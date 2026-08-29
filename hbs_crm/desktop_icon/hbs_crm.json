@@ -1,0 +1,20 @@
+{
+ "app": "hbs_crm",
+ "bg_color": "gray",
+ "creation": "2026-08-22 17:15:22.887281",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon_type": "App",
+ "idx": 0,
+ "label": "Hbs Crm",
+ "link_type": "External",
+ "modified": "2026-08-22 17:15:22.887281",
+ "modified_by": "Administrator",
+ "name": "Hbs Crm",
+ "owner": "Administrator",
+ "restrict_removal": 0,
+ "roles": [],
+ "sidebar": "HBS CRM",
+ "standard": 1
+}

@@ -1,0 +1,108 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "autoincrement",
+ "creation": "2026-07-22 16:15:21.905837",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_name",
+  "description",
+  "qty",
+  "rate",
+  "discount_type",
+  "discount_percentage",
+  "discount_amount",
+  "tax",
+  "tax_amount",
+  "hsn",
+  "amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "columns": 3,
+   "label": "item name",
+   "options": "Hbs Product"
+  },
+  {
+   "columns": 3,
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "description"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "columns": 2,
+   "label": "qty"
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "columns": 2,
+   "label": "rate"
+  },
+  {
+   "fieldname": "discount_type",
+   "fieldtype": "Select",
+   "label": "discount type",
+   "options": "amount\nrate"
+  },
+  {
+   "default": "0",
+   "fieldname": "discount_percentage",
+   "fieldtype": "Int",
+   "label": "discount percentage"
+  },
+  {
+   "fieldname": "discount_amount",
+   "fieldtype": "Int",
+   "label": "discount amount"
+  },
+  {
+   "fieldname": "tax",
+   "fieldtype": "Int",
+   "label": "tax"
+  },
+  {
+   "fieldname": "tax_amount",
+   "fieldtype": "Int",
+   "label": "tax amount"
+  },
+  {
+   "fieldname": "hsn",
+   "fieldtype": "Data",
+   "label": "hsn"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "columns": 2,
+   "label": "Amount"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-04 12:20:32.834809",
+ "modified_by": "Administrator",
+ "module": "Hbs Crm",
+ "name": "hbs crm items",
+ "naming_rule": "Autoincrement",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

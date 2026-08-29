@@ -1,9 +1,14 @@
 app_name = "hbs_crm"
-app_title = "Hbs Crm"
+app_title = "HBS CRM"
 app_publisher = "Hbs"
-app_description = "Crm_Desc"
+app_description = "HBS CRM Application"
 app_email = "hbs@mail.in"
 app_license = "mit"
+app_home = "/app/hbs-crm"
+
+website_route_rules = [
+	{"from_route": "/desk", "to_route": "app/hbs-crm"},
+]
 
 # Apps
 # ------------------
@@ -11,15 +16,14 @@ app_license = "mit"
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "hbs_crm",
-# 		"logo": "/assets/hbs_crm/logo.png",
-# 		"title": "Hbs Crm",
-# 		"route": "/hbs_crm",
-# 		"has_permission": "hbs_crm.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "hbs_crm",
+		"title": "HBS CRM",
+		"route": "/app/hbs-crm",
+		"has_permission": "hbs_crm.hbs_crm.utils.has_app_permission"
+	}
+]
 
 # Includes in <head>
 # ------------------
@@ -256,3 +260,10 @@ app_license = "mit"
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+permission_query_conditions = {
+	"Hbs Crm Lead": "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.get_permission_query_conditions",
+}
+
+has_permission = {
+	"Hbs Crm Lead": "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.has_permission",
+}

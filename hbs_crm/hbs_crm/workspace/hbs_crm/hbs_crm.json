@@ -1,0 +1,117 @@
+{
+ "app": "hbs_crm",
+ "charts": [],
+ "content": "[{\"id\":\"I2we-fpgai\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">HBS CRM Workspace</span>\",\"col\":12}},{\"id\":\"Vn_mC3YTa9\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hbs Crm Lead\",\"col\":3}},{\"id\":\"uh9NniWJJN\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hbs Customer\",\"col\":3}},{\"id\":\"mYJez-yqDT\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hbs Product\",\"col\":3}},{\"id\":\"GkJU5luVKh\",\"type\":\"card\",\"data\":{\"card_name\":\"CRM Management\",\"col\":4}}]",
+ "creation": "2026-08-19 14:54:00",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "users",
+ "idx": 0,
+ "indicator_color": "blue",
+ "is_hidden": 0,
+ "label": "HBS CRM",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "CRM Management",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hbs Crm Lead",
+   "link_count": 0,
+   "link_to": "Hbs Crm Lead",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hbs Customer",
+   "link_count": 0,
+   "link_to": "Hbs Customer",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hbs Product",
+   "link_count": 0,
+   "link_to": "Hbs Product",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hbs CRM Email Settings",
+   "link_count": 0,
+   "link_to": "Hbs CRM Email Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hbs Print Format",
+   "link_count": 0,
+   "link_to": "Print Format",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-26 12:37:40.212190",
+ "modified_by": "Administrator",
+ "module": "Hbs Crm",
+ "name": "HBS CRM",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "HBS CRM",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "Hbs Crm Lead",
+   "link_to": "Hbs Crm Lead",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "Hbs Customer",
+   "link_to": "Hbs Customer",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "label": "Hbs Product",
+   "link_to": "Hbs Product",
+   "type": "DocType"
+  }
+ ],
+ "title": "HBS CRM",
+ "type": "Workspace"
+}

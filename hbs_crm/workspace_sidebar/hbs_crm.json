@@ -1,0 +1,26 @@
+{
+ "app": "hbs_crm",
+ "creation": "2026-08-19 13:51:07.385406",
+ "docstatus": 0,
+ "doctype": "Workspace Sidebar",
+ "idx": 0,
+ "items": [
+  {
+   "child": 0,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "HBS CRM",
+   "link_to": "HBS CRM",
+   "link_type": "Workspace",
+   "show_arrow": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-22 17:16:11.082925",
+ "modified_by": "Administrator",
+ "name": "HBS CRM",
+ "owner": "Administrator",
+ "standard": 1,
+ "title": "HBS CRM"
+}

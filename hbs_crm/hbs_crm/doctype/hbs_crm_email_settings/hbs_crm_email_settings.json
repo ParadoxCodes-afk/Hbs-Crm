@@ -1,0 +1,129 @@
+{
+ "actions": [],
+ "creation": "2026-08-18 20:35:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_section",
+  "enable_auto_email",
+  "column_break_general",
+  "sender_name",
+  "smtp_settings_section",
+  "smtp_server",
+  "smtp_port",
+  "use_tls",
+  "use_ssl",
+  "column_break_smtp",
+  "email_id",
+  "password",
+  "email_template_section",
+  "email_subject",
+  "email_body"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_section",
+   "fieldtype": "Section Break",
+   "label": "General Settings"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_auto_email",
+   "fieldtype": "Check",
+   "label": "Enable Auto Email on Lead Creation"
+  },
+  {
+   "fieldname": "column_break_general",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "HBS Sales Team",
+   "fieldname": "sender_name",
+   "fieldtype": "Data",
+   "label": "Sender Display Name"
+  },
+  {
+   "fieldname": "smtp_settings_section",
+   "fieldtype": "Section Break",
+   "label": "SMTP Server Settings"
+  },
+  {
+   "fieldname": "smtp_server",
+   "fieldtype": "Data",
+   "label": "SMTP Server / Host"
+  },
+  {
+   "default": "587",
+   "fieldname": "smtp_port",
+   "fieldtype": "Int",
+   "label": "SMTP Port"
+  },
+  {
+   "default": "1",
+   "fieldname": "use_tls",
+   "fieldtype": "Check",
+   "label": "Use TLS"
+  },
+  {
+   "default": "0",
+   "fieldname": "use_ssl",
+   "fieldtype": "Check",
+   "label": "Use SSL"
+  },
+  {
+   "fieldname": "column_break_smtp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "email_id",
+   "fieldtype": "Data",
+   "label": "Email ID / Username",
+   "options": "Email"
+  },
+  {
+   "fieldname": "password",
+   "fieldtype": "Password",
+   "label": "Password / App Password"
+  },
+  {
+   "fieldname": "email_template_section",
+   "fieldtype": "Section Break",
+   "label": "Lead Welcome Email Template"
+  },
+  {
+   "default": "Thank you for reaching out, {{ doc.contact_name or doc.company_name or 'Valued Client' }}!",
+   "fieldname": "email_subject",
+   "fieldtype": "Data",
+   "label": "Email Subject Template"
+  },
+  {
+   "default": "Hello {{ doc.contact_name or doc.company_name or 'Valued Client' }},\n\nThank you for reaching out to us. We have received your inquiry and our team will get in touch with you shortly.\n\nBest regards,\n{{ doc.executive_1 or 'Sales Team' }}",
+   "fieldname": "email_body",
+   "fieldtype": "Text Editor",
+   "label": "Email Body Template"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-18 20:35:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hbs Crm",
+ "name": "Hbs CRM Email Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

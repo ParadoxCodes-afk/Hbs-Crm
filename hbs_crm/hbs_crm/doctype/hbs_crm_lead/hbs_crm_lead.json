@@ -1,0 +1,424 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "autoincrement",
+ "creation": "2026-07-22 12:29:29.722153",
+ "default_view": "List",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "customer_details_section",
+  "company_name",
+  "company_gst",
+  "contact_name",
+  "contact_designation",
+  "column_break_etml",
+  "contact_email",
+  "tally_serial",
+  "contact_phone",
+  "customer",
+  "lead_details_section",
+  "referred_by",
+  "executive_1",
+  "executive_2",
+  "column_break_dhhi",
+  "lead_source",
+  "lead_type",
+  "license_type",
+  "address_section",
+  "address",
+  "all_contacts_section",
+  "all_contacts",
+  "follow_up_section",
+  "follow_up_date",
+  "follow_up_time",
+  "status",
+  "column_break_luxb",
+  "requirement_received",
+  "proposal_sent",
+  "demo_done",
+  "remarks",
+  "all_activities_section",
+  "custom_activities",
+  "activity",
+  "quote_tab",
+  "items_section",
+  "items",
+  "additional_discount",
+  "add_cloud_product",
+  "terms_and_conditions",
+  "payment_terms",
+  "delivery",
+  "support",
+  "taxes",
+  "validity",
+  "uneditable_calculation_section",
+  "total_before_tax",
+  "total_tax",
+  "column_break_merw",
+  "total_after_tax",
+  "final_total"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer_details_section",
+   "fieldtype": "Section Break",
+   "label": "Customer Details"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Linked Customer / Party",
+   "options": "Hbs Customer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "company_name",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company_gst",
+   "fieldtype": "Data",
+   "label": "Company Gst"
+  },
+  {
+   "fieldname": "contact_name",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Contact Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contact_phone",
+   "fieldtype": "Data",
+   "ignore_xss_filter": 1,
+   "in_standard_filter": 1,
+   "label": "Contact Phone",
+   "length": 10,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_etml",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "lead_type",
+   "fieldtype": "Link",
+   "in_filter": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Lead Type",
+   "options": "hbs product type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contact_email",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Contact Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "tally_serial",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Tally Serial",
+   "length": 9
+  },
+  {
+   "fieldname": "license_type",
+   "fieldtype": "Select",
+   "label": "License Type",
+   "options": "\nAuditor\nGold\nSilver",
+   "reqd": 1
+  },
+  {
+   "fieldname": "address_section",
+   "fieldtype": "Section Break",
+   "label": "Address Details"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Small Text",
+   "in_global_search": 1,
+   "label": "Address"
+  },
+  {
+   "fieldname": "all_contacts_section",
+   "fieldtype": "Section Break",
+   "label": "All Contacts"
+  },
+  {
+   "fieldname": "all_contacts",
+   "fieldtype": "Table",
+   "label": "All Contacts",
+   "options": "Hbs Lead Contact"
+  },
+  {
+   "fieldname": "lead_details_section",
+   "fieldtype": "Section Break",
+   "label": "Lead Details"
+  },
+  {
+   "fieldname": "referred_by",
+   "fieldtype": "Link",
+   "label": "Referred By",
+   "options": "Hbs Customer"
+  },
+  {
+   "fieldname": "executive_1",
+   "fieldtype": "Link",
+   "in_filter": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Executive 1",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "executive_2",
+   "fieldtype": "Link",
+   "in_filter": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Executive 2",
+   "options": "User"
+  },
+  {
+   "fieldname": "column_break_dhhi",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "none",
+   "fieldname": "lead_source",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Lead Source",
+   "options": "none\nCA Data\nCold Calling\nConnect Task\nExisting Customer\nIncoming Call\nReference\nGST PRO DATA OF CA\nFacebook\nDirectory\nExcel Sheet Data\nCloud Existing User\nTally Portal\nMarketing\nGoogle Lead\nJustdial\nKP Sir\nHardik Sir\nWebsite",
+   "reqd": 1
+  },
+  {
+   "fieldname": "follow_up_section",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Follow Up"
+  },
+  {
+   "default": "Today",
+   "fieldname": "follow_up_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Follow up Date"
+  },
+  {
+   "default": "Now",
+   "fieldname": "follow_up_time",
+   "fieldtype": "Time",
+   "label": "Follow Up Time"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_filter": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "new\npending\nwon\nlost"
+  },
+  {
+   "fieldname": "column_break_luxb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "requirement_received",
+   "fieldtype": "Check",
+   "label": "Requirement Received"
+  },
+  {
+   "default": "0",
+   "fieldname": "proposal_sent",
+   "fieldtype": "Check",
+   "label": "Proposal Sent"
+  },
+  {
+   "default": "0",
+   "fieldname": "demo_done",
+   "fieldtype": "Check",
+   "label": "Demo Done"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Add Remark / Activity"
+  },
+  {
+   "fieldname": "quote_tab",
+   "fieldtype": "Tab Break",
+   "label": "Quote"
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "items"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "items",
+   "options": "hbs crm items"
+  },
+  {
+   "fieldname": "all_activities_section",
+   "fieldtype": "Section Break",
+   "label": "All Activities"
+  },
+  {
+   "fieldname": "custom_activities",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Custom Activities",
+   "max_height": "500px",
+   "options": "Hbs Lead Activity",
+   "width": "800px"
+  },
+  {
+   "fieldname": "activity",
+   "fieldtype": "HTML",
+   "label": "Activity"
+  },
+  {
+   "fieldname": "uneditable_calculation_section",
+   "fieldtype": "Section Break",
+   "label": "uneditable calculation"
+  },
+  {
+   "fieldname": "total_before_tax",
+   "fieldtype": "Float",
+   "label": "total before tax"
+  },
+  {
+   "fieldname": "total_tax",
+   "fieldtype": "Float",
+   "label": "Total Tax"
+  },
+  {
+   "fieldname": "column_break_merw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_after_tax",
+   "fieldtype": "Float",
+   "label": "Total After Tax"
+  },
+  {
+   "fieldname": "final_total",
+   "fieldtype": "Float",
+   "label": "Final Total"
+  },
+  {
+   "fieldname": "additional_discount",
+   "fieldtype": "Int",
+   "label": "additional discount"
+  },
+  {
+   "fieldname": "add_cloud_product",
+   "fieldtype": "Button",
+   "label": "Add Cloud Product"
+  },
+  {
+   "fieldname": "terms_and_conditions",
+   "fieldtype": "Section Break",
+   "label": "Terms and Conditions"
+  },
+  {
+   "fieldname": "payment_terms",
+   "fieldtype": "Data",
+   "label": "Payment Terms"
+  },
+  {
+   "fieldname": "delivery",
+   "fieldtype": "Data",
+   "label": "Delivery"
+  },
+  {
+   "fieldname": "support",
+   "fieldtype": "Data",
+   "label": "Support"
+  },
+  {
+   "fieldname": "taxes",
+   "fieldtype": "Data",
+   "label": "Taxes"
+  },
+  {
+   "fieldname": "validity",
+   "fieldtype": "Data",
+   "label": "Validity"
+  },
+  {
+   "fieldname": "contact_designation",
+   "fieldtype": "Select",
+   "label": "Contact Designation",
+   "options": "\nOwner\nAccountant\nCA\nExecutive"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-27 11:54:13.917335",
+ "modified_by": "Administrator",
+ "module": "Hbs Crm",
+ "name": "Hbs Crm Lead",
+ "naming_rule": "Autoincrement",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "contact_name, company_name, contact_phone, contact_email",
+ "show_preview_popup": 1,
+ "show_title_field_in_link": 1,
+ "sort_field": "follow_up_date",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "contact_name",
+ "track_changes": 1,
+ "track_seen": 1,
+ "track_views": 1
+}

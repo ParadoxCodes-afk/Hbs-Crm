@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="utf-8">
+    <title>HBS Quotation</title>
+
+    <style>
+        @page {
+            margin: 6mm;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            color: #000;
+            margin: 0;
+            padding: 0;
+        }
+
+        .full-img {
+            width: 100%;
+            display: block;
+        }
+
+        .page-break {
+            page-break-before: always;
+            break-before: page;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid #000;
+            padding: 5px;
+            font-size: 11px;
+        }
+
+        th {
+            font-weight: bold;
+            text-align: center;
+            background-color: #f2f2f2;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .jurisdiction {
+            text-align: center;
+            font-weight: bold;
+            font-size: 11px;
+            margin: 5px 0;
+            text-decoration: underline;
+        }
+
+        .terms-title {
+            margin-top: 8px;
+            font-weight: bold;
+            text-decoration: underline;
+        }
+
+        .bottom-section {
+            width: 100%;
+            display: table;
+            margin-top: 10px;
+        }
+
+        .bank-col {
+            display: table-cell;
+            width: 45%;
+            font-size: 11px;
+            vertical-align: top;
+        }
+
+        .qr-col {
+            display: table-cell;
+            width: 15%;
+            text-align: center;
+            vertical-align: top;
+        }
+
+        .qr-col img {
+            width: 80px;
+        }
+
+        .sign-col {
+            display: table-cell;
+            width: 40%;
+            text-align: right;
+            vertical-align: top;
+        }
+
+        .company-name {
+            font-weight: bold;
+            margin-bottom: 30px;
+            white-space: nowrap;
+        }
+
+        .page-wrapper {
+            position: relative;
+            min-height: 1000px;
+            padding: 0 6px 120px 6px;
+        }
+
+        .page-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+        }
+    </style>
+
+</head>
+
+<body>
+
+
+    <!-- PAGE 1 -->
+    <img src="/files/first_page.jpg" class="full-img">
+
+    <div class="page-break"></div>
+
+
+    <!-- PAGE 2 -->
+    <img src="/files/second_page.jpg" class="full-img">
+
+    <div class="page-break"></div>
+
+
+    <!-- PAGE 3 -->
+    <div class="page-wrapper">
+
+        <img src="/files/Invoice Header Final.jpg" class="full-img">
+
+        <div class="jurisdiction">
+            All Disputes Subject to Delhi Jurisdiction
+        </div>
+
+        {% set ns = namespace(has_discount=false, subtotal=0) %}
+        {% for item in doc.items %}
+            {% if item.discount_amount and item.discount_amount > 0 %}
+                {% set ns.has_discount = true %}
+            {% endif %}
+        {% endfor %}
+        {% set has_discount = ns.has_discount %}
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th style="width:40px;">SNO</th>
+
+                    {% if has_discount %}
+                    <th>DESCRIPTION</th>
+                    {% else %}
+                    <th colspan="2">DESCRIPTION</th>
+                    {% endif %}
+
+                    <th style="width:80px;">HSN</th>
+                    <th style="width:80px;">QTY</th>
+                    <th style="width:80px;">RATE</th>
+
+                    {% if has_discount %}
+                    <th style="width:80px;">DISC</th>
+                    {% endif %}
+
+                    <th style="width:100px;">TOTAL</th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for item in doc.items %}
+
+                {% set discount = item.discount_amount or 0 %}
+                {% set row_total = (item.qty * item.rate) - discount %}
+                {% set ns.subtotal = ns.subtotal + row_total %}
+                {% set hsn = frappe.db.get_value('Hbs Product', item.item_name, 'hsn') or item.hsn %}
+
+                <tr>
+
+                    <td class="center">{{ loop.index }}</td>
+
+                    {% if has_discount %}
+
+                    <td>
+
+                        <div style="font-weight:bold;">
+                            {% set item_name = frappe.db.get_value('Hbs Product', item.item_name, 'item_name') %}
+                            {{ item_name or item.item_name }}
+                        </div>
+
+                        {% if item.description %}
+                        <div style="font-size:10px;">
+                            {{ (item.description or '').replace('\n','<br>') }}
+                        </div>
+                        {% endif %}
+
+                    </td>
+
+                    {% else %}
+
+                    <td colspan="2">
+
+                        <div style="font-weight:bold;">
+                            {% set item_name = frappe.db.get_value('Hbs Product', item.item_name, 'item_name') %}
+                            {{ item_name or item.item_name }}
+                        </div>
+
+                        {% if item.description %}
+                        <div style="font-size:10px;">
+                            {{ (item.description or '').replace('\n','<br>') }}
+                        </div>
+                        {% endif %}
+
+                    </td>
+
+                    {% endif %}
+
+                    <td class="center">{{ hsn or '' }}</td>
+                    <td class="center">{{ item.qty }}</td>
+                    <td class="center">{{ item.rate }}</td>
+
+                    {% if has_discount %}
+                    <td class="center">{{ discount }}</td>
+                    {% endif %}
+
+                    <td class="center"><b>{{ row_total }}</b></td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+
+            <tfoot>
+
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>SUBTOTAL</b></td>
+                    <td class="center">{{ doc.total_before_tax or 0 }}</td>
+                </tr>
+
+                {% if doc.additional_discount and doc.additional_discount > 0 %}
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>DISCOUNT</b></td>
+                    <td class="center">{{ doc.additional_discount }}</td>
+                </tr>
+                {% endif %}
+
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>TAX</b></td>
+                    <td class="center">{{ doc.total_tax or 0 }}</td>
+                </tr>
+
+                {% set raw_total = (doc.total_before_tax or 0) - (doc.additional_discount or 0) + (doc.total_tax or 0) %}
+                {% set final_total_rounded = (raw_total | round) | int %}
+                {% set round_off = final_total_rounded - raw_total %}
+                {% if round_off | abs > 0.009 %}
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>ROUND OFF</b></td>
+                    <td class="center">{{ "{:.2f}".format(round_off) }}</td>
+                </tr>
+                {% endif %}
+
+                <tr>
+                    <td colspan="5"></td>
+                    <td class="center"><b>TOTAL</b></td>
+                    <td class="center"><b>{{ final_total_rounded }}</b></td>
+                </tr>
+
+                <tr>
+                    <td colspan="7" style="font-style:italic">
+                        Amount in Words :
+                        {{ frappe.utils.money_in_words(final_total_rounded) }}
+                    </td>
+                </tr>
+
+            </tfoot>
+
+        </table>
+
+
+        <div class="terms-title">Terms and Conditions :</div>
+
+        <table>
+            {% if doc.lead_type == "AMC" %}
+            <tr>
+                <td style="width:30px;">1</td>
+                <td style="width:140px;"><b>Payment Terms</b></td>
+                <td>{{ doc.payment_terms or '100% Advance with signing of the agreement' }}</td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td><b>Validity</b></td>
+                <td>{{ doc.validity or 'One Year from signing of the Agreement' }}</td>
+            </tr>
+            <tr>
+                <td>3</td>
+                <td><b>Scope of Work</b></td>
+                <td>{{ doc.delivery or 'For Tally Related Queries only.' }}</td>
+            </tr>
+            <tr>
+                <td>4</td>
+                <td><b>Site Visits</b></td>
+                <td>{{ doc.support or 'On site visits will be restricted to 7 visits. Extra visits will be charged as applicable. Each visit restricted to max. of 2 Hrs.' }}</td>
+            </tr>
+            <tr>
+                <td>5</td>
+                <td><b>Performa Invoice</b></td>
+                <td>{{ doc.taxes or 'This is a performa Invoice. Actual Invoice will be delivered to you later.' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td style="width:30px;">1</td>
+                <td style="width:140px;"><b>Payment Terms</b></td>
+                <td>{{ doc.payment_terms or '100% advance along with confirm order.' }}</td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td><b>Delivery</b></td>
+                <td>{{ doc.delivery or '2-3 working days.' }}</td>
+            </tr>
+            <tr>
+                <td>3</td>
+                <td><b>Support</b></td>
+                <td>{{ doc.support or '3 Months Telephonic Support from invoice date.' }}</td>
+            </tr>
+            <tr>
+                <td>4</td>
+                <td><b>Taxes</b></td>
+                <td>{{ doc.taxes or 'All Inclusive' }}</td>
+            </tr>
+            <tr>
+                <td>5</td>
+                <td><b>Validity</b></td>
+                <td>{{ doc.validity or 'ONE WEEK' }}</td>
+            </tr>
+            {% endif %}
+        </table>
+
+
+        <div class="bottom-section">
+
+            <div class="bank-col">
+
+                <div><b>Company's Bank Details</b></div>
+
+                <div>A/c Holder : <b>HBS SOLUTIONS PVT LTD</b></div>
+                <div>Bank Name : HDFC BANK</div>
+                <div>A/c No. : 07117630000061</div>
+                <div>Branch / IFSC : PUSHPANJALI ENCL & HDFC0000711</div>
+
+            </div>
+
+
+            <div class="qr-col">
+                <img src="/files/cloud_hbs_qr.jpeg">
+            </div>
+
+
+            <div class="sign-col">
+
+                <div class="company-name">
+                    For HBS SOLUTIONS PVT. LTD.
+                </div>
+
+                <div>
+                    Authorized Signatory
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="page-footer">
+            <img src="/files/Invoice Footer Final.jpg" class="full-img">
+        </div>
+
+    </div>
+
+</body>
+
+</html>

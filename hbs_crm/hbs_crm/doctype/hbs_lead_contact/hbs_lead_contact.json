@@ -1,0 +1,58 @@
+{
+ "actions": [],
+ "creation": "2026-08-21 13:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "contact_name",
+  "contact_phone",
+  "contact_email",
+  "contact_designation"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "fieldname": "contact_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "contact_name"
+  },
+  {
+   "columns": 3,
+   "fieldname": "contact_phone",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "contact_phone"
+  },
+  {
+   "columns": 3,
+   "fieldname": "contact_email",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "contact_email",
+   "options": "Email"
+  },
+  {
+   "columns": 3,
+   "fieldname": "contact_designation",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "contact_designation",
+   "options": "\nOwner\nAccountant\nExecutive\nCA"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-25 18:15:08.018454",
+ "modified_by": "Administrator",
+ "module": "Hbs Crm",
+ "name": "Hbs Lead Contact",
+ "naming_rule": "Autoincrement",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
