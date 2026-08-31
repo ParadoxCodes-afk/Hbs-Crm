@@ -108,6 +108,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 	contact_phone(frm) {
 		check_and_warn_duplicate_lead(frm);
 		validate_phone_field_length(frm, "contact_phone");
+		check_phone_number_in_use(frm);
 	},
 	contact_email(frm) {
 		check_and_warn_duplicate_lead(frm);
@@ -761,6 +762,27 @@ function handle_referred_by_dependency(frm) {
 	} else {
 		frm.set_value("referred_by", "");
 		frm.set_df_property("referred_by", "read_only", 1);
+	}
+}
+
+function check_phone_number_in_use(frm) {
+	if (frm.doc.contact_phone) {
+		frappe.call({
+			method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.check_phone_in_use",
+			args: {
+				contact_phone: frm.doc.contact_phone,
+				current_lead_name: frm.doc.name
+			},
+			callback: function (r) {
+				if (r.message) {
+					frappe.msgprint({
+						title: __("Phone Number In Use"),
+						message: r.message,
+						indicator: "orange"
+					});
+				}
+			}
+		});
 	}
 }
 

@@ -20,11 +20,11 @@
   "contact_phone",
   "customer",
   "lead_details_section",
-  "referred_by",
+  "lead_source",
   "executive_1",
   "executive_2",
   "column_break_dhhi",
-  "lead_source",
+  "referred_by",
   "lead_type",
   "license_type",
   "address_section",
@@ -200,12 +200,10 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "none",
    "fieldname": "lead_source",
    "fieldtype": "Select",
-   "in_standard_filter": 1,
    "label": "Lead Source",
-   "options": "none\nCA Data\nCold Calling\nConnect Task\nExisting Customer\nIncoming Call\nReference\nGST PRO DATA OF CA\nFacebook\nDirectory\nExcel Sheet Data\nCloud Existing User\nTally Portal\nMarketing\nGoogle Lead\nJustdial\nKP Sir\nHardik Sir\nWebsite",
+   "options": "\nCA Data\nCold Calling\nConnect Task\nExisting Customer\nIncoming Call\nReference\nGST PRO DATA OF CA\nFacebook\nDirectory\nExcel Sheet Data\nCloud Existing User\nTally Portal\nMarketing\nGoogle Lead\nJustdial\nKP Sir\nHardik Sir\nWebsite",
    "reqd": 1
   },
   {
@@ -378,7 +376,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-27 11:54:13.917335",
+ "modified": "2026-08-31 15:40:14.024127",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm Lead",

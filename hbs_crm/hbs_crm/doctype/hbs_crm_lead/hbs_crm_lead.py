@@ -779,3 +779,40 @@ def take_over_lead(lead_name):
 		"status": "success",
 		"message": _("Lead #{0} has been successfully taken over by you!").format(doc.name)
 	}
+
+
+@frappe.whitelist()
+def check_phone_in_use(contact_phone, current_lead_name=None):
+	"""Check if the contact_phone is already in use by another user's lead and return warning message."""
+	if not contact_phone:
+		return None
+
+	# Format contact phone to match format logic in python controller
+	raw = str(contact_phone).strip()
+	if raw.startswith("+91-"): raw = raw[4:].strip()
+	elif raw.startswith("+91"): raw = raw[3:].strip()
+	elif raw.startswith("91") and len(raw) > 10: raw = raw[2:].strip()
+	digits = "".join(filter(str.isdigit, raw))[:10]
+
+	if not digits:
+		return None
+
+	# Query another lead with the same phone
+	query = """
+		SELECT name, company_name, contact_name, executive_1, owner 
+		FROM `tabHbs Crm Lead` 
+		WHERE `contact_phone` = %s AND `name` != %s
+		LIMIT 1
+	"""
+	existing = frappe.db.sql(query, (digits, current_lead_name or ""), as_dict=True)
+	if existing:
+		lead = existing[0]
+		exec_user = lead.get("executive_1") or lead.get("owner")
+		
+		# Warn only if lead is working with a different user
+		if exec_user != frappe.session.user:
+			exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
+			company = lead.get("company_name") or lead.get("contact_name") or "Unnamed"
+			return _("This number is already working with user - {0} and company {1}").format(exec_name, company)
+
+	return None
