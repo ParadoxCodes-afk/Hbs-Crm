@@ -383,6 +383,18 @@ class HbsCrmLead(Document):
 			cust_doc.tally_serial = self.tally_serial or cust_doc.tally_serial
 			cust_doc.license_type = self.license_type or cust_doc.license_type
 			cust_doc.address = getattr(self, "address", None) or cust_doc.address
+
+			# Sync contacts child table
+			cust_doc.set("all_contacts", [])
+			if getattr(self, "all_contacts", None):
+				for row in self.all_contacts:
+					cust_doc.append("all_contacts", {
+						"contact_name": row.contact_name,
+						"contact_phone": row.contact_phone,
+						"contact_email": row.contact_email,
+						"contact_designation": row.contact_designation
+					})
+
 			cust_doc.save(ignore_permissions=True)
 		else:
 			cust_doc = frappe.new_doc("Hbs Customer")
@@ -396,6 +408,17 @@ class HbsCrmLead(Document):
 			cust_doc.address = getattr(self, "address", None)
 			if not self.is_new():
 				cust_doc.lead_reference = self.name
+
+			# Sync contacts child table
+			if getattr(self, "all_contacts", None):
+				for row in self.all_contacts:
+					cust_doc.append("all_contacts", {
+						"contact_name": row.contact_name,
+						"contact_phone": row.contact_phone,
+						"contact_email": row.contact_email,
+						"contact_designation": row.contact_designation
+					})
+
 			cust_doc.insert(ignore_permissions=True)
 			self.customer = cust_doc.name
 

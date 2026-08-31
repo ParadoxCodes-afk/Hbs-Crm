@@ -20,7 +20,9 @@
   "license_type",
   "lead_reference",
   "address_section",
-  "address"
+  "address",
+  "all_contacts_section",
+  "all_contacts"
  ],
  "fields": [
   {
@@ -98,6 +100,17 @@
    "fieldtype": "Small Text",
    "in_global_search": 1,
    "label": "Address"
+  },
+  {
+   "fieldname": "all_contacts_section",
+   "fieldtype": "Section Break",
+   "label": "All Contacts"
+  },
+  {
+   "fieldname": "all_contacts",
+   "fieldtype": "Table",
+   "label": "All Contacts",
+   "options": "Hbs Lead Contact"
   }
  ],
  "grid_page_length": 50,
