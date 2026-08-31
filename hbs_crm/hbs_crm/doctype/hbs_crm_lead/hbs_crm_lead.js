@@ -32,6 +32,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		render_activity_timeline_js(frm);
 		toggle_won_status_read_only(frm);
 		handle_lead_type_terms(frm);
+		handle_referred_by_dependency(frm);
 
 		frm.clear_custom_buttons();
 
@@ -89,6 +90,9 @@ frappe.ui.form.on("Hbs Crm Lead", {
 
 	status(frm) {
 		toggle_won_status_read_only(frm);
+	},
+	lead_source(frm) {
+		handle_referred_by_dependency(frm);
 	},
 
 	lead_type(frm) {
@@ -748,6 +752,15 @@ function handle_lead_type_terms(frm) {
 		if (!frm.doc.validity || frm.doc.validity === "One Year from signing of the Agreement") {
 			frm.set_value("validity", "ONE WEEK");
 		}
+	}
+}
+
+function handle_referred_by_dependency(frm) {
+	if (frm.doc.lead_source === "Reference") {
+		frm.set_df_property("referred_by", "read_only", 0);
+	} else {
+		frm.set_value("referred_by", "");
+		frm.set_df_property("referred_by", "read_only", 1);
 	}
 }
 

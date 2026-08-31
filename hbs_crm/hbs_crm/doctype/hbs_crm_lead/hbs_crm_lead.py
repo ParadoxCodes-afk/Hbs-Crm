@@ -21,6 +21,7 @@ class HbsCrmLead(Document):
 		self.validate_no_duplicate_lead_type()
 		self.validate_follow_up_date()
 		self.validate_contact_phone_length()
+		self.notify_duplicate_contact_phone()
 		self.validate_item_min_rate()
 		self.sync_primary_contact_to_all_contacts()
 		self.sync_or_create_customer()
@@ -114,6 +115,33 @@ class HbsCrmLead(Document):
 
 					digits = "".join(filter(str.isdigit, raw))[:10]
 					row.contact_phone = digits
+
+	def notify_duplicate_contact_phone(self):
+		"""Notify if another user is already working with this contact number."""
+		if not self.contact_phone:
+			return
+
+		# Find other active or existing leads with the same contact_phone (excluding self)
+		query = """
+			SELECT name, company_name, contact_name, executive_1, owner 
+			FROM `tabHbs Crm Lead` 
+			WHERE `contact_phone` = %s AND `name` != %s
+			LIMIT 1
+		"""
+		existing = frappe.db.sql(query, (self.contact_phone, self.name or ""), as_dict=True)
+		if existing:
+			lead = existing[0]
+			exec_user = lead.get("executive_1") or lead.get("owner")
+			
+			# If the lead is assigned to a different user, trigger notification
+			if exec_user != frappe.session.user:
+				exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
+				company = lead.get("company_name") or lead.get("contact_name") or "Unnamed"
+				frappe.msgprint(
+					_("This number is already working with user - {0} and company {1}").format(exec_name, company),
+					title=_("Phone Number In Use"),
+					indicator="orange"
+				)
 
 	def sync_primary_contact_to_all_contacts(self):
 		"""Ensure primary contact details populate automatically in the All Contacts table and stay in sync."""
@@ -635,21 +663,20 @@ def has_permission(doc, ptype="read", user=None):
 
 @frappe.whitelist()
 def check_duplicate_lead(company_name=None, contact_name=None, contact_phone=None, contact_email=None, customer=None, lead_type=None, company_gst=None, current_lead_name=None):
-	"""Check if an active lead already exists for the same party/phone and lead type."""
+	"""Check if an active lead already exists for the same company_name, GST, and lead type."""
 	if not lead_type or not str(lead_type).strip():
 		return None
 
 	lead_type = str(lead_type).strip()
 	company_name = str(company_name or "").strip()
-	contact_name = str(contact_name or "").strip()
-	contact_phone = str(contact_phone or "").strip()
 	company_gst = str(company_gst or "").strip()
+
+	if not company_name or not company_gst:
+		return None
 
 	params = {
 		"lead_type": lead_type,
-		"contact_phone": contact_phone,
 		"company_name": company_name.lower(),
-		"contact_name": contact_name.lower(),
 		"company_gst": company_gst
 	}
 
@@ -659,24 +686,7 @@ def check_duplicate_lead(company_name=None, contact_name=None, contact_phone=Non
 		base_clause += " AND `name` != %(current_lead_name)s"
 		params["current_lead_name"] = str(current_lead_name).strip()
 
-	# Match criteria options
-	conds = []
-	
-	# Option 1: Match by Phone
-	if contact_phone:
-		conds.append("`contact_phone` = %(contact_phone)s")
-
-	# Option 2: Match by Company Details (Company Name + Contact Name + optional GST)
-	if company_name and contact_name:
-		name_clause = "LOWER(`company_name`) = %(company_name)s AND LOWER(`contact_name`) = %(contact_name)s"
-		if company_gst:
-			name_clause += " AND (`company_gst` = %(company_gst)s OR `company_gst` IS NULL OR `company_gst` = '')"
-		conds.append(f"({name_clause})")
-
-	if not conds:
-		return None
-
-	where_clause = f"{base_clause} AND ({ ' OR '.join(conds) })"
+	where_clause = f"{base_clause} AND LOWER(`company_name`) = %(company_name)s AND `company_gst` = %(company_gst)s"
 
 	duplicates = frappe.db.sql(f"""
 		SELECT name, contact_name, company_name, lead_type, executive_1, executive_2, owner, creation
