@@ -863,7 +863,8 @@ def search_customers(search_term):
 		   OR `contact_phone` LIKE %s
 		   OR `contact_email` LIKE %s
 		   OR `company_gst` LIKE %s
+		   OR `tally_serial` LIKE %s
 		ORDER BY customer_name ASC
 		LIMIT 15
 	"""
-	return frappe.db.sql(query, (term, term, term, term, term), as_dict=True)
+	return frappe.db.sql(query, (term, term, term, term, term, term), as_dict=True)
