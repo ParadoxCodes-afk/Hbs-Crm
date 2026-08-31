@@ -152,7 +152,8 @@
    "fieldname": "address",
    "fieldtype": "Small Text",
    "in_global_search": 1,
-   "label": "Address"
+   "label": "Address",
+   "max_height": "100 px"
   },
   {
    "fieldname": "all_contacts_section",
@@ -184,6 +185,7 @@
    "in_standard_filter": 1,
    "label": "Executive 1",
    "options": "User",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -376,7 +378,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-31 15:40:14.024127",
+ "modified": "2026-08-31 16:28:18.119010",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm Lead",

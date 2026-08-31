@@ -36,6 +36,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		toggle_won_status_read_only(frm);
 		handle_lead_type_terms(frm);
 		handle_referred_by_dependency(frm);
+		frm.set_df_property("executive_1", "read_only", 1);
 
 		frm.clear_custom_buttons();
 
