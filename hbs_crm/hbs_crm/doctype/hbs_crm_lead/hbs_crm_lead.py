@@ -138,7 +138,7 @@ class HbsCrmLead(Document):
 				exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
 				company = lead.get("company_name") or lead.get("contact_name") or "Unnamed"
 				frappe.msgprint(
-					_("This number is already working with user - {0} and company {1}").format(exec_name, company),
+					_("This number is already working with Executive - {0} for company {1}").format(exec_name, company),
 					title=_("Phone Number In Use"),
 					indicator="orange"
 				)
@@ -813,6 +813,6 @@ def check_phone_in_use(contact_phone, current_lead_name=None):
 		if exec_user != frappe.session.user:
 			exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
 			company = lead.get("company_name") or lead.get("contact_name") or "Unnamed"
-			return _("This number is already working with user - {0} and company {1}").format(exec_name, company)
+			return _("This number is already working with Executive - {0} for company {1}").format(exec_name, company)
 
 	return None
