@@ -13,30 +13,39 @@ class HbsCustomer(Document):
 			gst = self.company_gst.strip()
 			existing = frappe.db.exists("Hbs Customer", {"company_gst": gst, "name": ["!=", self.name]})
 			if existing:
-				frappe.throw(
-					_("A customer with GST Number <b>{0}</b> already exists: <b>{1}</b>.").format(gst, existing),
-					title=_("Duplicate Customer GST")
-				)
+				msg = _(
+					"<b>Duplicate Customer GST Blocked!</b><br><br>"
+					"A customer with GST Number <b>{0}</b> already exists in the system.<br>"
+					"Existing Customer ID: <b>{1}</b>.<br><br>"
+					"<i>You cannot create a duplicate customer record.</i>"
+				).format(gst, existing)
+				frappe.throw(msg, title=_("Duplicate Customer GST"))
 
 		# 2. Check by Contact Phone
 		if self.contact_phone and self.contact_phone.strip():
 			phone = self.contact_phone.strip()
 			existing = frappe.db.exists("Hbs Customer", {"contact_phone": phone, "name": ["!=", self.name]})
 			if existing:
-				frappe.throw(
-					_("A customer with Phone Number <b>{0}</b> already exists: <b>{1}</b>.").format(phone, existing),
-					title=_("Duplicate Customer Phone")
-				)
+				msg = _(
+					"<b>Duplicate Customer Phone Blocked!</b><br><br>"
+					"A customer with Phone Number <b>{0}</b> already exists in the system.<br>"
+					"Existing Customer ID: <b>{1}</b>.<br><br>"
+					"<i>You cannot create a duplicate customer record.</i>"
+				).format(phone, existing)
+				frappe.throw(msg, title=_("Duplicate Customer Phone"))
 
 		# 3. Check by Contact Email
 		if self.contact_email and self.contact_email.strip():
 			email = self.contact_email.strip()
 			existing = frappe.db.exists("Hbs Customer", {"contact_email": email, "name": ["!=", self.name]})
 			if existing:
-				frappe.throw(
-					_("A customer with Email ID <b>{0}</b> already exists: <b>{1}</b>.").format(email, existing),
-					title=_("Duplicate Customer Email")
-				)
+				msg = _(
+					"<b>Duplicate Customer Email Blocked!</b><br><br>"
+					"A customer with Email ID <b>{0}</b> already exists in the system.<br>"
+					"Existing Customer ID: <b>{1}</b>.<br><br>"
+					"<i>You cannot create a duplicate customer record.</i>"
+				).format(email, existing)
+				frappe.throw(msg, title=_("Duplicate Customer Email"))
 
 		# 4. Check by Company Name or Customer Name
 		name_to_check = self.company_name or self.customer_name
@@ -50,10 +59,13 @@ class HbsCustomer(Document):
 				LIMIT 1
 			""", (name_str, name_str, self.name or ""), as_dict=True)
 			if existing:
-				frappe.throw(
-					_("A customer with Name <b>{0}</b> already exists: <b>{1}</b>.").format(name_str, existing[0].name),
-					title=_("Duplicate Customer Name")
-				)
+				msg = _(
+					"<b>Duplicate Customer Name Blocked!</b><br><br>"
+					"A customer with Name/Company <b>{0}</b> already exists in the system.<br>"
+					"Existing Customer ID: <b>{1}</b>.<br><br>"
+					"<i>You cannot create a duplicate customer record.</i>"
+				).format(name_str, existing[0].name)
+				frappe.throw(msg, title=_("Duplicate Customer Name"))
 
 	def on_trash(self):
 		"""Clear customer link from Hbs Crm Lead before deleting Hbs Customer."""

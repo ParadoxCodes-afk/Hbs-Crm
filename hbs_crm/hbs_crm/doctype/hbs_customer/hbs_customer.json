@@ -4,17 +4,14 @@
  "allow_import": 1,
  "allow_rename": 1,
  "autoname": "autoincrement",
- "title_field": "customer_name",
- "show_title_field_in_link": 1,
- "search_fields": "customer_name, company_name, contact_phone, contact_email, tally_serial, address",
- "creation": "2026-08-18 23:35:00.000000",
+ "creation": "2026-08-18 23:35:00",
  "default_view": "List",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "customer_details_section",
-  "customer_name",
   "company_name",
+  "customer_name",
   "company_gst",
   "contact_phone",
   "column_break_info",
@@ -106,7 +103,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-19 14:41:00.000000",
+ "modified": "2026-08-31 15:45:35.739678",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Customer",
@@ -115,7 +112,6 @@
  "permissions": [
   {
    "create": 1,
-   "delete": 0,
    "email": 1,
    "export": 1,
    "print": 1,
@@ -139,9 +135,12 @@
   }
  ],
  "row_format": "Dynamic",
+ "search_fields": "customer_name, company_name, contact_phone, contact_email, tally_serial, address",
  "show_preview_popup": 1,
+ "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
+ "title_field": "customer_name",
  "track_changes": 1
 }
