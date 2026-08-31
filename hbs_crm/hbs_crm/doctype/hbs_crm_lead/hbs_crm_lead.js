@@ -853,6 +853,7 @@ function perform_customer_search(dialog, frm) {
 									<th>${__("Company")}</th>
 									<th>${__("Phone")}</th>
 									<th>${__("Email")}</th>
+									<th>${__("Tally Serial")}</th>
 									<th>${__("Action")}</th>
 								</tr>
 							</thead>
@@ -872,6 +873,7 @@ function perform_customer_search(dialog, frm) {
 							<td>${cust.company_name || ''}<br><small class="text-muted">GST: ${cust.company_gst || ''}</small></td>
 							<td>${cust.contact_phone || ''}</td>
 							<td>${cust.contact_email || ''}</td>
+							<td><b>${cust.tally_serial || ''}</b><br><small class="text-muted">${cust.license_type || ''}</small></td>
 							<td class="text-center" style="vertical-align: middle;">
 								<button class="btn btn-xs btn-primary btn-fill-detail" data-key="${cust_key}">
 									${__("Fill this detail")}
