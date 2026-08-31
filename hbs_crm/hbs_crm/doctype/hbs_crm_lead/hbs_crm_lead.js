@@ -40,6 +40,12 @@ frappe.ui.form.on("Hbs Crm Lead", {
 
 		frm.clear_custom_buttons();
 
+		if (frm.doc.status !== "won" && frm.doc.status !== "lost") {
+			frm.add_custom_button(__("🔍 Auto Fill Details"), function () {
+				open_auto_fill_customer_dialog(frm);
+			});
+		}
+
 		if (!frm.is_new()) {
 			if (frm.doc.status !== "won" && frm.doc.status !== "lost") {
 				frm.add_custom_button(__("+ Follow-up"), function () {
@@ -788,5 +794,129 @@ function check_phone_number_in_use(frm) {
 			}
 		});
 	}
+}
+
+function open_auto_fill_customer_dialog(frm) {
+	let dialog = new frappe.ui.Dialog({
+		title: __("Search & Auto Fill Customer Details"),
+		fields: [
+			{
+				label: __("Search Customer"),
+				fieldname: "search_term",
+				fieldtype: "Data",
+				description: __("Type Customer Name, Company Name, Phone, Email, or GST and press Enter to search"),
+				onchange: function() {
+					perform_customer_search(dialog, frm);
+				}
+			},
+			{
+				fieldtype: "Button",
+				label: __("Search"),
+				fieldname: "search_btn",
+				click: function() {
+					perform_customer_search(dialog, frm);
+				}
+			},
+			{
+				fieldtype: "HTML",
+				fieldname: "results_html",
+				label: __("Results")
+			}
+		]
+	});
+
+	dialog.show();
+}
+
+function perform_customer_search(dialog, frm) {
+	let term = dialog.get_value("search_term");
+	if (!term || term.trim().length === 0) {
+		dialog.set_df_property("results_html", "options", '<div class="text-muted text-center" style="padding: 10px;">Please enter a search term.</div>');
+		return;
+	}
+
+	dialog.set_df_property("results_html", "options", '<div class="text-center" style="padding: 10px;"><i class="fa fa-spinner fa-spin"></i> Searching...</div>');
+
+	frappe.call({
+		method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.search_customers",
+		args: {
+			search_term: term
+		},
+		callback: function(r) {
+			if (r.message && r.message.length > 0) {
+				let html = `
+					<div style="max-height: 300px; overflow-y: auto; margin-top: 15px;">
+						<table class="table table-bordered table-hover" style="font-size: 13px;">
+							<thead>
+								<tr class="active">
+									<th>${__("Name")}</th>
+									<th>${__("Company")}</th>
+									<th>${__("Phone")}</th>
+									<th>${__("Email")}</th>
+									<th>${__("Action")}</th>
+								</tr>
+							</thead>
+							<tbody>
+				`;
+
+				r.message.forEach((cust, index) => {
+					let cust_key = `cust_res_${index}`;
+					if (!window.customer_search_results) {
+						window.customer_search_results = {};
+					}
+					window.customer_search_results[cust_key] = cust;
+
+					html += `
+						<tr>
+							<td><b>${cust.customer_name || ''}</b><br><small class="text-muted">${cust.name}</small></td>
+							<td>${cust.company_name || ''}<br><small class="text-muted">GST: ${cust.company_gst || ''}</small></td>
+							<td>${cust.contact_phone || ''}</td>
+							<td>${cust.contact_email || ''}</td>
+							<td class="text-center" style="vertical-align: middle;">
+								<button class="btn btn-xs btn-primary btn-fill-detail" data-key="${cust_key}">
+									${__("Fill this detail")}
+								</button>
+							</td>
+						</tr>
+					`;
+				});
+
+				html += `
+							</tbody>
+						</table>
+					</div>
+				`;
+
+				dialog.set_df_property("results_html", "options", html);
+
+				// Attach click listener to the dynamically generated buttons
+				dialog.$wrapper.find(".btn-fill-detail").on("click", function() {
+					let key = $(this).attr("data-key");
+					let customer_doc = window.customer_search_results[key];
+					if (customer_doc) {
+						// Auto fill values into lead form
+						frm.set_value("customer", customer_doc.name);
+						frm.set_value("company_name", customer_doc.company_name);
+						frm.set_value("company_gst", customer_doc.company_gst);
+						frm.set_value("contact_name", customer_doc.customer_name);
+						frm.set_value("contact_phone", customer_doc.contact_phone);
+						frm.set_value("contact_email", customer_doc.contact_email);
+						frm.set_value("address", customer_doc.address);
+						frm.set_value("tally_serial", customer_doc.tally_serial);
+						frm.set_value("license_type", customer_doc.license_type);
+
+						frappe.show_alert({
+							message: __("Customer details auto-filled successfully!"),
+							indicator: "green"
+						});
+
+						dialog.hide();
+					}
+				});
+			} else {
+				dialog.set_df_property("results_html", "options", '<div class="text-danger text-center" style="padding: 10px;">No matching customers found.</div>');
+			}
+		}
+	});
 }
 

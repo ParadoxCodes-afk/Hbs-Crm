@@ -822,3 +822,25 @@ def check_phone_in_use(contact_phone, current_lead_name=None):
 			return _("This number is already working with Executive - {0} for company {1}").format(exec_name, company)
 
 	return None
+
+
+@frappe.whitelist()
+def search_customers(search_term):
+	"""Search Hbs Customer records matching search_term in any of the identifying fields."""
+	if not search_term or not str(search_term).strip():
+		return []
+
+	term = f"%{str(search_term).strip()}%"
+
+	query = """
+		SELECT name, customer_name, company_name, company_gst, contact_phone, contact_email, address, tally_serial, license_type
+		FROM `tabHbs Customer`
+		WHERE `customer_name` LIKE %s
+		   OR `company_name` LIKE %s
+		   OR `contact_phone` LIKE %s
+		   OR `contact_email` LIKE %s
+		   OR `company_gst` LIKE %s
+		ORDER BY customer_name ASC
+		LIMIT 15
+	"""
+	return frappe.db.sql(query, (term, term, term, term, term), as_dict=True)
