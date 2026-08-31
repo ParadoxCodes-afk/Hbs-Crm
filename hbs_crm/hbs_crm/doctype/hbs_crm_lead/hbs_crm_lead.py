@@ -663,7 +663,7 @@ def has_permission(doc, ptype="read", user=None):
 
 @frappe.whitelist()
 def check_duplicate_lead(company_name=None, contact_name=None, contact_phone=None, contact_email=None, customer=None, lead_type=None, company_gst=None, current_lead_name=None):
-	"""Check if an active lead already exists for the same company_name, GST, and lead type."""
+	"""Check if an active lead already exists for the same company_name OR GST, and lead type."""
 	if not lead_type or not str(lead_type).strip():
 		return None
 
@@ -671,13 +671,11 @@ def check_duplicate_lead(company_name=None, contact_name=None, contact_phone=Non
 	company_name = str(company_name or "").strip()
 	company_gst = str(company_gst or "").strip()
 
-	if not company_name or not company_gst:
+	if not company_name and not company_gst:
 		return None
 
 	params = {
-		"lead_type": lead_type,
-		"company_name": company_name.lower(),
-		"company_gst": company_gst
+		"lead_type": lead_type
 	}
 
 	base_clause = "`lead_type` = %(lead_type)s AND `status` NOT IN ('won', 'lost')"
@@ -686,7 +684,15 @@ def check_duplicate_lead(company_name=None, contact_name=None, contact_phone=Non
 		base_clause += " AND `name` != %(current_lead_name)s"
 		params["current_lead_name"] = str(current_lead_name).strip()
 
-	where_clause = f"{base_clause} AND LOWER(`company_name`) = %(company_name)s AND `company_gst` = %(company_gst)s"
+	conds = []
+	if company_name:
+		conds.append("LOWER(`company_name`) = %(company_name)s")
+		params["company_name"] = company_name.lower()
+	if company_gst:
+		conds.append("`company_gst` = %(company_gst)s")
+		params["company_gst"] = company_gst
+
+	where_clause = f"{base_clause} AND ({ ' OR '.join(conds) })"
 
 	duplicates = frappe.db.sql(f"""
 		SELECT name, contact_name, company_name, lead_type, executive_1, executive_2, owner, creation
