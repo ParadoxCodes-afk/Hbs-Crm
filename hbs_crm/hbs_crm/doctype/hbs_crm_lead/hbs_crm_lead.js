@@ -4,6 +4,9 @@
 frappe.ui.form.on("Hbs Crm Lead", {
 	onload(frm) {
 		if (frm.is_new()) {
+			if (!frm.doc.executive_1) {
+				frm.set_value("executive_1", frappe.session.user);
+			}
 			if (!frm.doc.follow_up_date) {
 				frm.set_value("follow_up_date", frappe.datetime.get_today());
 			}
