@@ -260,10 +260,21 @@ class HbsCrmLead(Document):
 			creation_date = dup.get("creation_date")
 
 			msg = _(
-				"<b>Active Duplicate Lead Blocked!</b><br><br>"
-				"A lead for party <b>{0}</b> with Lead Type <b>{1}</b> has already been created by <b>{2}</b> on <b>{3}</b> (Lead #{4}).<br>"
-				"Active follow-ups are ongoing ({5} days since last follow-up).<br><br>"
-				"<i>You cannot save a new lead until Lead Type '{1}' is changed.</i>"
+				'<div style="border: 2px solid #ef4444; background-color: #fef2f2; padding: 15px; border-radius: 6px; font-family: sans-serif; text-align: left;">'
+				'  <h4 style="color: #b91c1c; margin-top: 0; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 8px;">'
+				'    🚨 Active Duplicate Lead Blocked!'
+				'  </h4>'
+				'  <hr style="border-top: 1px solid #fecaca; margin: 10px 0;">'
+				'  <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+				'    A lead for company/party <b>{0}</b> with Lead Type <b>{1}</b> has already been created by <b>{2}</b> on <b>{3}</b> (Lead #{4}).'
+				'  </p>'
+				'  <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+				'    Active follow-ups are ongoing (<b>{5}</b> days since last follow-up).'
+				'  </p>'
+				'  <p style="margin: 12px 0 0 0; font-size: 13px; font-style: italic; color: #b91c1c; font-weight: bold;">'
+				'    You cannot save a new lead until the Lead Type is changed.'
+				'  </p>'
+				'</div>'
 			).format(party, self.lead_type, exec_name, creation_date, lead_id, dup.get("days_inactive", 0))
 
 			frappe.throw(msg, title=_("Duplicate Lead Type Blocked"))

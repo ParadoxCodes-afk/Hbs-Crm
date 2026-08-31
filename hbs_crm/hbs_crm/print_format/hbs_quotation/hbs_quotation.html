@@ -234,13 +234,13 @@
 
                     <td class="center">{{ hsn or '' }}</td>
                     <td class="center">{{ item.qty }}</td>
-                    <td class="center">{{ item.rate }}</td>
+                    <td class="center">{{ "{:,.2f}".format(item.rate | float) }}</td>
 
                     {% if has_discount %}
-                    <td class="center">{{ discount }}</td>
+                    <td class="center">{{ "{:,.2f}".format(discount | float) }}</td>
                     {% endif %}
 
-                    <td class="center"><b>{{ row_total }}</b></td>
+                    <td class="center"><b>{{ "{:,.2f}".format(row_total | float) }}</b></td>
 
                 </tr>
 
@@ -254,21 +254,21 @@
                 <tr>
                     <td colspan="5"></td>
                     <td class="center"><b>SUBTOTAL</b></td>
-                    <td class="center">{{ doc.total_before_tax or 0 }}</td>
+                    <td class="center">{{ "{:,.2f}".format((doc.total_before_tax or 0) | float) }}</td>
                 </tr>
 
                 {% if doc.additional_discount and doc.additional_discount > 0 %}
                 <tr>
                     <td colspan="5"></td>
                     <td class="center"><b>DISCOUNT</b></td>
-                    <td class="center">{{ doc.additional_discount }}</td>
+                    <td class="center">{{ "{:,.2f}".format((doc.additional_discount or 0) | float) }}</td>
                 </tr>
                 {% endif %}
 
                 <tr>
                     <td colspan="5"></td>
                     <td class="center"><b>TAX</b></td>
-                    <td class="center">{{ doc.total_tax or 0 }}</td>
+                    <td class="center">{{ "{:,.2f}".format((doc.total_tax or 0) | float) }}</td>
                 </tr>
 
                 {% set raw_total = (doc.total_before_tax or 0) - (doc.additional_discount or 0) + (doc.total_tax or 0) %}
@@ -278,14 +278,14 @@
                 <tr>
                     <td colspan="5"></td>
                     <td class="center"><b>ROUND OFF</b></td>
-                    <td class="center">{{ "{:.2f}".format(round_off) }}</td>
+                    <td class="center">{{ "{:,.2f}".format(round_off | float) }}</td>
                 </tr>
                 {% endif %}
 
                 <tr>
                     <td colspan="5"></td>
                     <td class="center"><b>TOTAL</b></td>
-                    <td class="center"><b>{{ final_total_rounded }}</b></td>
+                    <td class="center"><b>{{ "{:,.2f}".format(final_total_rounded | float) }}</b></td>
                 </tr>
 
                 <tr>

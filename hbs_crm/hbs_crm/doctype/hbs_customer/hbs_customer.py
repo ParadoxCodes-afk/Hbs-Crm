@@ -14,10 +14,21 @@ class HbsCustomer(Document):
 			existing = frappe.db.exists("Hbs Customer", {"company_gst": gst, "name": ["!=", self.name]})
 			if existing:
 				msg = _(
-					"<b>Duplicate Customer GST Blocked!</b><br><br>"
-					"A customer with GST Number <b>{0}</b> already exists in the system.<br>"
-					"Existing Customer ID: <b>{1}</b>.<br><br>"
-					"<i>You cannot create a duplicate customer record.</i>"
+					'<div style="border: 2px solid #ef4444; background-color: #fef2f2; padding: 15px; border-radius: 6px; font-family: sans-serif; text-align: left;">'
+					'  <h4 style="color: #b91c1c; margin-top: 0; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 8px;">'
+					'    🚨 Duplicate Customer GST Blocked!'
+					'  </h4>'
+					'  <hr style="border-top: 1px solid #fecaca; margin: 10px 0;">'
+					'  <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+					'    A customer with GST Number <b>{0}</b> already exists in the system.'
+					'  </p>'
+					'  <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+					'    Existing Customer ID: <b>{1}</b>.'
+					'  </p>'
+					'  <p style="margin: 12px 0 0 0; font-size: 13px; font-style: italic; color: #b91c1c; font-weight: bold;">'
+					'    You cannot create a duplicate customer record.'
+					'  </p>'
+					'</div>'
 				).format(gst, existing)
 				frappe.throw(msg, title=_("Duplicate Customer GST"))
 
@@ -27,10 +38,21 @@ class HbsCustomer(Document):
 			existing = frappe.db.exists("Hbs Customer", {"contact_phone": phone, "name": ["!=", self.name]})
 			if existing:
 				msg = _(
-					"<b>Duplicate Customer Phone Blocked!</b><br><br>"
-					"A customer with Phone Number <b>{0}</b> already exists in the system.<br>"
-					"Existing Customer ID: <b>{1}</b>.<br><br>"
-					"<i>You cannot create a duplicate customer record.</i>"
+					'<div style="border: 2px solid #ef4444; background-color: #fef2f2; padding: 15px; border-radius: 6px; font-family: sans-serif; text-align: left;">'
+					'  <h4 style="color: #b91c1c; margin-top: 0; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 8px;">'
+					'    🚨 Duplicate Customer Phone Blocked!'
+					'  </h4>'
+					'  <hr style="border-top: 1px solid #fecaca; margin: 10px 0;">'
+					'  <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+					'    A customer with Phone Number <b>{0}</b> already exists in the system.'
+					'  </p>'
+					'  <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+					'    Existing Customer ID: <b>{1}</b>.'
+					'  </p>'
+					'  <p style="margin: 12px 0 0 0; font-size: 13px; font-style: italic; color: #b91c1c; font-weight: bold;">'
+					'    You cannot create a duplicate customer record.'
+					'  </p>'
+					'</div>'
 				).format(phone, existing)
 				frappe.throw(msg, title=_("Duplicate Customer Phone"))
 
@@ -40,10 +62,21 @@ class HbsCustomer(Document):
 			existing = frappe.db.exists("Hbs Customer", {"contact_email": email, "name": ["!=", self.name]})
 			if existing:
 				msg = _(
-					"<b>Duplicate Customer Email Blocked!</b><br><br>"
-					"A customer with Email ID <b>{0}</b> already exists in the system.<br>"
-					"Existing Customer ID: <b>{1}</b>.<br><br>"
-					"<i>You cannot create a duplicate customer record.</i>"
+					'<div style="border: 2px solid #ef4444; background-color: #fef2f2; padding: 15px; border-radius: 6px; font-family: sans-serif; text-align: left;">'
+					'  <h4 style="color: #b91c1c; margin-top: 0; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 8px;">'
+					'    🚨 Duplicate Customer Email Blocked!'
+					'  </h4>'
+					'  <hr style="border-top: 1px solid #fecaca; margin: 10px 0;">'
+					'  <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+					'    A customer with Email ID <b>{0}</b> already exists in the system.'
+					'  </p>'
+					'  <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+					'    Existing Customer ID: <b>{1}</b>.'
+					'  </p>'
+					'  <p style="margin: 12px 0 0 0; font-size: 13px; font-style: italic; color: #b91c1c; font-weight: bold;">'
+					'    You cannot create a duplicate customer record.'
+					'  </p>'
+					'</div>'
 				).format(email, existing)
 				frappe.throw(msg, title=_("Duplicate Customer Email"))
 
@@ -60,10 +93,21 @@ class HbsCustomer(Document):
 			""", (name_str, name_str, self.name or ""), as_dict=True)
 			if existing:
 				msg = _(
-					"<b>Duplicate Customer Name Blocked!</b><br><br>"
-					"A customer with Name/Company <b>{0}</b> already exists in the system.<br>"
-					"Existing Customer ID: <b>{1}</b>.<br><br>"
-					"<i>You cannot create a duplicate customer record.</i>"
+					'<div style="border: 2px solid #ef4444; background-color: #fef2f2; padding: 15px; border-radius: 6px; font-family: sans-serif; text-align: left;">'
+					'  <h4 style="color: #b91c1c; margin-top: 0; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 8px;">'
+					'    🚨 Duplicate Customer Name Blocked!'
+					'  </h4>'
+					'  <hr style="border-top: 1px solid #fecaca; margin: 10px 0;">'
+					'  <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+					'    A customer with Name/Company <b>{0}</b> already exists in the system.'
+					'  </p>'
+					'  <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
+					'    Existing Customer ID: <b>{1}</b>.'
+					'  </p>'
+					'  <p style="margin: 12px 0 0 0; font-size: 13px; font-style: italic; color: #b91c1c; font-weight: bold;">'
+					'    You cannot create a duplicate customer record.'
+					'  </p>'
+					'</div>'
 				).format(name_str, existing[0].name)
 				frappe.throw(msg, title=_("Duplicate Customer Name"))
 
