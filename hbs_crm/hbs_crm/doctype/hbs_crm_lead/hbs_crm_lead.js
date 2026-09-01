@@ -29,6 +29,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 				frm.set_value("validity", "ONE WEEK");
 			}
 		}
+		handle_executive_1_permission(frm);
 	},
 
 	refresh(frm) {
@@ -36,7 +37,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		toggle_won_status_read_only(frm);
 		handle_lead_type_terms(frm);
 		handle_referred_by_dependency(frm);
-		frm.set_df_property("executive_1", "read_only", 1);
+		handle_executive_1_permission(frm);
 
 		frm.clear_custom_buttons();
 
@@ -916,6 +917,22 @@ function perform_customer_search(dialog, frm) {
 			} else {
 				dialog.set_df_property("results_html", "options", '<div class="text-danger text-center" style="padding: 10px;">No matching customers found.</div>');
 			}
+		}
+	});
+}
+
+function handle_executive_1_permission(frm) {
+	if (frappe.session.user === "Administrator" || frappe.user.has_role("System Manager")) {
+		frm.set_df_property("executive_1", "read_only", 0);
+		return;
+	}
+
+	frappe.db.get_value("Hbs User Hierarchy", {"user": frappe.session.user}, "role_type", function(r) {
+		let role = r && (r.role_type || (r.message && r.message.role_type));
+		if (role === "Owner") {
+			frm.set_df_property("executive_1", "read_only", 0);
+		} else {
+			frm.set_df_property("executive_1", "read_only", 1);
 		}
 	});
 }

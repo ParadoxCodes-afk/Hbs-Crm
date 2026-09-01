@@ -185,7 +185,6 @@
    "in_standard_filter": 1,
    "label": "Executive 1",
    "options": "User",
-   "read_only": 1,
    "reqd": 1
   },
   {

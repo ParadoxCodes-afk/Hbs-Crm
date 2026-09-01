@@ -17,6 +17,7 @@ class HbsCrmLead(Document):
 			self.contact_name = self.company_name or f"Lead #{self.name}"
 		self.set_default_terms_if_empty()
 		self.validate_tally_serial_for_won()
+		self.validate_executive_1_permission()
 		self.validate_won_status_lock()
 		self.validate_no_duplicate_lead_type()
 		self.validate_follow_up_date()
@@ -28,6 +29,32 @@ class HbsCrmLead(Document):
 		self.record_remark_activity()
 		self.calculate_totals()
 		self.render_activity_html()
+
+	def validate_executive_1_permission(self):
+		"""Only Owner and Administrator / System Manager can assign or change Executive 1 to someone else."""
+		user = frappe.session.user if frappe.session else "System"
+		if not user or user in ("Administrator", "System"):
+			return
+
+		roles = frappe.get_roles(user)
+		if "System Manager" in roles:
+			return
+
+		hierarchy_entry = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, ["role_type"], as_dict=True)
+		if hierarchy_entry and hierarchy_entry.get("role_type") == "Owner":
+			return
+
+		# If regular user is creating a lead, default executive_1 to themselves
+		if self.is_new():
+			if not self.executive_1:
+				self.executive_1 = user
+			elif self.executive_1 != user:
+				self.executive_1 = user
+		else:
+			old_exec = frappe.db.get_value("Hbs Crm Lead", self.name, "executive_1")
+			if old_exec and self.executive_1 != old_exec:
+				if not getattr(self.flags, "in_takeover", False):
+					frappe.throw(_("Only Owner and Administrator can change Executive 1."), title=_("Permission Denied"))
 
 	def validate_tally_serial_for_won(self):
 		"""Validate that Tally Serial Number is mandatory when status is Won."""
@@ -817,6 +844,7 @@ def take_over_lead(lead_name):
 		"remark": remark_text
 	})
 
+	doc.flags.in_takeover = True
 	doc.save(ignore_permissions=True)
 	frappe.db.set_value("Hbs Crm Lead", doc.name, "owner", user)
 	frappe.db.commit()
