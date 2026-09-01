@@ -13,21 +13,6 @@ frappe.ui.form.on("Hbs Crm Lead", {
 			if (!frm.doc.follow_up_time) {
 				frm.set_value("follow_up_time", frappe.datetime.now_time());
 			}
-			if (!frm.doc.payment_terms) {
-				frm.set_value("payment_terms", "100% advance along with confirm order.");
-			}
-			if (!frm.doc.delivery) {
-				frm.set_value("delivery", "2-3 working days.");
-			}
-			if (!frm.doc.support) {
-				frm.set_value("support", "3 Months Telephonic Support from invoice date.");
-			}
-			if (!frm.doc.taxes) {
-				frm.set_value("taxes", "All Inclusive");
-			}
-			if (!frm.doc.validity) {
-				frm.set_value("validity", "ONE WEEK");
-			}
 		}
 		handle_executive_1_permission(frm);
 	},
@@ -38,6 +23,12 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		handle_lead_type_terms(frm);
 		handle_referred_by_dependency(frm);
 		handle_executive_1_permission(frm);
+
+		frm.set_query("referred_by", function() {
+			return {
+				query: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.get_customer_reference_list"
+			};
+		});
 
 		frm.clear_custom_buttons();
 

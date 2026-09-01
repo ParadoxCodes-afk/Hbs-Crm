@@ -6,6 +6,109 @@ from frappe import _
 from frappe.model.document import Document
 
 
+# --- Shared helpers (previously duplicated across multiple methods) ---
+
+def clean_indian_phone(raw):
+	"""Normalize a phone number to a bare 10-digit string, stripping +91 / 91 prefixes."""
+	if not raw:
+		return raw
+	raw = str(raw).strip()
+	if raw.startswith("+91-"):
+		raw = raw[4:].strip()
+	elif raw.startswith("+91"):
+		raw = raw[3:].strip()
+	elif raw.startswith("91") and len(raw) > 10:
+		raw = raw[2:].strip()
+	return "".join(filter(str.isdigit, raw))[:10]
+
+
+def find_duplicate_phone_warning(contact_phone, current_lead_name=None, session_user=None):
+	"""Return a warning message if contact_phone is already worked by a different executive, else None."""
+	digits = clean_indian_phone(contact_phone)
+	if not digits:
+		return None
+
+	existing = frappe.db.sql(
+		"""
+		SELECT name, company_name, contact_name, executive_1, owner
+		FROM `tabHbs Crm Lead`
+		WHERE `contact_phone` = %s AND `name` != %s
+		LIMIT 1
+		""",
+		(digits, current_lead_name or ""),
+		as_dict=True,
+	)
+	if not existing:
+		return None
+
+	lead = existing[0]
+	exec_user = lead.get("executive_1") or lead.get("owner")
+	current_user = session_user or (frappe.session.user if frappe.session else None)
+	if exec_user == current_user:
+		return None
+
+	exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
+	company = lead.get("company_name") or lead.get("contact_name") or "Unnamed"
+	return _("This number is already working with Executive - {0} for company {1}").format(exec_name, company)
+
+
+def is_owner_or_admin(user):
+	"""True if the given user is Administrator/System, has System Manager role, or is an Owner in the hierarchy."""
+	if not user or user in ("Administrator", "System"):
+		return True
+	if "System Manager" in frappe.get_roles(user):
+		return True
+	role_type = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
+	return role_type == "Owner"
+
+
+def get_logged_in_user_context(user=None):
+	"""Build the `logged_in_user` dict used by email templates."""
+	user = user or (frappe.session.user if frappe.session else "Administrator")
+	user_doc = frappe.get_doc("User", user) if frappe.db.exists("User", user) else None
+
+	phone = ""
+	if user_doc:
+		phone = user_doc.get("phone_number") or user_doc.get("mobile_no") or user_doc.get("phone") or ""
+
+	return {
+		"full_name": (user_doc.full_name if user_doc and user_doc.full_name else "Sales Representative"),
+		"mobile_no": phone,
+		"phone": phone,
+		"phone_number": phone,
+		"email": (user_doc.email if user_doc and user_doc.email else ""),
+	}
+
+
+def get_quotation_pdf_attachment(doc):
+	"""Render the HBS Quotation print format to PDF and return an attachments list (or [] on failure)."""
+	try:
+		pdf_content = frappe.get_print(
+			doctype=doc.doctype,
+			name=doc.name,
+			print_format="HBS Quotation",
+			as_pdf=True,
+		)
+		if pdf_content:
+			return [{
+				"fname": f"{doc.company_name or doc.name}.pdf",
+				"fcontent": pdf_content,
+			}]
+	except Exception as e:
+		frappe.log_error(f"PDF generation error for Lead {doc.name}: {str(e)}", "Quotation PDF Warning")
+	return []
+
+
+def get_last_activity_date(lead_name, fallback_date):
+	"""Return the most recent Hbs Lead Activity date_time for lead_name, or fallback_date if none exist."""
+	row = frappe.db.sql(
+		"SELECT MAX(`date_time`) FROM `tabHbs Lead Activity` WHERE `parent` = %s",
+		lead_name,
+	)
+	latest = row[0][0] if row and row[0][0] else None
+	return latest or fallback_date
+
+
 class HbsCrmLead(Document):
 	@property
 	def user(self):
@@ -33,22 +136,12 @@ class HbsCrmLead(Document):
 	def validate_executive_1_permission(self):
 		"""Only Owner and Administrator / System Manager can assign or change Executive 1 to someone else."""
 		user = frappe.session.user if frappe.session else "System"
-		if not user or user in ("Administrator", "System"):
-			return
-
-		roles = frappe.get_roles(user)
-		if "System Manager" in roles:
-			return
-
-		hierarchy_entry = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, ["role_type"], as_dict=True)
-		if hierarchy_entry and hierarchy_entry.get("role_type") == "Owner":
+		if is_owner_or_admin(user):
 			return
 
 		# If regular user is creating a lead, default executive_1 to themselves
 		if self.is_new():
-			if not self.executive_1:
-				self.executive_1 = user
-			elif self.executive_1 != user:
+			if not self.executive_1 or self.executive_1 != user:
 				self.executive_1 = user
 		else:
 			old_exec = frappe.db.get_value("Hbs Crm Lead", self.name, "executive_1")
@@ -63,16 +156,16 @@ class HbsCrmLead(Document):
 
 	def set_default_terms_if_empty(self):
 		"""Pre-fill terms and conditions fields with defaults on save if empty."""
-		if not self.payment_terms:
-			self.payment_terms = "100% advance along with confirm order."
-		if not self.delivery:
-			self.delivery = "2-3 working days."
-		if not self.support:
-			self.support = "3 Months Telephonic Support from invoice date."
-		if not self.taxes:
-			self.taxes = "All Inclusive"
-		if not self.validity:
-			self.validity = "ONE WEEK"
+		defaults = {
+			"payment_terms": "100% advance along with confirm order.",
+			"delivery": "2-3 working days.",
+			"support": "3 Months Telephonic Support from invoice date.",
+			"taxes": "All Inclusive",
+			"validity": "ONE WEEK",
+		}
+		for field, default_value in defaults.items():
+			if not getattr(self, field, None):
+				setattr(self, field, default_value)
 
 	def calculate_totals(self):
 		"""Calculate totals and taxes taking additional discount into account first."""
@@ -83,24 +176,21 @@ class HbsCrmLead(Document):
 			self.final_total = 0
 			return
 
+		row_subtotals = []
 		total_before_tax = 0
 		for row in self.items:
 			qty = frappe.utils.flt(row.qty) or 1
 			rate = frappe.utils.flt(row.rate) or 0
 			discount = frappe.utils.flt(row.discount_amount) or 0
 			row_subtotal = (qty * rate) - discount
+			row_subtotals.append(row_subtotal)
 			total_before_tax += row_subtotal
 
 		additional_discount = frappe.utils.flt(self.additional_discount) or 0
 		total_tax = 0
 		total_after_tax = 0
 
-		for row in self.items:
-			qty = frappe.utils.flt(row.qty) or 1
-			rate = frappe.utils.flt(row.rate) or 0
-			discount = frappe.utils.flt(row.discount_amount) or 0
-			row_subtotal = (qty * rate) - discount
-
+		for row, row_subtotal in zip(self.items, row_subtotals):
 			row_additional_discount = 0
 			if total_before_tax > 0:
 				row_additional_discount = (row_subtotal / total_before_tax) * additional_discount
@@ -124,51 +214,20 @@ class HbsCrmLead(Document):
 	def validate_contact_phone_length(self):
 		"""Enforce pure 10-digit mobile numbers without prepending +91."""
 		if self.contact_phone:
-			raw = str(self.contact_phone).strip()
-			if raw.startswith("+91-"): raw = raw[4:].strip()
-			elif raw.startswith("+91"): raw = raw[3:].strip()
-			elif raw.startswith("91") and len(raw) > 10: raw = raw[2:].strip()
+			self.contact_phone = clean_indian_phone(self.contact_phone)
 
-			digits = "".join(filter(str.isdigit, raw))[:10]
-			self.contact_phone = digits
-
-		if getattr(self, "all_contacts", None):
-			for row in self.all_contacts:
-				if row.contact_phone:
-					raw = str(row.contact_phone).strip()
-					if raw.startswith("+91-"): raw = raw[4:].strip()
-					elif raw.startswith("+91"): raw = raw[3:].strip()
-					elif raw.startswith("91") and len(raw) > 10: raw = raw[2:].strip()
-
-					digits = "".join(filter(str.isdigit, raw))[:10]
-					row.contact_phone = digits
+		for row in getattr(self, "all_contacts", None) or []:
+			if row.contact_phone:
+				row.contact_phone = clean_indian_phone(row.contact_phone)
 
 	def notify_duplicate_contact_phone(self):
 		"""Notify if another user is already working with this contact number."""
 		if not self.contact_phone:
 			return
 
-		# Find other active or existing leads with the same contact_phone (excluding self)
-		query = """
-			SELECT name, company_name, contact_name, executive_1, owner 
-			FROM `tabHbs Crm Lead` 
-			WHERE `contact_phone` = %s AND `name` != %s
-			LIMIT 1
-		"""
-		existing = frappe.db.sql(query, (self.contact_phone, self.name or ""), as_dict=True)
-		if existing:
-			lead = existing[0]
-			exec_user = lead.get("executive_1") or lead.get("owner")
-			
-			# If the lead is assigned to a different user, trigger notification
-			if exec_user != frappe.session.user:
-				exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
-				company = lead.get("company_name") or lead.get("contact_name") or "Unnamed"
-				frappe.msgprint(
-					_("This number is already working with Executive - {0} for company {1}").format(exec_name, company),
-					title=_("Phone Number In Use"),
-					indicator="orange"
-				)
+		warning = find_duplicate_phone_warning(self.contact_phone, current_lead_name=self.name)
+		if warning:
+			frappe.msgprint(warning, title=_("Phone Number In Use"), indicator="orange")
 
 	def sync_primary_contact_to_all_contacts(self):
 		"""Ensure primary contact details populate automatically in the All Contacts table and stay in sync."""
@@ -344,8 +403,6 @@ class HbsCrmLead(Document):
 						"remark": rem
 					})
 
-
-
 		if not raw_list:
 			self.activity = "<div style='color:#a0aec0; font-style:italic; padding:10px;'>No activities recorded yet.</div>"
 			return
@@ -360,11 +417,11 @@ class HbsCrmLead(Document):
 			user_email = item.get("user") or "System"
 			dt = item.get("date_time")
 			remark_text = item.get("remark") or ""
-			
+
 			formatted_datetime = ""
 			if dt:
 				from zoneinfo import ZoneInfo
-				from frappe.utils import get_datetime, get_system_timezone
+				from frappe.utils import get_datetime
 				system_tz = frappe.utils.get_system_timezone() or "Asia/Kolkata"
 				dt_obj = get_datetime(dt)
 				if dt_obj.tzinfo is None:
@@ -397,6 +454,18 @@ class HbsCrmLead(Document):
 			if frappe.db.get_value("Hbs Customer", cust_name, "lead_reference") == self.name:
 				frappe.delete_doc("Hbs Customer", cust_name, ignore_permissions=True)
 
+	def _sync_customer_contacts(self, cust_doc):
+		"""Push this lead's all_contacts rows onto the given customer doc."""
+		if not getattr(self, "all_contacts", None):
+			return
+		for row in self.all_contacts:
+			cust_doc.append("all_contacts", {
+				"contact_name": row.contact_name,
+				"contact_phone": row.contact_phone,
+				"contact_email": row.contact_email,
+				"contact_designation": row.contact_designation
+			})
+
 	def sync_or_create_customer(self):
 		"""Auto-create or update Hbs Customer record upon Lead creation/save."""
 		cust_name = self.contact_name or self.company_name or self.contact_email or self.contact_phone
@@ -428,16 +497,8 @@ class HbsCrmLead(Document):
 			cust_doc.license_type = self.license_type or cust_doc.license_type
 			cust_doc.address = getattr(self, "address", None) or cust_doc.address
 
-			# Sync contacts child table
 			cust_doc.set("all_contacts", [])
-			if getattr(self, "all_contacts", None):
-				for row in self.all_contacts:
-					cust_doc.append("all_contacts", {
-						"contact_name": row.contact_name,
-						"contact_phone": row.contact_phone,
-						"contact_email": row.contact_email,
-						"contact_designation": row.contact_designation
-					})
+			self._sync_customer_contacts(cust_doc)
 
 			cust_doc.save(ignore_permissions=True)
 		else:
@@ -453,15 +514,7 @@ class HbsCrmLead(Document):
 			if not self.is_new():
 				cust_doc.lead_reference = self.name
 
-			# Sync contacts child table
-			if getattr(self, "all_contacts", None):
-				for row in self.all_contacts:
-					cust_doc.append("all_contacts", {
-						"contact_name": row.contact_name,
-						"contact_phone": row.contact_phone,
-						"contact_email": row.contact_email,
-						"contact_designation": row.contact_designation
-					})
+			self._sync_customer_contacts(cust_doc)
 
 			cust_doc.insert(ignore_permissions=True)
 			self.customer = cust_doc.name
@@ -491,23 +544,7 @@ class HbsCrmLead(Document):
 			else:
 				return
 
-		# Get logged in user details for the template context
-		user_doc = None
-		current_user = frappe.session.user if frappe.session else "Administrator"
-		if frappe.db.exists("User", current_user):
-			user_doc = frappe.get_doc("User", current_user)
-
-		phone_val = ""
-		if user_doc:
-			phone_val = user_doc.get("phone_number") or user_doc.get("mobile_no") or user_doc.get("phone") or ""
-
-		logged_in_user_dict = {
-			"full_name": user_doc.full_name if user_doc and user_doc.full_name else "Sales Representative",
-			"mobile_no": phone_val,
-			"phone": phone_val,
-			"phone_number": phone_val,
-			"email": user_doc.email if user_doc and user_doc.email else ""
-		}
+		logged_in_user_dict = get_logged_in_user_context()
 
 		subject_template = settings.email_subject or "Quotation {{ doc.name }} for {{ doc.company_name or doc.contact_name or 'Valued Client' }}"
 		subject = frappe.render_template(subject_template, {"doc": self, "logged_in_user": logged_in_user_dict})
@@ -519,21 +556,7 @@ class HbsCrmLead(Document):
 		email_addr = settings.email_id or "tally@hbsmail.in"
 		sender = f"{display_name} <{email_addr}>"
 
-		attachments = []
-		try:
-			pdf_content = frappe.get_print(
-				doctype=self.doctype,
-				name=self.name,
-				print_format="HBS Quotation",
-				as_pdf=True
-			)
-			if pdf_content:
-				attachments.append({
-					"fname": f"{self.company_name or self.name}.pdf",
-					"fcontent": pdf_content
-				})
-		except Exception as e:
-			frappe.log_error(f"PDF generation error for Lead {self.name}: {str(e)}", "Quotation PDF Warning")
+		attachments = get_quotation_pdf_attachment(self)
 
 		frappe.sendmail(
 			recipients=[self.contact_email],
@@ -554,24 +577,8 @@ def get_rendered_email_template(lead_name):
 	"""Render email subject and body template from Hbs CRM Email Settings for the given lead."""
 	doc = frappe.get_doc("Hbs Crm Lead", lead_name)
 	settings = frappe.get_doc("Hbs CRM Email Settings", ignore_permissions=True)
-	
-	# Get logged in user details for the template context
-	user_doc = None
-	current_user = frappe.session.user if frappe.session else "Administrator"
-	if frappe.db.exists("User", current_user):
-		user_doc = frappe.get_doc("User", current_user)
 
-	phone_val = ""
-	if user_doc:
-		phone_val = user_doc.get("phone_number") or user_doc.get("mobile_no") or user_doc.get("phone") or ""
-
-	logged_in_user_dict = {
-		"full_name": user_doc.full_name if user_doc and user_doc.full_name else "Sales Representative",
-		"mobile_no": phone_val,
-		"phone": phone_val,
-		"phone_number": phone_val,
-		"email": user_doc.email if user_doc and user_doc.email else ""
-	}
+	logged_in_user_dict = get_logged_in_user_context()
 
 	subject_template = settings.email_subject or "Quotation {{ doc.name }} for {{ doc.company_name or doc.contact_name or 'Valued Client' }}"
 	subject = frappe.render_template(subject_template, {"doc": doc, "logged_in_user": logged_in_user_dict})
@@ -585,6 +592,7 @@ def get_rendered_email_template(lead_name):
 		"from_email": settings.email_id or "tally@hbsmail.in",
 		"sender_name": settings.sender_name or "HBS Sales Team"
 	}
+
 
 @frappe.whitelist()
 def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None, from_email=None, sender_name=None, attach_print=1):
@@ -605,22 +613,7 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 
 	sender = f"{display_name} <{email_addr}>"
 
-	attachments = []
-	if frappe.utils.cint(attach_print) == 1:
-		try:
-			pdf_content = frappe.get_print(
-				doctype=doc.doctype,
-				name=doc.name,
-				print_format="HBS Quotation",
-				as_pdf=True
-			)
-			if pdf_content:
-				attachments.append({
-					"fname": f"{doc.company_name or doc.name}.pdf",
-					"fcontent": pdf_content
-				})
-		except Exception as e:
-			frappe.log_error(f"Attachment error for Lead {doc.name}: {str(e)}", "Quotation Attachment Warning")
+	attachments = get_quotation_pdf_attachment(doc) if frappe.utils.cint(attach_print) == 1 else []
 
 	frappe.sendmail(
 		recipients=[e.strip() for e in to_email.split(",") if e.strip()],
@@ -647,7 +640,13 @@ def get_activity_html(lead_name):
 
 
 def get_subordinates_from_hierarchy(user, visited=None):
-	"""Recursively get all users reporting directly or indirectly to the given user in Hbs User Hierarchy."""
+	"""Recursively get all users reporting directly or indirectly to the given user in Hbs User Hierarchy (cached in request)."""
+	if not hasattr(frappe.local, "subordinates_cache"):
+		frappe.local.subordinates_cache = {}
+
+	if visited is None and user in frappe.local.subordinates_cache:
+		return frappe.local.subordinates_cache[user]
+
 	if visited is None:
 		visited = set()
 	if user in visited:
@@ -664,7 +663,11 @@ def get_subordinates_from_hierarchy(user, visited=None):
 		if report not in subordinates:
 			subordinates.append(report)
 			subordinates.extend(get_subordinates_from_hierarchy(report, visited))
-	return list(set(subordinates))
+
+	result = list(set(subordinates))
+	if len(visited) == 1:
+		frappe.local.subordinates_cache[user] = result
+	return result
 
 
 def get_permission_query_conditions(user=None):
@@ -672,21 +675,8 @@ def get_permission_query_conditions(user=None):
 	if not user:
 		user = frappe.session.user
 
-	# Administrator / System Manager sees ALL leads without date restrictions
-	roles = frappe.get_roles(user)
-	if "System Manager" in roles or user == "Administrator":
-		return ""
-
-	# Check Hbs User Hierarchy entry for this user
-	hierarchy_entry = frappe.db.get_value(
-		"Hbs User Hierarchy",
-		{"user": user},
-		["role_type", "name"],
-		as_dict=True
-	)
-
-	# If role is Owner, return "" (sees all leads across the company)
-	if hierarchy_entry and hierarchy_entry.get("role_type") == "Owner":
+	# Administrator / System Manager / Owner sees ALL leads without date restrictions
+	if is_owner_or_admin(user):
 		return ""
 
 	# Standard user level (Manager, Executive): Team members only (no date restrictions on permissions)
@@ -704,18 +694,7 @@ def has_permission(doc, ptype="read", user=None):
 	if not user:
 		user = frappe.session.user
 
-	roles = frappe.get_roles(user)
-	if "System Manager" in roles or user == "Administrator":
-		return True
-
-	hierarchy_entry = frappe.db.get_value(
-		"Hbs User Hierarchy",
-		{"user": user},
-		["role_type", "name"],
-		as_dict=True
-	)
-
-	if hierarchy_entry and hierarchy_entry.get("role_type") == "Owner":
+	if is_owner_or_admin(user):
 		return True
 
 	subordinates = get_subordinates_from_hierarchy(user)
@@ -769,36 +748,29 @@ def check_duplicate_lead(company_name=None, contact_name=None, contact_phone=Non
 		LIMIT 1
 	""", params, as_dict=True)
 
-	if duplicates:
-		dup = duplicates[0]
+	if not duplicates:
+		return None
 
-		exec_user = dup.get("executive_1") or dup.get("executive_2") or dup.get("owner")
-		exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
-		dup["executive_full_name"] = exec_name
-		dup["creation_date"] = frappe.utils.formatdate(dup.creation, "dd/MM/yyyy")
+	dup = duplicates[0]
 
-		# Calculate last follow-up / activity date
-		latest_activity_row = frappe.db.sql(
-			"SELECT MAX(`date_time`) FROM `tabHbs Lead Activity` WHERE `parent` = %s",
-			dup["name"]
-		)
-		latest_activity_date = latest_activity_row[0][0] if latest_activity_row and latest_activity_row[0][0] else None
+	exec_user = dup.get("executive_1") or dup.get("executive_2") or dup.get("owner")
+	exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
+	dup["executive_full_name"] = exec_name
+	dup["creation_date"] = frappe.utils.formatdate(dup.creation, "dd/MM/yyyy")
 
-		last_date = latest_activity_date or dup.get("creation")
-		if last_date:
-			today = frappe.utils.getdate()
-			last_d = frappe.utils.getdate(last_date)
-			days_diff = frappe.utils.date_diff(today, last_d)
-			dup["days_inactive"] = max(0, days_diff)
-			dup["last_follow_up_formatted"] = frappe.utils.formatdate(last_d, "dd/MM/yyyy")
-			dup["is_inactive"] = days_diff > 15
-		else:
-			dup["days_inactive"] = 0
-			dup["is_inactive"] = False
+	last_date = get_last_activity_date(dup["name"], dup.get("creation"))
+	if last_date:
+		today = frappe.utils.getdate()
+		last_d = frappe.utils.getdate(last_date)
+		days_diff = frappe.utils.date_diff(today, last_d)
+		dup["days_inactive"] = max(0, days_diff)
+		dup["last_follow_up_formatted"] = frappe.utils.formatdate(last_d, "dd/MM/yyyy")
+		dup["is_inactive"] = days_diff > 15
+	else:
+		dup["days_inactive"] = 0
+		dup["is_inactive"] = False
 
-		return dup
-
-	return None
+	return dup
 
 
 @frappe.whitelist()
@@ -809,14 +781,7 @@ def take_over_lead(lead_name):
 
 	doc = frappe.get_doc("Hbs Crm Lead", lead_name)
 
-	# Calculate days inactive
-	latest_activity_row = frappe.db.sql(
-		"SELECT MAX(`date_time`) FROM `tabHbs Lead Activity` WHERE `parent` = %s",
-		doc.name
-	)
-	latest_activity_date = latest_activity_row[0][0] if latest_activity_row and latest_activity_row[0][0] else None
-
-	last_date = latest_activity_date or doc.creation
+	last_date = get_last_activity_date(doc.name, doc.creation)
 	days_diff = frappe.utils.date_diff(frappe.utils.getdate(), frappe.utils.getdate(last_date))
 
 	if days_diff <= 15:
@@ -832,7 +797,7 @@ def take_over_lead(lead_name):
 	doc.executive_1 = user
 	if doc.executive_2 in (user, old_exec):
 		doc.executive_2 = None
-	
+
 	doc.follow_up_date = frappe.utils.today()
 	doc.follow_up_time = frappe.utils.nowtime()
 
@@ -858,38 +823,7 @@ def take_over_lead(lead_name):
 @frappe.whitelist()
 def check_phone_in_use(contact_phone, current_lead_name=None):
 	"""Check if the contact_phone is already in use by another user's lead and return warning message."""
-	if not contact_phone:
-		return None
-
-	# Format contact phone to match format logic in python controller
-	raw = str(contact_phone).strip()
-	if raw.startswith("+91-"): raw = raw[4:].strip()
-	elif raw.startswith("+91"): raw = raw[3:].strip()
-	elif raw.startswith("91") and len(raw) > 10: raw = raw[2:].strip()
-	digits = "".join(filter(str.isdigit, raw))[:10]
-
-	if not digits:
-		return None
-
-	# Query another lead with the same phone
-	query = """
-		SELECT name, company_name, contact_name, executive_1, owner 
-		FROM `tabHbs Crm Lead` 
-		WHERE `contact_phone` = %s AND `name` != %s
-		LIMIT 1
-	"""
-	existing = frappe.db.sql(query, (digits, current_lead_name or ""), as_dict=True)
-	if existing:
-		lead = existing[0]
-		exec_user = lead.get("executive_1") or lead.get("owner")
-		
-		# Warn only if lead is working with a different user
-		if exec_user != frappe.session.user:
-			exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
-			company = lead.get("company_name") or lead.get("contact_name") or "Unnamed"
-			return _("This number is already working with Executive - {0} for company {1}").format(exec_name, company)
-
-	return None
+	return find_duplicate_phone_warning(contact_phone, current_lead_name=current_lead_name)
 
 
 @frappe.whitelist()
@@ -913,3 +847,25 @@ def search_customers(search_term):
 		LIMIT 15
 	"""
 	return frappe.db.sql(query, (term, term, term, term, term, term), as_dict=True)
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def get_customer_reference_list(doctype, txt, searchfield, start, page_len, filters):
+	"""Link search query for referred_by that displays Company Name prominently."""
+	term = f"%{txt}%"
+	return frappe.db.sql(
+		"""
+		SELECT name, company_name, customer_name
+		FROM `tabHbs Customer`
+		WHERE `company_name` LIKE %s
+		   OR `customer_name` LIKE %s
+		   OR `company_gst` LIKE %s
+		   OR `contact_phone` LIKE %s
+		ORDER BY
+			CASE WHEN `company_name` LIKE %s THEN 0 ELSE 1 END,
+			`company_name` ASC
+		LIMIT %s, %s
+		""",
+		(term, term, term, term, term, start, page_len),
+	)

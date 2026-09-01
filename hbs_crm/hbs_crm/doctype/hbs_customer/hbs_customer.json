@@ -45,7 +45,8 @@
    "in_global_search": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Company Name"
+   "label": "Company Name",
+   "reqd": 1
   },
   {
    "fieldname": "company_gst",
@@ -57,7 +58,8 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Contact Phone"
+   "label": "Contact Phone",
+   "reqd": 1
   },
   {
    "fieldname": "column_break_info",
@@ -116,7 +118,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-31 15:45:35.739678",
+ "modified": "2026-09-01 21:14:35.304564",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Customer",
@@ -148,12 +150,12 @@
   }
  ],
  "row_format": "Dynamic",
- "search_fields": "company_name, customer_name, company_gst, contact_phone, contact_email, tally_serial, address",
+ "search_fields": "customer_name, company_name, contact_phone, contact_email, tally_serial, address",
  "show_preview_popup": 1,
  "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
- "title_field": "company_name",
+ "title_field": "customer_name",
  "track_changes": 1
 }

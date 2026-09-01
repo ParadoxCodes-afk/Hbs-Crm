@@ -13,13 +13,10 @@ class HbsCustomer(Document):
 
 		# Block duplicate customer only when BOTH company name AND GST number match an existing customer
 		if c_name and c_gst:
-			existing = frappe.db.sql("""
-				SELECT name FROM `tabHbs Customer`
-				WHERE LOWER(`company_name`) = LOWER(%s)
-				  AND `company_gst` = %s
-				  AND `name` != %s
-				LIMIT 1
-			""", (c_name, c_gst, self.name or ""), as_dict=True)
+			existing = frappe.db.get_value(
+				"Hbs Customer",
+				{"company_name": c_name, "company_gst": c_gst, "name": ["!=", self.name or ""]},
+			)
 
 			if existing:
 				msg = _(
@@ -38,7 +35,7 @@ class HbsCustomer(Document):
 					'    You cannot create a duplicate customer record.'
 					'  </p>'
 					'</div>'
-				).format(c_name, c_gst, existing[0].name)
+				).format(c_name, c_gst, existing)
 				frappe.throw(msg, title=_("Duplicate Customer Blocked"))
 
 	def on_trash(self):
