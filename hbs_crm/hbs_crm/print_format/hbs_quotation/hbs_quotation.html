@@ -272,7 +272,7 @@
                 </tr>
 
                 {% set raw_total = (doc.total_before_tax or 0) - (doc.additional_discount or 0) + (doc.total_tax or 0) %}
-                {% set final_total_rounded = (raw_total | round) | int %}
+                {% set final_total_rounded = (raw_total + 0.5) | int %}
                 {% set round_off = final_total_rounded - raw_total %}
                 {% if round_off | abs > 0.009 %}
                 <tr>
