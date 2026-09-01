@@ -377,12 +377,18 @@ class HbsCrmLead(Document):
 			return
 
 		existing_cust = None
-		if self.contact_email:
-			existing_cust = frappe.db.get_value("Hbs Customer", {"contact_email": self.contact_email})
-		if not existing_cust and self.contact_phone:
-			existing_cust = frappe.db.get_value("Hbs Customer", {"contact_phone": self.contact_phone})
-		if not existing_cust and cust_name:
-			existing_cust = frappe.db.get_value("Hbs Customer", {"customer_name": cust_name})
+		if self.customer and frappe.db.exists("Hbs Customer", self.customer):
+			existing_cust = self.customer
+		elif self.company_name and self.company_name.strip():
+			c_name = self.company_name.strip()
+			existing_cust = frappe.db.get_value("Hbs Customer", {"company_name": c_name})
+			if not existing_cust and self.company_gst and self.company_gst.strip():
+				existing_cust = frappe.db.get_value("Hbs Customer", {"company_gst": self.company_gst.strip()})
+		elif not self.company_name:
+			if self.contact_email and self.contact_email.strip():
+				existing_cust = frappe.db.get_value("Hbs Customer", {"contact_email": self.contact_email.strip()})
+			if not existing_cust and self.contact_phone and self.contact_phone.strip():
+				existing_cust = frappe.db.get_value("Hbs Customer", {"contact_phone": self.contact_phone.strip()})
 
 		if existing_cust:
 			self.customer = existing_cust

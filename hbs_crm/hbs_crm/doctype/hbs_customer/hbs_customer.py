@@ -80,36 +80,34 @@ class HbsCustomer(Document):
 				).format(email, existing)
 				frappe.throw(msg, title=_("Duplicate Customer Email"))
 
-		# 4. Check by Company Name or Customer Name
-		name_to_check = self.company_name or self.customer_name
-		if name_to_check and name_to_check.strip():
-			name_str = name_to_check.strip()
-			# Case insensitive match on company_name or customer_name
+		# 4. Check by Company Name (company_name must be unique)
+		if self.company_name and self.company_name.strip():
+			c_name = self.company_name.strip()
 			existing = frappe.db.sql("""
 				SELECT name FROM `tabHbs Customer`
-				WHERE (LOWER(`company_name`) = LOWER(%s) OR LOWER(`customer_name`) = LOWER(%s))
+				WHERE LOWER(`company_name`) = LOWER(%s)
 				  AND `name` != %s
 				LIMIT 1
-			""", (name_str, name_str, self.name or ""), as_dict=True)
+			""", (c_name, self.name or ""), as_dict=True)
 			if existing:
 				msg = _(
 					'<div style="border: 2px solid #ef4444; background-color: #fef2f2; padding: 15px; border-radius: 6px; font-family: sans-serif; text-align: left;">'
 					'  <h4 style="color: #b91c1c; margin-top: 0; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 8px;">'
-					'    🚨 Duplicate Customer Name Blocked!'
+					'    🚨 Duplicate Company Name Blocked!'
 					'  </h4>'
 					'  <hr style="border-top: 1px solid #fecaca; margin: 10px 0;">'
 					'  <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
-					'    A customer with Name/Company <b>{0}</b> already exists in the system.'
+					'    A customer with Company Name <b>{0}</b> already exists in the system.'
 					'  </p>'
 					'  <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.5; color: #1f2937;">'
 					'    Existing Customer ID: <b>{1}</b>.'
 					'  </p>'
 					'  <p style="margin: 12px 0 0 0; font-size: 13px; font-style: italic; color: #b91c1c; font-weight: bold;">'
-					'    You cannot create a duplicate customer record.'
+					'    You cannot create a duplicate company record.'
 					'  </p>'
 					'</div>'
-				).format(name_str, existing[0].name)
-				frappe.throw(msg, title=_("Duplicate Customer Name"))
+				).format(c_name, existing[0].name)
+				frappe.throw(msg, title=_("Duplicate Company Name"))
 
 	def on_trash(self):
 		"""Clear customer link from Hbs Crm Lead before deleting Hbs Customer."""
