@@ -369,12 +369,16 @@ class HbsCrmLead(Document):
 		"""Record new remark in Hbs Lead Activity child table and clear input field."""
 		if self.remarks and self.remarks.strip():
 			user_email = frappe.session.user if frappe.session and frappe.session.user else "System"
+			new_remark = self.remarks.strip()
 			self.append("custom_activities", {
 				"user": user_email,
 				"date_time": frappe.utils.now_datetime(),
-				"remark": self.remarks.strip()
+				"remark": new_remark
 			})
+			self.last_remark = new_remark
 			self.remarks = ""
+		elif getattr(self, "custom_activities", None) and not self.last_remark:
+			self.last_remark = self.custom_activities[-1].remark
 
 	def render_activity_html(self):
 		"""Render chronological All Activities timeline from custom_activities, DB, and comments."""
@@ -808,7 +812,7 @@ def take_over_lead(lead_name):
 		"date_time": frappe.utils.now_datetime(),
 		"remark": remark_text
 	})
-
+	doc.last_remark = remark_text
 	doc.flags.in_takeover = True
 	doc.save(ignore_permissions=True)
 	frappe.db.set_value("Hbs Crm Lead", doc.name, "owner", user)

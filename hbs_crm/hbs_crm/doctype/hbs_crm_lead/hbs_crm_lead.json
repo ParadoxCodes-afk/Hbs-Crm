@@ -27,6 +27,7 @@
   "referred_by",
   "lead_type",
   "license_type",
+  "last_remark",
   "address_section",
   "address",
   "all_contacts_section",
@@ -129,19 +130,18 @@
    "options": "Email"
   },
   {
-   "fieldname": "tally_serial",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Tally Serial",
-   "length": 9
-  },
-  {
    "fieldname": "license_type",
    "fieldtype": "Select",
    "label": "License Type",
    "options": "\nAuditor\nGold\nSilver",
    "reqd": 1
+  },
+  {
+   "fieldname": "last_remark",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Last Remark",
+   "read_only": 1
   },
   {
    "fieldname": "address_section",
@@ -199,6 +199,14 @@
    "in_standard_filter": 1,
    "label": "Executive 2",
    "options": "User"
+  },
+  {
+   "fieldname": "tally_serial",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Tally Serial",
+   "length": 9
   },
   {
    "fieldname": "column_break_dhhi",
@@ -386,7 +394,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-01 22:20:54.892019",
+ "modified": "2026-09-02 16:08:15.351879",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm Lead",
