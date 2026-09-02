@@ -35,8 +35,13 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 		}
 	},
 	onload(listview) {
-		// Set default follow-up date route options for standard users
-		if (!frappe.user.has_role("System Manager") && frappe.session.user !== "Administrator") {
+		// Only set default follow-up date filter for standard sales users (NOT Admin/Owner/System Manager)
+		let user = frappe.session.user || "";
+		let roles = frappe.user_roles || [];
+		let is_admin = user === "Administrator" || user.startsWith("admin@") || user === "admin@hbsmail.in" ||
+			roles.some(r => ["System Manager", "Administrator", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"].includes(r));
+
+		if (!is_admin) {
 			if (!frappe.route_options) {
 				frappe.route_options = {};
 			}
