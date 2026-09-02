@@ -873,3 +873,21 @@ def get_customer_reference_list(doctype, txt, searchfield, start, page_len, filt
 		""",
 		(term, term, term, term, term, start, page_len),
 	)
+
+
+def backfill_last_remarks():
+	"""Backfill last_remark for all existing leads that don't have it set."""
+	try:
+		frappe.db.sql("""
+			UPDATE `tabHbs Crm Lead` l
+			SET l.last_remark = (
+				SELECT remark FROM `tabHbs Lead Activity`
+				WHERE parent = l.name
+				ORDER BY date_time DESC, creation DESC
+				LIMIT 1
+			)
+			WHERE (l.last_remark IS NULL OR l.last_remark = '')
+		""")
+		frappe.db.commit()
+	except Exception:
+		pass
