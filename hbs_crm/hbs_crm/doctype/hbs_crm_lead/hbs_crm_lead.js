@@ -381,7 +381,7 @@ function open_email_dialog(frm) {
 							default: 1
 						},
 						{
-							label: __("📎 Attach Documents (Select Single / Multiple Files)"),
+							label: __("Attach Document"),
 							fieldname: "attach_btn",
 							fieldtype: "Button",
 							click: function() {
