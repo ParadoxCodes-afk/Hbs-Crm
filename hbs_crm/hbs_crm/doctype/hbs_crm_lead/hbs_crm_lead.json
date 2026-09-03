@@ -33,9 +33,9 @@
   "all_contacts_section",
   "all_contacts",
   "follow_up_section",
+  "status",
   "follow_up_date",
   "follow_up_time",
-  "status",
   "column_break_luxb",
   "requirement_received",
   "proposal_sent",
@@ -77,6 +77,7 @@
    "read_only": 1
   },
   {
+   "columns": 2,
    "fieldname": "company_name",
    "fieldtype": "Data",
    "in_global_search": 1,
@@ -231,7 +232,6 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "in_filter": 1,
-   "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
    "options": "new\npending\nwon\nlost"
@@ -241,7 +241,6 @@
    "default": "Today",
    "fieldname": "follow_up_date",
    "fieldtype": "Date",
-   "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Follow up Date"
   },
@@ -397,7 +396,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-03 13:19:24.221302",
+ "modified": "2026-09-03 15:41:26.354859",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm Lead",
