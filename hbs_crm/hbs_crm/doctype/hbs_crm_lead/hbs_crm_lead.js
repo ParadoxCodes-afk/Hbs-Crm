@@ -325,6 +325,7 @@ function open_email_dialog(frm) {
 
 				let d = new frappe.ui.Dialog({
 					title: __("Enter email details"),
+					size: "large",
 					fields: [
 						{
 							label: __("Sender Name"),
@@ -368,14 +369,34 @@ function open_email_dialog(frm) {
 							reqd: 1
 						},
 						{
-							label: __("Attach Document Print"),
+							fieldtype: "Section Break",
+							label: __("Attachments")
+						},
+						{
+							label: __("Attach Quotation PDF Print"),
 							fieldname: "attach_print",
 							fieldtype: "Check",
 							default: 1
+						},
+						{
+							label: __("Attach Document 1 (Excel, PDF, etc.)"),
+							fieldname: "attach_file_1",
+							fieldtype: "Attach"
+						},
+						{
+							label: __("Attach Document 2 (Excel, PDF, etc.)"),
+							fieldname: "attach_file_2",
+							fieldtype: "Attach"
+						},
+						{
+							label: __("Attach Document 3 (Excel, PDF, etc.)"),
+							fieldname: "attach_file_3",
+							fieldtype: "Attach"
 						}
 					],
 					primary_action_label: __("Send"),
 					primary_action(values) {
+						let extra_files = [values.attach_file_1, values.attach_file_2, values.attach_file_3].filter(f => f);
 						frappe.call({
 							method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.send_manual_lead_email",
 							args: {
@@ -386,10 +407,11 @@ function open_email_dialog(frm) {
 								cc_email: values.cc_email,
 								subject: values.subject,
 								message: values.message,
-								attach_print: values.attach_print ? 1 : 0
+								attach_print: values.attach_print ? 1 : 0,
+								extra_attachments: JSON.stringify(extra_files)
 							},
 							freeze: true,
-							freeze_message: __("Sending email..."),
+							freeze_message: __("Sending email with attachments..."),
 							callback: function (r) {
 								if (!r.exc) {
 									d.hide();

@@ -599,8 +599,9 @@ def get_rendered_email_template(lead_name):
 
 
 @frappe.whitelist()
-def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None, from_email=None, sender_name=None, attach_print=1):
-	"""Backend endpoint for the interactive 'Enter email details' dialog."""
+def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None, from_email=None, sender_name=None, attach_print=1, extra_attachments=None):
+	"""Backend endpoint for the interactive 'Enter email details' dialog with custom file attachments."""
+	import json
 	doc = frappe.get_doc("Hbs Crm Lead", lead_name)
 	if not to_email:
 		frappe.throw(_("Recipient 'To' Email is required."))
@@ -618,6 +619,31 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 	sender = f"{display_name} <{email_addr}>"
 
 	attachments = get_quotation_pdf_attachment(doc) if frappe.utils.cint(attach_print) == 1 else []
+
+	# Process extra uploaded attachments (Excel, PDF, Word, Images, etc.)
+	if extra_attachments:
+		if isinstance(extra_attachments, str):
+			try:
+				extra_attachments = json.loads(extra_attachments)
+			except Exception:
+				extra_attachments = [extra_attachments]
+
+		for file_url in extra_attachments:
+			if not file_url or not isinstance(file_url, str):
+				continue
+			file_url = file_url.strip()
+			if not file_url:
+				continue
+			try:
+				file_names = frappe.get_all("File", filters={"file_url": file_url}, fields=["name", "file_name"])
+				if file_names:
+					file_doc = frappe.get_doc("File", file_names[0].name)
+					attachments.append({
+						"fname": file_doc.file_name,
+						"fcontent": file_doc.get_content()
+					})
+			except Exception as e:
+				frappe.log_error(f"Failed to attach file {file_url}: {str(e)}", "Email Attachment Error")
 
 	frappe.sendmail(
 		recipients=[e.strip() for e in to_email.split(",") if e.strip()],
