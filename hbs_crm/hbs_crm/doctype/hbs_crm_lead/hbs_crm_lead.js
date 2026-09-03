@@ -928,3 +928,11 @@ function handle_executive_1_permission(frm) {
 	});
 }
 
+function handle_referred_by_dependency(frm) {
+	if (frm.doc.lead_source === "Reference") {
+		frm.set_df_property("referred_by", "reqd", 1);
+	} else {
+		frm.set_df_property("referred_by", "reqd", 0);
+	}
+}
+

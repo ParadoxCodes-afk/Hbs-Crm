@@ -150,12 +150,12 @@
   }
  ],
  "row_format": "Dynamic",
- "search_fields": "customer_name, company_name, contact_phone, contact_email, tally_serial, address",
+ "search_fields": "company_name, customer_name, contact_phone, contact_email, tally_serial, address",
  "show_preview_popup": 1,
  "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
- "title_field": "customer_name",
+ "title_field": "company_name",
  "track_changes": 1
 }
