@@ -202,12 +202,14 @@
    "length": 9
   },
   {
+   "depends_on": "eval:doc.lead_source=='Reference'",
    "fieldname": "referred_by",
    "fieldtype": "Link",
    "in_filter": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Referred By",
+   "mandatory_depends_on": "eval:doc.lead_source=='Reference'",
    "options": "Hbs Customer"
   },
   {

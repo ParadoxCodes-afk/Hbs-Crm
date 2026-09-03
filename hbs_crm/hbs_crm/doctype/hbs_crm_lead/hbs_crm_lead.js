@@ -24,12 +24,6 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		handle_referred_by_dependency(frm);
 		handle_executive_1_permission(frm);
 
-		frm.set_query("referred_by", function() {
-			return {
-				query: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.get_customer_reference_list"
-			};
-		});
-
 		frm.clear_custom_buttons();
 
 		if (frm.doc.status !== "won" && frm.doc.status !== "lost") {
@@ -930,8 +924,10 @@ function handle_executive_1_permission(frm) {
 
 function handle_referred_by_dependency(frm) {
 	if (frm.doc.lead_source === "Reference") {
+		frm.set_df_property("referred_by", "hidden", 0);
 		frm.set_df_property("referred_by", "reqd", 1);
 	} else {
+		frm.set_df_property("referred_by", "hidden", 1);
 		frm.set_df_property("referred_by", "reqd", 0);
 	}
 }
