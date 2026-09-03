@@ -785,6 +785,7 @@ function check_phone_number_in_use(frm) {
 function open_auto_fill_customer_dialog(frm) {
 	let dialog = new frappe.ui.Dialog({
 		title: __("Search & Auto Fill Customer Details"),
+		size: "large",
 		fields: [
 			{
 				label: __("Search Customer"),
@@ -811,6 +812,11 @@ function open_auto_fill_customer_dialog(frm) {
 		]
 	});
 
+	dialog.$wrapper.find(".modal-dialog").css({
+		"max-width": "950px",
+		"width": "90%"
+	});
+
 	dialog.show();
 }
 
@@ -831,7 +837,7 @@ function perform_customer_search(dialog, frm) {
 		callback: function(r) {
 			if (r.message && r.message.length > 0) {
 				let html = `
-					<div style="max-height: 300px; overflow-y: auto; margin-top: 15px;">
+					<div style="max-height: 420px; overflow-y: auto; margin-top: 15px;">
 						<table class="table table-bordered table-hover" style="font-size: 13px;">
 							<thead>
 								<tr class="active">
