@@ -195,6 +195,7 @@
    "options": "User"
   },
   {
+   "columns": 1,
    "fieldname": "tally_serial",
    "fieldtype": "Data",
    "in_list_view": 1,

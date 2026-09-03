@@ -26,18 +26,22 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 			let info = (typeof frappe !== "undefined" && frappe.user_info) ? frappe.user_info[val] : null;
 			let name = (info && info.fullname) ? info.fullname : val;
 			let short = name.split(" ")[0].split("@")[0];
-			return `<span style="white-space: nowrap; font-size: 12px;" title="${frappe.utils.escape_html(name)}">${short}</span>`;
+			return `<span title="${frappe.utils.escape_html(name)}">${short}</span>`;
 		},
 		executive_2(val) {
 			if (!val) return "";
 			let info = (typeof frappe !== "undefined" && frappe.user_info) ? frappe.user_info[val] : null;
 			let name = (info && info.fullname) ? info.fullname : val;
 			let short = name.split(" ")[0].split("@")[0];
-			return `<span style="white-space: nowrap; font-size: 12px;" title="${frappe.utils.escape_html(name)}">${short}</span>`;
+			return `<span title="${frappe.utils.escape_html(name)}">${short}</span>`;
+		},
+		tally_serial(val) {
+			if (!val) return "";
+			return `<span>${frappe.utils.escape_html(val)}</span>`;
 		},
 		follow_up_date(val) {
 			if (!val) return "";
-			return `<span style="white-space: nowrap; font-size: 11.5px;">${frappe.datetime.str_to_user(val)}</span>`;
+			return `<span>${frappe.datetime.str_to_user(val)}</span>`;
 		}
 	},
 	onload(listview) {
@@ -45,6 +49,13 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col:nth-child(3),
 			.frappe-list[data-doctype="Hbs Crm Lead"] .list-subject {
 				min-width: 260px !important;
+			}
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-sort-by="executive_1"],
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-sort-by="executive_2"],
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-sort-by="tally_serial"] {
+				max-width: 105px !important;
+				min-width: 75px !important;
+				flex-grow: 0 !important;
 			}
 		`);
 
