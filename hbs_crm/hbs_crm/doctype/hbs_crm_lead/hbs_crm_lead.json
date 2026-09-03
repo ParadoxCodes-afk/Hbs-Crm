@@ -11,21 +11,21 @@
  "field_order": [
   "customer_details_section",
   "company_name",
-  "lead_type",
   "company_gst",
   "contact_name",
   "contact_designation",
   "column_break_etml",
   "contact_email",
+  "tally_serial",
   "contact_phone",
   "customer",
   "lead_details_section",
   "lead_source",
   "executive_1",
   "executive_2",
-  "tally_serial",
   "column_break_dhhi",
   "referred_by",
+  "lead_type",
   "license_type",
   "last_remark",
   "address_section",
@@ -33,9 +33,9 @@
   "all_contacts_section",
   "all_contacts",
   "follow_up_section",
-  "status",
   "follow_up_date",
   "follow_up_time",
+  "status",
   "column_break_luxb",
   "requirement_received",
   "proposal_sent",
@@ -86,16 +86,6 @@
    "reqd": 1
   },
   {
-   "fieldname": "lead_type",
-   "fieldtype": "Link",
-   "in_filter": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Lead Type",
-   "options": "hbs product type",
-   "reqd": 1
-  },
-  {
    "fieldname": "company_gst",
    "fieldtype": "Data",
    "label": "Company Gst"
@@ -128,6 +118,16 @@
    "in_standard_filter": 1,
    "label": "Contact Email",
    "options": "Email"
+  },
+  {
+   "fieldname": "lead_type",
+   "fieldtype": "Link",
+   "in_filter": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Lead Type",
+   "options": "hbs product type",
+   "reqd": 1
   },
   {
    "fieldname": "license_type",
@@ -202,14 +202,12 @@
    "length": 9
   },
   {
-   "depends_on": "eval:doc.lead_source=='Reference'",
    "fieldname": "referred_by",
    "fieldtype": "Link",
    "in_filter": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Referred By",
-   "mandatory_depends_on": "eval:doc.lead_source=='Reference'",
    "options": "Hbs Customer"
   },
   {
@@ -399,7 +397,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-02 16:08:15.351879",
+ "modified": "2026-09-03 13:19:24.221302",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm Lead",
