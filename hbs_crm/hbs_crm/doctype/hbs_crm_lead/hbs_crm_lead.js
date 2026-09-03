@@ -323,6 +323,8 @@ function open_email_dialog(frm) {
 				let default_from = res.message.from_email;
 				let default_sender = res.message.sender_name;
 
+				let attached_files = [];
+
 				let d = new frappe.ui.Dialog({
 					title: __("Enter email details"),
 					size: "large",
@@ -379,24 +381,38 @@ function open_email_dialog(frm) {
 							default: 1
 						},
 						{
-							label: __("Attach Document 1 (Excel, PDF, etc.)"),
-							fieldname: "attach_file_1",
-							fieldtype: "Attach"
+							label: __("📎 Attach Documents (Select Single / Multiple Files)"),
+							fieldname: "attach_btn",
+							fieldtype: "Button",
+							click: function() {
+								new frappe.ui.FileUploader({
+									doctype: "Hbs Crm Lead",
+									docname: frm.doc.name,
+									allow_multiple: true,
+									on_success(file_doc) {
+										if (file_doc) {
+											if (Array.isArray(file_doc)) {
+												file_doc.forEach(f => {
+													if (f && f.file_url) attached_files.push({ file_name: f.file_name, file_url: f.file_url });
+												});
+											} else if (file_doc.file_url) {
+												attached_files.push({ file_name: file_doc.file_name, file_url: file_doc.file_url });
+											}
+											render_attached_files();
+										}
+									}
+								});
+							}
 						},
 						{
-							label: __("Attach Document 2 (Excel, PDF, etc.)"),
-							fieldname: "attach_file_2",
-							fieldtype: "Attach"
-						},
-						{
-							label: __("Attach Document 3 (Excel, PDF, etc.)"),
-							fieldname: "attach_file_3",
-							fieldtype: "Attach"
+							fieldtype: "HTML",
+							fieldname: "attached_files_html",
+							label: __("Attached Files")
 						}
 					],
 					primary_action_label: __("Send"),
 					primary_action(values) {
-						let extra_files = [values.attach_file_1, values.attach_file_2, values.attach_file_3].filter(f => f);
+						let extra_urls = attached_files.map(f => f.file_url).filter(u => u);
 						frappe.call({
 							method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.send_manual_lead_email",
 							args: {
@@ -408,7 +424,7 @@ function open_email_dialog(frm) {
 								subject: values.subject,
 								message: values.message,
 								attach_print: values.attach_print ? 1 : 0,
-								extra_attachments: JSON.stringify(extra_files)
+								extra_attachments: JSON.stringify(extra_urls)
 							},
 							freeze: true,
 							freeze_message: __("Sending email with attachments..."),
@@ -425,7 +441,34 @@ function open_email_dialog(frm) {
 						});
 					}
 				});
+
+				function render_attached_files() {
+					if (attached_files.length === 0) {
+						d.set_df_property("attached_files_html", "options", '<div class="text-muted" style="font-size: 12px; margin-top: 5px;">No additional documents attached. Click the button above to upload Excel, PDF, Word, or other files.</div>');
+						return;
+					}
+					let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">';
+					attached_files.forEach((f, idx) => {
+						let fname = frappe.utils.escape_html(f.file_name || f.file_url.split("/").pop());
+						html += `
+							<span style="display: inline-flex; align-items: center; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 4px 10px; font-size: 13px; color: #1e40af;">
+								<span style="margin-right: 8px;">📄 <b>${fname}</b></span>
+								<span class="btn-remove-attachment" data-idx="${idx}" style="cursor: pointer; color: #ef4444; font-weight: bold; font-size: 16px; line-height: 1;" title="Remove this file">×</span>
+							</span>
+						`;
+					});
+					html += '</div>';
+					d.set_df_property("attached_files_html", "options", html);
+
+					d.$wrapper.find(".btn-remove-attachment").off("click").on("click", function() {
+						let remove_idx = parseInt($(this).attr("data-idx"), 10);
+						attached_files.splice(remove_idx, 1);
+						render_attached_files();
+					});
+				}
+
 				d.show();
+				render_attached_files();
 			}
 		}
 	});
