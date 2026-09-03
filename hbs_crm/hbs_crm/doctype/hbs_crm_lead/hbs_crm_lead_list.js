@@ -2,7 +2,7 @@
 // For license information, please see license.txt
 
 frappe.listview_settings['Hbs Crm Lead'] = {
-	add_fields: ["contact_name", "company_name", "last_remark", "executive_1", "executive_2", "tally_serial", "status", "follow_up_date", "follow_up_time"],
+	add_fields: ["contact_name", "company_name", "last_remark", "lead_type", "executive_1", "executive_2", "tally_serial", "status", "follow_up_date", "follow_up_time"],
 	hide_name_column: true,
 	order_by: "follow_up_date asc, follow_up_time asc",
 	formatters: {
@@ -25,13 +25,19 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 			if (!val) return "";
 			let info = (typeof frappe !== "undefined" && frappe.user_info) ? frappe.user_info[val] : null;
 			let name = (info && info.fullname) ? info.fullname : val;
-			return name.split(" ")[0].split("@")[0];
+			let short = name.split(" ")[0].split("@")[0];
+			return `<span style="white-space: nowrap; font-size: 12px;" title="${frappe.utils.escape_html(name)}">${short}</span>`;
 		},
 		executive_2(val) {
 			if (!val) return "";
 			let info = (typeof frappe !== "undefined" && frappe.user_info) ? frappe.user_info[val] : null;
 			let name = (info && info.fullname) ? info.fullname : val;
-			return name.split(" ")[0].split("@")[0];
+			let short = name.split(" ")[0].split("@")[0];
+			return `<span style="white-space: nowrap; font-size: 12px;" title="${frappe.utils.escape_html(name)}">${short}</span>`;
+		},
+		follow_up_date(val) {
+			if (!val) return "";
+			return `<span style="white-space: nowrap; font-size: 11.5px;">${frappe.datetime.str_to_user(val)}</span>`;
 		}
 	},
 	onload(listview) {
