@@ -155,27 +155,20 @@ class HbsCrmLead(Document):
 			raw_serial = str(self.tally_serial).strip()
 			serial = "".join(filter(str.isdigit, raw_serial))
 
+			is_valid = True
 			if len(serial) != 9 or len(raw_serial) != 9 or not raw_serial.isdigit():
-				frappe.throw(
-					_("<b>Invalid Tally Serial Number ({0})!</b><br>A genuine Tally serial number must be exactly 9 digits.").format(raw_serial),
-					title=_("Invalid Tally Serial")
-				)
+				is_valid = False
+			elif not serial.startswith("7"):
+				is_valid = False
+			else:
+				sum_digits = sum(int(d) for d in serial)
+				while sum_digits >= 10:
+					sum_digits = sum(int(d) for d in str(sum_digits))
+				if sum_digits != 9:
+					is_valid = False
 
-			if not serial.startswith("7"):
-				frappe.throw(
-					_("<b>Invalid Tally Serial Number ({0})!</b><br>A genuine Tally serial number must start with digit 7.").format(raw_serial),
-					title=_("Invalid Tally Serial")
-				)
-
-			sum_digits = sum(int(d) for d in serial)
-			while sum_digits >= 10:
-				sum_digits = sum(int(d) for d in str(sum_digits))
-
-			if sum_digits != 9:
-				frappe.throw(
-					_("<b>Invalid Tally Serial Number ({0})!</b><br>A genuine Tally serial number's recursive digit sum must be 9 (e.g., 762000741 -> 7+6+2+0+0+0+7+4+1=27 -> 2+7=9).").format(raw_serial),
-					title=_("Invalid Tally Serial")
-				)
+			if not is_valid:
+				frappe.throw(_("Invalid Serial Number"), title=_("Invalid Serial Number"))
 
 			self.tally_serial = serial
 

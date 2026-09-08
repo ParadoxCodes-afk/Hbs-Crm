@@ -147,9 +147,9 @@ frappe.ui.form.on("Hbs Crm Lead", {
 			let s = String(frm.doc.tally_serial).trim();
 			if (!is_genuine_tally_serial(s)) {
 				frappe.msgprint({
-					title: __("Invalid Tally Serial Number"),
+					title: __("Invalid Serial Number"),
 					indicator: "red",
-					message: __("<b>Invalid Tally Serial ({0})!</b><br>A genuine Tally serial number must:<br>1. Start with digit <b>7</b><br>2. Be exactly <b>9 digits</b> long<br>3. Have a recursive digit sum equal to <b>9</b> (e.g., 762000741 -> 7+6+2+0+0+0+7+4+1=27 -> 2+7=9).", [s])
+					message: __("Invalid Serial Number")
 				});
 			}
 		}
@@ -190,9 +190,9 @@ frappe.ui.form.on("Hbs Crm Lead", {
 			let s = String(frm.doc.tally_serial).trim();
 			if (!is_genuine_tally_serial(s)) {
 				frappe.msgprint({
-					title: __("Invalid Tally Serial Number"),
+					title: __("Invalid Serial Number"),
 					indicator: "red",
-					message: __("<b>Invalid Tally Serial ({0})!</b><br>A genuine Tally serial number must:<br>1. Start with digit <b>7</b><br>2. Be exactly <b>9 digits</b> long<br>3. Have a recursive digit sum equal to <b>9</b> (e.g., 762000741 -> 7+6+2+0+0+0+7+4+1=27 -> 2+7=9).", [s])
+					message: __("Invalid Serial Number")
 				});
 				frappe.validated = false;
 				return;
