@@ -195,7 +195,6 @@
    "options": "User"
   },
   {
-   "columns": 1,
    "fieldname": "tally_serial",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -242,6 +241,7 @@
    "default": "Today",
    "fieldname": "follow_up_date",
    "fieldtype": "Date",
+   "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Follow up Date"
   },
@@ -397,7 +397,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-03 15:41:26.354859",
+ "modified": "2026-09-03 16:33:15.719282",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm Lead",
@@ -408,6 +408,7 @@
    "create": 1,
    "email": 1,
    "export": 1,
+   "import": 1,
    "print": 1,
    "read": 1,
    "report": 1,
@@ -420,6 +421,7 @@
    "delete": 1,
    "email": 1,
    "export": 1,
+   "import": 1,
    "print": 1,
    "read": 1,
    "report": 1,

@@ -19,7 +19,7 @@ def clean_indian_phone(raw):
 		raw = raw[3:].strip()
 	elif raw.startswith("91") and len(raw) > 10:
 		raw = raw[2:].strip()
-	return "".join(filter(str.isdigit, raw))[:10]
+	return "".join(filter(str.isdigit, raw))
 
 
 def find_duplicate_phone_warning(contact_phone, current_lead_name=None, session_user=None):
@@ -119,7 +119,7 @@ class HbsCrmLead(Document):
 		if not self.contact_name:
 			self.contact_name = self.company_name or f"Lead #{self.name}"
 		self.set_default_terms_if_empty()
-		self.validate_tally_serial_for_won()
+		self.validate_tally_serial()
 		self.validate_executive_1_permission()
 		self.validate_won_status_lock()
 		self.validate_no_duplicate_lead_type()
@@ -149,9 +149,37 @@ class HbsCrmLead(Document):
 				if not getattr(self.flags, "in_takeover", False):
 					frappe.throw(_("Only Owner and Administrator can change Executive 1."), title=_("Permission Denied"))
 
-	def validate_tally_serial_for_won(self):
-		"""Validate that Tally Serial Number is mandatory when status is Won."""
-		if self.status == "won" and not self.tally_serial:
+	def validate_tally_serial(self):
+		"""Validate that Tally Serial Number is mandatory when status is Won, and if provided, verify it is genuine."""
+		if self.tally_serial:
+			raw_serial = str(self.tally_serial).strip()
+			serial = "".join(filter(str.isdigit, raw_serial))
+
+			if len(serial) != 9 or len(raw_serial) != 9 or not raw_serial.isdigit():
+				frappe.throw(
+					_("<b>Invalid Tally Serial Number ({0})!</b><br>A genuine Tally serial number must be exactly 9 digits.").format(raw_serial),
+					title=_("Invalid Tally Serial")
+				)
+
+			if not serial.startswith("7"):
+				frappe.throw(
+					_("<b>Invalid Tally Serial Number ({0})!</b><br>A genuine Tally serial number must start with digit 7.").format(raw_serial),
+					title=_("Invalid Tally Serial")
+				)
+
+			sum_digits = sum(int(d) for d in serial)
+			while sum_digits >= 10:
+				sum_digits = sum(int(d) for d in str(sum_digits))
+
+			if sum_digits != 9:
+				frappe.throw(
+					_("<b>Invalid Tally Serial Number ({0})!</b><br>A genuine Tally serial number's recursive digit sum must be 9 (e.g., 762000741 -> 7+6+2+0+0+0+7+4+1=27 -> 2+7=9).").format(raw_serial),
+					title=_("Invalid Tally Serial")
+				)
+
+			self.tally_serial = serial
+
+		elif self.status == "won":
 			frappe.throw(_("Tally Serial Number is required when Lead Status is Won."), title=_("Tally Serial Required"))
 
 	def set_default_terms_if_empty(self):
@@ -212,13 +240,25 @@ class HbsCrmLead(Document):
 		self.final_total = int(frappe.utils.flt(total_before_tax - additional_discount + total_tax) + 0.5)
 
 	def validate_contact_phone_length(self):
-		"""Enforce pure 10-digit mobile numbers without prepending +91."""
+		"""Enforce pure 10-digit mobile numbers. Throw error if length is less than or not equal to 10 digits."""
 		if self.contact_phone:
-			self.contact_phone = clean_indian_phone(self.contact_phone)
+			cleaned = clean_indian_phone(self.contact_phone)
+			if len(cleaned) != 10:
+				frappe.throw(
+					_("<b>Wrong Mobile Number ({0})!</b><br>Mobile number must be exactly 10 digits.").format(self.contact_phone),
+					title=_("Invalid Mobile Number")
+				)
+			self.contact_phone = cleaned
 
-		for row in getattr(self, "all_contacts", None) or []:
+		for idx, row in enumerate(getattr(self, "all_contacts", None) or [], 1):
 			if row.contact_phone:
-				row.contact_phone = clean_indian_phone(row.contact_phone)
+				cleaned = clean_indian_phone(row.contact_phone)
+				if len(cleaned) != 10:
+					frappe.throw(
+						_("<b>Wrong Mobile Number in All Contacts Row #{0} ({1})!</b><br>Mobile number must be exactly 10 digits.").format(idx, row.contact_phone),
+						title=_("Invalid Mobile Number")
+					)
+				row.contact_phone = cleaned
 
 	def notify_duplicate_contact_phone(self):
 		"""Notify if another user is already working with this contact number."""
@@ -727,13 +767,20 @@ def has_permission(doc, ptype="read", user=None):
 	if is_owner_or_admin(user):
 		return True
 
+	if ptype == "import":
+		return False
+
+	if not doc:
+		return True
+
 	subordinates = get_subordinates_from_hierarchy(user)
 	team_members = set([user] + subordinates)
 
+	doc_obj = doc if hasattr(doc, "get") else frappe.get_doc("Hbs Crm Lead", doc)
 	return (
-		doc.executive_1 in team_members or
-		doc.executive_2 in team_members or
-		doc.owner in team_members
+		doc_obj.get("executive_1") in team_members or
+		doc_obj.get("executive_2") in team_members or
+		doc_obj.get("owner") in team_members
 	)
 
 

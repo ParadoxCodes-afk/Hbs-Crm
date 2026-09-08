@@ -142,10 +142,80 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		}
 	},
 
+	tally_serial(frm) {
+		if (frm.doc.tally_serial) {
+			let s = String(frm.doc.tally_serial).trim();
+			if (!is_genuine_tally_serial(s)) {
+				frappe.msgprint({
+					title: __("Invalid Tally Serial Number"),
+					indicator: "red",
+					message: __("<b>Invalid Tally Serial ({0})!</b><br>A genuine Tally serial number must:<br>1. Start with digit <b>7</b><br>2. Be exactly <b>9 digits</b> long<br>3. Have a recursive digit sum equal to <b>9</b> (e.g., 762000741 -> 7+6+2+0+0+0+7+4+1=27 -> 2+7=9).", [s])
+				});
+			}
+		}
+	},
+
+	validate(frm) {
+		// 1. Contact Phone Validation
+		if (frm.doc.contact_phone) {
+			let cleaned = format_phone_with_country_code(frm.doc.contact_phone);
+			if (cleaned.length !== 10) {
+				frappe.msgprint({
+					title: __("Invalid Mobile Number"),
+					indicator: "red",
+					message: __("<b>Wrong Mobile Number ({0})!</b><br>Mobile number must be exactly 10 digits.", [frm.doc.contact_phone])
+				});
+				frappe.validated = false;
+				return;
+			}
+		}
+
+		for (let row of (frm.doc.all_contacts || [])) {
+			if (row.contact_phone) {
+				let cleaned = format_phone_with_country_code(row.contact_phone);
+				if (cleaned.length !== 10) {
+					frappe.msgprint({
+						title: __("Invalid Mobile Number"),
+						indicator: "red",
+						message: __("<b>Wrong Mobile Number in All Contacts ({0})!</b><br>Mobile number must be exactly 10 digits.", [row.contact_phone])
+					});
+					frappe.validated = false;
+					return;
+				}
+			}
+		}
+
+		// 2. Tally Serial Number Validation
+		if (frm.doc.tally_serial) {
+			let s = String(frm.doc.tally_serial).trim();
+			if (!is_genuine_tally_serial(s)) {
+				frappe.msgprint({
+					title: __("Invalid Tally Serial Number"),
+					indicator: "red",
+					message: __("<b>Invalid Tally Serial ({0})!</b><br>A genuine Tally serial number must:<br>1. Start with digit <b>7</b><br>2. Be exactly <b>9 digits</b> long<br>3. Have a recursive digit sum equal to <b>9</b> (e.g., 762000741 -> 7+6+2+0+0+0+7+4+1=27 -> 2+7=9).", [s])
+				});
+				frappe.validated = false;
+				return;
+			}
+		}
+	},
+
 	additional_discount(frm) {
 		calculate_totals(frm);
 	}
 });
+
+function is_genuine_tally_serial(serial) {
+	if (!serial) return true;
+	let s = String(serial).trim();
+	if (s.length !== 9 || !/^\d+$/.test(s)) return false;
+	if (!s.startsWith("7")) return false;
+	let sum = s.split("").reduce((acc, d) => acc + parseInt(d, 10), 0);
+	while (sum >= 10) {
+		sum = String(sum).split("").reduce((acc, d) => acc + parseInt(d, 10), 0);
+	}
+	return sum === 9;
+}
 
 function toggle_won_status_read_only(frm) {
 	if (frm.doc.status === "won" || frm.doc.status === "lost") {
