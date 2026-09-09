@@ -299,15 +299,15 @@ class HbsCrmLead(Document):
 		follow_up = frappe.utils.getdate(self.follow_up_date)
 
 		if self.is_new():
-			# On lead creation: follow-up date must be exactly today (cannot be past or future)
-			if follow_up != server_today:
+			# On lead creation: follow-up date must be today or future
+			if follow_up < server_today:
 				frappe.throw(
-					_("When creating a new lead, the Follow-up Date must be set to today's date ({0}).").format(frappe.utils.formatdate(server_today)),
-					title=_("Invalid Lead Creation Date")
+					_("When creating a new lead, Follow-up Date cannot be set to a past date. (Server Today: {0})").format(frappe.utils.formatdate(server_today)),
+					title=_("Invalid Follow-up Date")
 				)
 		else:
-			# On subsequent follow-ups: follow-up date cannot be set to a past date
-			if follow_up < server_today:
+			# On existing lead: only check if the follow_up_date was modified to a past date
+			if self.has_value_changed("follow_up_date") and follow_up < server_today:
 				frappe.throw(
 					_("Follow-up Date cannot be set to a past date. (Server Today: {0})").format(frappe.utils.formatdate(server_today)),
 					title=_("Invalid Follow-up Date")
@@ -682,6 +682,7 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 		recipients=[e.strip() for e in to_email.split(",") if e.strip()],
 		cc=[e.strip() for e in cc_email.split(",") if e.strip()] if cc_email else None,
 		sender=sender,
+		reply_to=email_addr,
 		subject=subject,
 		message=message,
 		attachments=attachments if attachments else None,

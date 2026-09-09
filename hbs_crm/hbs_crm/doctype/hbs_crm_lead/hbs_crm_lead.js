@@ -142,19 +142,6 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		}
 	},
 
-	tally_serial(frm) {
-		if (frm.doc.tally_serial) {
-			let s = String(frm.doc.tally_serial).trim();
-			if (!is_genuine_tally_serial(s)) {
-				frappe.msgprint({
-					title: __("Invalid Serial Number"),
-					indicator: "red",
-					message: __("Invalid Serial Number")
-				});
-			}
-		}
-	},
-
 	validate(frm) {
 		// 1. Contact Phone Validation
 		if (frm.doc.contact_phone) {
@@ -383,6 +370,24 @@ function render_activity_timeline_js(frm) {
 }
 
 function open_email_dialog(frm) {
+	let client_email = (frm.doc.contact_email || "").trim();
+	if (!client_email && frm.doc.all_contacts && frm.doc.all_contacts.length > 0) {
+		for (let c of frm.doc.all_contacts) {
+			if (c.contact_email && c.contact_email.trim()) {
+				client_email = c.contact_email.trim();
+				break;
+			}
+		}
+	}
+
+	if (!client_email) {
+		frappe.msgprint({
+			title: __("Client Email Required"),
+			indicator: "orange",
+			message: __("<b>Contact Email is not set on this Lead!</b><br>Please enter the client's email in <b>Contact Email</b> field on the form, or enter the client's email in the <b>To</b> field in the dialog.")
+		});
+	}
+
 	frappe.call({
 		method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.get_rendered_email_template",
 		args: { lead_name: frm.doc.name },
@@ -414,17 +419,19 @@ function open_email_dialog(frm) {
 							reqd: 1
 						},
 						{
-							label: __("To"),
+							label: __("To (Client Email)"),
 							fieldname: "to_email",
 							fieldtype: "Data",
-							default: frm.doc.contact_email || "",
-							reqd: 1
+							default: client_email,
+							reqd: 1,
+							description: __("Client's email address")
 						},
 						{
-							label: __("CC"),
+							label: __("CC (Executive / Internal)"),
 							fieldname: "cc_email",
 							fieldtype: "Data",
-							default: (frappe.session.user && frappe.session.user.indexOf("@") !== -1) ? frappe.session.user : ""
+							default: (frappe.session.user && frappe.session.user.indexOf("@") !== -1) ? frappe.session.user : "",
+							description: __("Executive email copy")
 						},
 						{
 							label: __("Subject"),
@@ -482,33 +489,47 @@ function open_email_dialog(frm) {
 					],
 					primary_action_label: __("Send"),
 					primary_action(values) {
-						let extra_urls = attached_files.map(f => f.file_url).filter(u => u);
-						frappe.call({
-							method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.send_manual_lead_email",
-							args: {
-								lead_name: frm.doc.name,
-								sender_name: values.sender_name,
-								from_email: values.from_email,
-								to_email: values.to_email,
-								cc_email: values.cc_email,
-								subject: values.subject,
-								message: values.message,
-								attach_print: values.attach_print ? 1 : 0,
-								extra_attachments: JSON.stringify(extra_urls)
-							},
-							freeze: true,
-							freeze_message: __("Sending email with attachments..."),
-							callback: function (r) {
-								if (!r.exc) {
-									d.hide();
-									frappe.show_alert({
-										message: __("Email sent successfully!"),
-										indicator: "green"
-									});
-									frm.reload_doc();
+						let do_send = function() {
+							let extra_urls = attached_files.map(f => f.file_url).filter(u => u);
+							frappe.call({
+								method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.send_manual_lead_email",
+								args: {
+									lead_name: frm.doc.name,
+									sender_name: values.sender_name,
+									from_email: values.from_email,
+									to_email: values.to_email,
+									cc_email: values.cc_email,
+									subject: values.subject,
+									message: values.message,
+									attach_print: values.attach_print ? 1 : 0,
+									extra_attachments: JSON.stringify(extra_urls)
+								},
+								freeze: true,
+								freeze_message: __("Sending email with attachments..."),
+								callback: function (r) {
+									if (!r.exc) {
+										d.hide();
+										frappe.show_alert({
+											message: __("Email sent successfully to {0}!", [values.to_email]),
+											indicator: "green"
+										});
+										frm.reload_doc();
+									}
 								}
-							}
-						});
+							});
+						};
+
+						// Safeguard: Check if 'To' was accidentally filled with the logged in executive's email
+						if (frappe.session.user && values.to_email && values.to_email.trim().toLowerCase() === frappe.session.user.toLowerCase()) {
+							frappe.confirm(
+								__("<b>Notice:</b> The 'To' email is set to your own executive email (<b>{0}</b>).<br><br>Do you want to continue sending to yourself, or cancel to enter the client's email?", [values.to_email]),
+								function () {
+									do_send();
+								}
+							);
+						} else {
+							do_send();
+						}
 					}
 				});
 
