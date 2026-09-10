@@ -39,7 +39,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "contact_designation",
-   "options": "\nOwner\nAccountant\nExecutive\nCA"
+   "options": "\nOwner\nAccountant\nExecutive\nCA\nManager"
   }
  ],
  "istable": 1,
