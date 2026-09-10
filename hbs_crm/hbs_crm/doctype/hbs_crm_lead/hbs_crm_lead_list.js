@@ -59,24 +59,29 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 			}
 		`);
 
-		// Only set default follow-up date filter for standard sales users (NOT Admin/Owner/System Manager)
+		if (!frappe.route_options) {
+			frappe.route_options = {};
+		}
+
+		// 1. Default status = pending for EVERY user (Admin, Owner, Standard User)
+		frappe.route_options["status"] = "pending";
+
+		// 2. Default follow_up_date <= today for standard sales users (NOT Admin/Owner/System Manager)
 		let user = frappe.session.user || "";
 		let roles = frappe.user_roles || [];
 		let is_admin = user === "Administrator" || user.startsWith("admin@") || user === "admin@hbsmail.in" ||
 			roles.some(r => ["System Manager", "Administrator", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"].includes(r));
 
 		if (!is_admin) {
-			if (!frappe.route_options) {
-				frappe.route_options = {};
-			}
 			frappe.route_options["follow_up_date"] = ["<=", frappe.datetime.get_today()];
-			
-			// Clear it after load so it doesn't stick in memory and conflict with UI filters
-			setTimeout(() => {
-				if (frappe.route_options && frappe.route_options.follow_up_date) {
-					delete frappe.route_options.follow_up_date;
-				}
-			}, 100);
 		}
+
+		// Clear route_options after load so it does not persist in memory and interfere when user changes filter
+		setTimeout(() => {
+			if (frappe.route_options) {
+				delete frappe.route_options.status;
+				delete frappe.route_options.follow_up_date;
+			}
+		}, 100);
 	}
 };
