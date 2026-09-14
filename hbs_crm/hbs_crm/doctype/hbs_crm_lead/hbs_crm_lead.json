@@ -4,7 +4,7 @@
  "allow_import": 1,
  "allow_rename": 1,
  "autoname": "autoincrement",
- "creation": "2026-07-22 12:29:29.722153",
+ "creation": "2026-09-07 17:30:33.659117",
  "default_view": "List",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -23,6 +23,7 @@
   "lead_source",
   "executive_1",
   "executive_2",
+  "executive_3",
   "column_break_dhhi",
   "referred_by",
   "lead_type",
@@ -30,6 +31,7 @@
   "last_remark",
   "address_section",
   "address",
+  "column_break_mslc",
   "all_contacts_section",
   "all_contacts",
   "follow_up_section",
@@ -121,6 +123,7 @@
    "options": "Email"
   },
   {
+   "columns": 3,
    "fieldname": "lead_type",
    "fieldtype": "Link",
    "in_filter": 1,
@@ -153,8 +156,7 @@
    "fieldname": "address",
    "fieldtype": "Small Text",
    "in_global_search": 1,
-   "label": "Address",
-   "max_height": "100 px"
+   "label": "Address"
   },
   {
    "fieldname": "all_contacts_section",
@@ -392,12 +394,23 @@
    "fieldtype": "Select",
    "label": "Contact Designation",
    "options": "\nOwner\nAccountant\nCA\nManager\nExecutive"
+  },
+  {
+   "fieldname": "column_break_mslc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "executive_3",
+   "fieldtype": "Link",
+   "in_filter": 1,
+   "label": "Executive 3",
+   "options": "User"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-03 16:33:15.719282",
+ "modified": "2026-09-14 12:34:40.266657",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm Lead",
@@ -408,7 +421,6 @@
    "create": 1,
    "email": 1,
    "export": 1,
-   "import": 1,
    "print": 1,
    "read": 1,
    "report": 1,

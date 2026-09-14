@@ -102,7 +102,7 @@ def get_quotation_pdf_attachment(doc):
 def get_last_activity_date(lead_name, fallback_date):
 	"""Return the most recent Hbs Lead Activity date_time for lead_name, or fallback_date if none exist."""
 	row = frappe.db.sql(
-		"SELECT MAX(`date_time`) FROM `tabHbs Lead Activity` WHERE `parent` = %s",
+		"SELECT MAX(`date_time`) FROM `tabHbs Lead Activity` WHERE `parent` = %s AND `parenttype` = 'Hbs Crm Lead'",
 		lead_name,
 	)
 	latest = row[0][0] if row and row[0][0] else None
@@ -342,7 +342,10 @@ class HbsCrmLead(Document):
 		self.render_activity_html()
 
 	def after_insert(self):
-		"""Auto-send welcome email on new lead creation."""
+		"""Link customer lead_reference and auto-send welcome email on new lead creation."""
+		if self.customer and frappe.db.exists("Hbs Customer", self.customer):
+			if not frappe.db.get_value("Hbs Customer", self.customer, "lead_reference"):
+				frappe.db.set_value("Hbs Customer", self.customer, "lead_reference", self.name)
 		self.send_auto_welcome_email()
 
 	def validate_won_status_lock(self):
@@ -428,7 +431,7 @@ class HbsCrmLead(Document):
 		if not self.is_new():
 			db_activities = frappe.get_all(
 				"Hbs Lead Activity",
-				filters={"parent": self.name},
+				filters={"parent": self.name, "parenttype": "Hbs Crm Lead", "parentfield": "custom_activities"},
 				fields=["user", "date_time", "remark"]
 			)
 			for d in db_activities:
@@ -526,13 +529,16 @@ class HbsCrmLead(Document):
 		if existing_cust:
 			self.customer = existing_cust
 			cust_doc = frappe.get_doc("Hbs Customer", existing_cust)
+			cust_doc.customer_name = self.contact_name or self.company_name or cust_doc.customer_name
 			cust_doc.company_name = self.company_name or cust_doc.company_name
-			cust_doc.company_gst = self.company_gst or cust_doc.company_gst
+			cust_doc.company_gst = self.company_gst
 			cust_doc.contact_phone = self.contact_phone or cust_doc.contact_phone
-			cust_doc.contact_email = self.contact_email or cust_doc.contact_email
-			cust_doc.tally_serial = self.tally_serial or cust_doc.tally_serial
-			cust_doc.license_type = self.license_type or cust_doc.license_type
-			cust_doc.address = getattr(self, "address", None) or cust_doc.address
+			cust_doc.contact_email = self.contact_email
+			cust_doc.tally_serial = self.tally_serial
+			cust_doc.license_type = self.license_type
+			cust_doc.address = getattr(self, "address", None)
+			if not cust_doc.lead_reference and not self.is_new():
+				cust_doc.lead_reference = self.name
 
 			cust_doc.set("all_contacts", [])
 			self._sync_customer_contacts(cust_doc)
@@ -623,11 +629,14 @@ def get_rendered_email_template(lead_name):
 	body_template = settings.email_body or "Hello {{ doc.contact_name or doc.company_name }},\n\nPlease find attached the quotation details."
 	message = frappe.render_template(body_template, {"doc": doc, "logged_in_user": logged_in_user_dict})
 
+	user_email = logged_in_user_dict.get("email") or frappe.db.get_value("User", frappe.session.user, "email") or (frappe.session.user if frappe.session and "@" in str(frappe.session.user) else "")
+
 	return {
 		"subject": subject,
 		"message": message,
 		"from_email": settings.email_id or "tally@hbsmail.in",
-		"sender_name": settings.sender_name or "HBS Sales Team"
+		"sender_name": settings.sender_name or "HBS Sales Team",
+		"cc_email": user_email
 	}
 
 
@@ -638,6 +647,19 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 	doc = frappe.get_doc("Hbs Crm Lead", lead_name)
 	if not to_email:
 		frappe.throw(_("Recipient 'To' Email is required."))
+
+	if not cc_email:
+		user_dict = get_logged_in_user_context()
+		cc_email = user_dict.get("email") or frappe.db.get_value("User", frappe.session.user, "email") or (frappe.session.user if frappe.session and "@" in str(frappe.session.user) else None)
+
+	user_email = (frappe.session.user or "").strip().lower()
+	recipients_list = [e.strip() for e in to_email.split(",") if e.strip()]
+	if user_email and [e.lower() for e in recipients_list] == [user_email]:
+		frappe.throw(_("The 'To' field cannot be your own executive email ({0}). Please enter the client's email address.").format(to_email))
+
+	if not doc.contact_email and recipients_list:
+		doc.db_set("contact_email", recipients_list[0])
+		doc.contact_email = recipients_list[0]
 
 	display_name = sender_name or "HBS Sales Team"
 	email_addr = from_email or "tally@hbsmail.in"
@@ -748,7 +770,7 @@ def get_permission_query_conditions(user=None):
 	team_members = list(set([user] + subordinates))
 	team_escaped = ", ".join([frappe.db.escape(u) for u in team_members])
 
-	user_cond = f"(`tabHbs Crm Lead`.`executive_1` IN ({team_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({team_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({team_escaped}))"
+	user_cond = f"(`tabHbs Crm Lead`.`executive_1` IN ({team_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({team_escaped}) OR `tabHbs Crm Lead`.`executive_3` IN ({team_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({team_escaped}))"
 
 	return user_cond
 
@@ -774,6 +796,7 @@ def has_permission(doc, ptype="read", user=None):
 	return (
 		doc_obj.get("executive_1") in team_members or
 		doc_obj.get("executive_2") in team_members or
+		doc_obj.get("executive_3") in team_members or
 		doc_obj.get("owner") in team_members
 	)
 
@@ -812,7 +835,7 @@ def check_duplicate_lead(company_name=None, contact_name=None, contact_phone=Non
 	where_clause = f"{base_clause} AND ({ ' OR '.join(conds) })"
 
 	duplicates = frappe.db.sql(f"""
-		SELECT name, contact_name, company_name, lead_type, executive_1, executive_2, owner, creation
+		SELECT name, contact_name, company_name, lead_type, executive_1, executive_2, executive_3, owner, creation
 		FROM `tabHbs Crm Lead`
 		WHERE {where_clause}
 		ORDER BY creation DESC
@@ -824,7 +847,7 @@ def check_duplicate_lead(company_name=None, contact_name=None, contact_phone=Non
 
 	dup = duplicates[0]
 
-	exec_user = dup.get("executive_1") or dup.get("executive_2") or dup.get("owner")
+	exec_user = dup.get("executive_1") or dup.get("executive_2") or dup.get("executive_3") or dup.get("owner")
 	exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
 	dup["executive_full_name"] = exec_name
 	dup["creation_date"] = frappe.utils.formatdate(dup.creation, "dd/MM/yyyy")
@@ -868,6 +891,8 @@ def take_over_lead(lead_name):
 	doc.executive_1 = user
 	if doc.executive_2 in (user, old_exec):
 		doc.executive_2 = None
+	if getattr(doc, "executive_3", None) in (user, old_exec):
+		doc.executive_3 = None
 
 	doc.follow_up_date = frappe.utils.today()
 	doc.follow_up_time = frappe.utils.nowtime()
@@ -949,7 +974,7 @@ def backfill_last_remarks():
 			UPDATE `tabHbs Crm Lead` l
 			SET l.last_remark = (
 				SELECT remark FROM `tabHbs Lead Activity`
-				WHERE parent = l.name
+				WHERE parent = l.name AND parenttype = 'Hbs Crm Lead' AND parentfield = 'custom_activities'
 				ORDER BY date_time DESC, creation DESC
 				LIMIT 1
 			)

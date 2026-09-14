@@ -397,6 +397,10 @@ function open_email_dialog(frm) {
 				let default_message = res.message.message;
 				let default_from = res.message.from_email;
 				let default_sender = res.message.sender_name;
+				let default_cc = res.message.cc_email ||
+					(frappe.boot && frappe.boot.user && frappe.boot.user.email) ||
+					(frappe.user_info && frappe.user_info[frappe.session.user] && frappe.user_info[frappe.session.user].email) ||
+					(frappe.session.user && frappe.session.user.indexOf("@") !== -1 ? frappe.session.user : "");
 
 				let attached_files = [];
 
@@ -430,7 +434,7 @@ function open_email_dialog(frm) {
 							label: __("CC (Executive / Internal)"),
 							fieldname: "cc_email",
 							fieldtype: "Data",
-							default: (frappe.session.user && frappe.session.user.indexOf("@") !== -1) ? frappe.session.user : "",
+							default: default_cc,
 							description: __("Executive email copy")
 						},
 						{
@@ -519,17 +523,16 @@ function open_email_dialog(frm) {
 							});
 						};
 
-						// Safeguard: Check if 'To' was accidentally filled with the logged in executive's email
+						// Hard Guard: Prevent sending if 'To' is set to the logged-in executive's email
 						if (frappe.session.user && values.to_email && values.to_email.trim().toLowerCase() === frappe.session.user.toLowerCase()) {
-							frappe.confirm(
-								__("<b>Notice:</b> The 'To' email is set to your own executive email (<b>{0}</b>).<br><br>Do you want to continue sending to yourself, or cancel to enter the client's email?", [values.to_email]),
-								function () {
-									do_send();
-								}
-							);
-						} else {
-							do_send();
+							frappe.msgprint({
+								title: __("Invalid Client Email"),
+								indicator: "red",
+								message: __("<b>The 'To' recipient cannot be your own executive email ({0})!</b><br><br>Please enter the <b>client's email address</b> in the <b>To</b> field so the quotation is delivered to the client and traceable in the future.", [values.to_email])
+							});
+							return;
 						}
+						do_send();
 					}
 				});
 
@@ -559,6 +562,9 @@ function open_email_dialog(frm) {
 				}
 
 				d.show();
+				if (default_cc) {
+					d.set_value("cc_email", default_cc);
+				}
 				render_attached_files();
 			}
 		}
