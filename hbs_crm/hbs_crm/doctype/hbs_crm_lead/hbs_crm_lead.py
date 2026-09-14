@@ -652,11 +652,7 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 		user_dict = get_logged_in_user_context()
 		cc_email = user_dict.get("email") or frappe.db.get_value("User", frappe.session.user, "email") or (frappe.session.user if frappe.session and "@" in str(frappe.session.user) else None)
 
-	user_email = (frappe.session.user or "").strip().lower()
 	recipients_list = [e.strip() for e in to_email.split(",") if e.strip()]
-	if user_email and [e.lower() for e in recipients_list] == [user_email]:
-		frappe.throw(_("The 'To' field cannot be your own executive email ({0}). Please enter the client's email address.").format(to_email))
-
 	if not doc.contact_email and recipients_list:
 		doc.db_set("contact_email", recipients_list[0])
 		doc.contact_email = recipients_list[0]
@@ -710,6 +706,7 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 		attachments=attachments if attachments else None,
 		reference_doctype=doc.doctype,
 		reference_name=doc.name,
+		expose_recipients="header",
 		now=True
 	)
 	return True

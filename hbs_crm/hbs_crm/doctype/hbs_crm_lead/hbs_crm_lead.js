@@ -523,15 +523,6 @@ function open_email_dialog(frm) {
 							});
 						};
 
-						// Hard Guard: Prevent sending if 'To' is set to the logged-in executive's email
-						if (frappe.session.user && values.to_email && values.to_email.trim().toLowerCase() === frappe.session.user.toLowerCase()) {
-							frappe.msgprint({
-								title: __("Invalid Client Email"),
-								indicator: "red",
-								message: __("<b>The 'To' recipient cannot be your own executive email ({0})!</b><br><br>Please enter the <b>client's email address</b> in the <b>To</b> field so the quotation is delivered to the client and traceable in the future.", [values.to_email])
-							});
-							return;
-						}
 						do_send();
 					}
 				});
