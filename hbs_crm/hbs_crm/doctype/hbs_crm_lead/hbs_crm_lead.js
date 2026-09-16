@@ -13,6 +13,9 @@ frappe.ui.form.on("Hbs Crm Lead", {
 			if (!frm.doc.follow_up_time) {
 				frm.set_value("follow_up_time", frappe.datetime.now_time());
 			}
+			if (!frm.doc.quotation_date) {
+				frm.set_value("quotation_date", frappe.datetime.get_today());
+			}
 		}
 		handle_executive_1_permission(frm);
 	},
@@ -23,6 +26,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		handle_lead_type_terms(frm);
 		handle_referred_by_dependency(frm);
 		handle_executive_1_permission(frm);
+		frm.set_df_property("pi_number", "read_only", 1);
 
 		frm.clear_custom_buttons();
 

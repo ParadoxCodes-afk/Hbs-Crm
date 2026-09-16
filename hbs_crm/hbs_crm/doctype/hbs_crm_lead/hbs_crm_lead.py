@@ -80,6 +80,83 @@ def get_logged_in_user_context(user=None):
 	}
 
 
+def extract_pi_number_and_prefix(val):
+	"""Extract prefix, serial counter, and suffix from strings like 'HBS/TS/14/26-27' or '14'."""
+	if not val:
+		return "HBS/TS", 0, None
+	val_str = str(val).strip()
+	import re
+	m = re.match(r"^(.*?/)?(\d+)(/.*)?$", val_str)
+	if m:
+		prefix = (m.group(1) or "HBS/TS/").rstrip("/")
+		number = int(m.group(2))
+		suffix = (m.group(3) or "").lstrip("/") or None
+		return prefix, number, suffix
+	digits = re.findall(r"\d+", val_str)
+	if digits:
+		return "HBS/TS", int(digits[0]), None
+	return "HBS/TS", 0, None
+
+
+def get_current_fy_str(date_val=None):
+	"""Return financial year string like '26-27' for given date (defaults to today)."""
+	d = frappe.utils.getdate(date_val or frappe.utils.nowdate())
+	fy_start = d.year if d.month >= 4 else (d.year - 1)
+	return f"{str(fy_start)[-2:]}-{str(fy_start + 1)[-2:]}"
+
+
+def get_last_lead_pi_info():
+	"""Query the highest PI number generated on any Lead in the database."""
+	rows = frappe.db.sql(
+		"""
+		SELECT pi_number FROM `tabHbs Crm Lead`
+		WHERE pi_number IS NOT NULL AND pi_number != ''
+		ORDER BY creation DESC LIMIT 100
+		""",
+		as_dict=True
+	)
+	max_num = 0
+	last_full_str = None
+	for r in rows:
+		val = (r.pi_number or "").strip()
+		if not val:
+			continue
+		_, num, _ = extract_pi_number_and_prefix(val)
+		if num > max_num:
+			max_num = num
+			last_full_str = val
+	return max_num, last_full_str
+
+
+def assign_lead_pi_and_date(doc):
+	"""Assign quotation date and increment PI number checking both DB and Hbs CRM Settings."""
+	today = frappe.utils.nowdate()
+	if not getattr(doc, "quotation_date", None):
+		if not doc.is_new():
+			doc.db_set("quotation_date", today)
+		doc.quotation_date = today
+
+	if not getattr(doc, "pi_number", None):
+		admin_val = frappe.db.get_single_value("Hbs CRM Settings", "hbs_lead_pi_number")
+		last_gen_val = frappe.db.get_single_value("Hbs CRM Settings", "last_generated_pi_number")
+
+		prefix, admin_num, suffix = extract_pi_number_and_prefix(admin_val)
+		_, last_gen_num, _ = extract_pi_number_and_prefix(last_gen_val)
+		last_db_num, _ = get_last_lead_pi_info()
+
+		next_num = max(admin_num, last_gen_num, last_db_num) + 1
+		fy_str = suffix or get_current_fy_str(today)
+		prefix_clean = prefix or "HBS/TS"
+		full_pi_number = f"{prefix_clean}/{next_num}/{fy_str}"
+
+		if not doc.is_new():
+			doc.db_set("pi_number", full_pi_number)
+		doc.pi_number = full_pi_number
+
+		# Only update last_generated_pi_number; preserve admin's base order in hbs_lead_pi_number
+		frappe.db.set_single_value("Hbs CRM Settings", "last_generated_pi_number", full_pi_number)
+
+
 def get_quotation_pdf_attachment(doc):
 	"""Render the HBS Quotation print format to PDF and return an attachments list (or [] on failure)."""
 	try:
@@ -133,8 +210,17 @@ class HbsCrmLead(Document):
 		self.calculate_totals()
 		self.render_activity_html()
 
+		if not self.quotation_date:
+			self.quotation_date = frappe.utils.nowdate()
+
+		if getattr(self, "items", None) and len(self.items) > 0 and not getattr(self, "pi_number", None):
+			assign_lead_pi_and_date(self)
+
 	def validate_executive_1_permission(self):
 		"""Only Owner and Administrator / System Manager can assign or change Executive 1 to someone else."""
+		if getattr(self.flags, "in_takeover", False) or getattr(frappe.flags, "in_takeover", False):
+			return
+
 		user = frappe.session.user if frappe.session else "System"
 		if is_owner_or_admin(user):
 			return
@@ -146,8 +232,7 @@ class HbsCrmLead(Document):
 		else:
 			old_exec = frappe.db.get_value("Hbs Crm Lead", self.name, "executive_1")
 			if old_exec and self.executive_1 != old_exec:
-				if not getattr(self.flags, "in_takeover", False):
-					frappe.throw(_("Only Owner and Administrator can change Executive 1."), title=_("Permission Denied"))
+				frappe.throw(_("Only Owner and Administrator can change Executive 1."), title=_("Permission Denied"))
 
 	def validate_tally_serial(self):
 		"""Validate that Tally Serial Number is mandatory when status is Won, and if provided, verify it is genuine."""
@@ -327,8 +412,7 @@ class HbsCrmLead(Document):
 			row_rate = frappe.utils.flt(row.rate)
 
 			if min_rate > 0 and row_rate < min_rate:
-				product_doc = frappe.db.get_value("Hbs Product", row.item_name, ["item_name", "product_name"], as_dict=True)
-				p_name = product_doc.get("item_name") or product_doc.get("product_name") or row.item_name if product_doc else row.item_name
+				p_name = frappe.db.get_value("Hbs Product", row.item_name, "item_name") or row.item_name
 
 				msg = _(
 					"<b>Invalid Item Rate in Row #{0}!</b><br><br>"
@@ -487,12 +571,11 @@ class HbsCrmLead(Document):
 		self.activity = "".join(html)
 
 	def on_trash(self):
-		"""Unlink and clean up customer link when lead is deleted."""
-		if self.customer:
-			cust_name = self.customer
-			self.db_set("customer", None)
-			if frappe.db.get_value("Hbs Customer", cust_name, "lead_reference") == self.name:
-				frappe.delete_doc("Hbs Customer", cust_name, ignore_permissions=True)
+		"""Clear lead reference from Hbs Customer before deleting Hbs Crm Lead."""
+		frappe.db.sql(
+			"UPDATE `tabHbs Customer` SET `lead_reference` = NULL WHERE `lead_reference` = %s",
+			str(self.name),
+		)
 
 	def _sync_customer_contacts(self, cust_doc):
 		"""Push this lead's all_contacts rows onto the given customer doc."""
@@ -547,9 +630,9 @@ class HbsCrmLead(Document):
 		else:
 			cust_doc = frappe.new_doc("Hbs Customer")
 			cust_doc.customer_name = cust_name
-			cust_doc.company_name = self.company_name
+			cust_doc.company_name = self.company_name or cust_name or "Individual"
 			cust_doc.company_gst = self.company_gst
-			cust_doc.contact_phone = self.contact_phone
+			cust_doc.contact_phone = (self.contact_phone or "").strip() or "N/A"
 			cust_doc.contact_email = self.contact_email
 			cust_doc.tally_serial = self.tally_serial
 			cust_doc.license_type = self.license_type
@@ -599,6 +682,7 @@ class HbsCrmLead(Document):
 		email_addr = settings.email_id or "tally@hbsmail.in"
 		sender = f"{display_name} <{email_addr}>"
 
+		assign_lead_pi_and_date(self)
 		attachments = get_quotation_pdf_attachment(self)
 
 		frappe.sendmail(
@@ -669,6 +753,7 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 
 	sender = f"{display_name} <{email_addr}>"
 
+	assign_lead_pi_and_date(doc)
 	attachments = get_quotation_pdf_attachment(doc) if frappe.utils.cint(attach_print) == 1 else []
 
 	# Process extra uploaded attachments (Excel, PDF, Word, Images, etc.)
@@ -710,6 +795,14 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 		now=True
 	)
 	return True
+
+
+@frappe.whitelist()
+def assign_lead_pi_number(lead_name):
+	"""Explicitly assign PI number and quotation date to a Lead."""
+	doc = frappe.get_doc("Hbs Crm Lead", lead_name)
+	assign_lead_pi_and_date(doc)
+	return {"pi_number": doc.pi_number, "quotation_date": doc.quotation_date}
 
 
 @frappe.whitelist()
@@ -903,7 +996,12 @@ def take_over_lead(lead_name):
 	})
 	doc.last_remark = remark_text
 	doc.flags.in_takeover = True
-	doc.save(ignore_permissions=True)
+	doc.flags.ignore_permissions = True
+	frappe.flags.in_takeover = True
+	try:
+		doc.save(ignore_permissions=True)
+	finally:
+		frappe.flags.in_takeover = False
 	frappe.db.set_value("Hbs Crm Lead", doc.name, "owner", user)
 	frappe.db.commit()
 

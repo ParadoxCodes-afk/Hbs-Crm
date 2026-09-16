@@ -1,0 +1,116 @@
+{
+ "actions": [],
+ "creation": "2026-09-07 16:31:36.125472",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "tally_portal_section",
+  "tally_portal_url",
+  "tally_portal_apikey",
+  "column_break_tally",
+  "tally_portal_apikey_secondary",
+  "enable_tally_auto_sync",
+  "general_settings_section",
+  "default_sender_name",
+  "hbs_lead_pi_number",
+  "last_generated_pi_number",
+  "column_break_gen",
+  "default_lead_owner"
+ ],
+ "fields": [
+  {
+   "fieldname": "tally_portal_section",
+   "fieldtype": "Section Break",
+   "label": "Tally Portal API Integration"
+  },
+  {
+   "default": "https://tallysolutions.com/api/v1/serialexpiry",
+   "description": "Base endpoint for Tally Serial Expiry API",
+   "fieldname": "tally_portal_url",
+   "fieldtype": "Data",
+   "label": "Tally Portal API URL"
+  },
+  {
+   "default": "4e3bb07a-2ee5-4cb8-8c10-85f95b542456",
+   "description": "Primary partner API key provided by Tally Solutions",
+   "fieldname": "tally_portal_apikey",
+   "fieldtype": "Data",
+   "label": "Primary API Key"
+  },
+  {
+   "fieldname": "column_break_tally",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Optional secondary partner/branch API key",
+   "fieldname": "tally_portal_apikey_secondary",
+   "fieldtype": "Data",
+   "label": "Secondary API Key (Optional)"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_tally_auto_sync",
+   "fieldtype": "Check",
+   "label": "Enable Daily Auto Sync for Renewals"
+  },
+  {
+   "fieldname": "general_settings_section",
+   "fieldtype": "Section Break",
+   "label": "General CRM Settings"
+  },
+  {
+   "default": "HBS Sales Team",
+   "fieldname": "default_sender_name",
+   "fieldtype": "Data",
+   "label": "Default Sender Name"
+  },
+  {
+   "default": "HBS/TS/0/26-27",
+   "description": "Write full number or base sequence (e.g. HBS/TS/14/26-27 or 14)",
+   "fieldname": "hbs_lead_pi_number",
+   "fieldtype": "Data",
+   "label": "Hbs Lead Pi Number"
+  },
+  {
+   "description": "Last PI Number generated across quotations",
+   "fieldname": "last_generated_pi_number",
+   "fieldtype": "Data",
+   "label": "Last Generated PI Number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_gen",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "default_lead_owner",
+   "fieldtype": "Link",
+   "label": "Default Lead Owner",
+   "options": "User"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-09 11:30:16.843178",
+ "modified_by": "Administrator",
+ "module": "Hbs Crm",
+ "name": "Hbs CRM Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

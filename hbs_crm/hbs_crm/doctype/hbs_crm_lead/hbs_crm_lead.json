@@ -62,7 +62,9 @@
   "total_tax",
   "column_break_merw",
   "total_after_tax",
-  "final_total"
+  "final_total",
+  "pi_number",
+  "quotation_date"
  ],
  "fields": [
   {
@@ -343,6 +345,19 @@
    "fieldname": "final_total",
    "fieldtype": "Float",
    "label": "Final Total"
+  },
+  {
+   "fieldname": "pi_number",
+   "fieldtype": "Data",
+   "label": "HBS PI Number",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "quotation_date",
+   "fieldtype": "Date",
+   "label": "Quotation Date"
   },
   {
    "fieldname": "additional_discount",

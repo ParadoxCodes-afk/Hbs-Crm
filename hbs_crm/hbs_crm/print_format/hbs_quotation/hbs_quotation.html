@@ -63,6 +63,60 @@
             text-decoration: underline;
         }
 
+        .client-info-table {
+            width: 100%;
+            border-collapse: collapse !important;
+            margin: 4px 0 8px 0 !important;
+        }
+
+        .client-box-header {
+            text-align: center;
+            font-weight: bold;
+            font-size: 11px;
+            padding: 4px;
+            border: 1px solid #000;
+            letter-spacing: 0.5px;
+        }
+
+        .client-box-body {
+            padding: 6px 10px;
+            text-align: center;
+            font-size: 11px;
+            border: 1px solid #000;
+            border-top: none;
+            vertical-align: top;
+        }
+
+        .proforma-box-body {
+            padding: 6px 10px;
+            font-size: 11px;
+            border: 1px solid #000;
+            border-top: none;
+            vertical-align: top;
+        }
+
+        .box-spacer {
+            width: 8px;
+            min-width: 8px;
+            max-width: 8px;
+            border: none !important;
+            padding: 0 !important;
+        }
+
+        .meta-inner-table {
+            width: 100%;
+            border: none !important;
+            border-collapse: collapse !important;
+            margin: 0 !important;
+        }
+
+        .meta-inner-table td {
+            border: none !important;
+            padding: 2px 0 !important;
+            font-size: 11px;
+            vertical-align: middle;
+        }
+
         .terms-title {
             margin-top: 8px;
             font-weight: bold;
@@ -147,6 +201,57 @@
         <div class="jurisdiction">
             All Disputes Subject to Delhi Jurisdiction
         </div>
+
+        {% set ref_date = frappe.utils.getdate(doc.quotation_date or doc.creation or frappe.utils.nowdate()) %}
+        {% set fy_start = ref_date.year if ref_date.month >= 4 else (ref_date.year - 1) %}
+        {% set fy_end = fy_start + 1 %}
+        {% set fy_str = (fy_start | string)[-2:] ~ '-' ~ (fy_end | string)[-2:] %}
+
+        <table class="client-info-table">
+            <tbody>
+                <tr>
+                    <td class="client-box-header" style="width: 63%;">CLIENT</td>
+                    <td class="box-spacer"><div style="width: 8px; height: 1px;"></div></td>
+                    <td class="client-box-header" style="width: 37%;">PROFORMA /QUOTATION</td>
+                </tr>
+                <tr>
+                    <td class="client-box-body">
+                        <div style="font-weight: bold; font-size: 12px;">
+                            {{ (doc.company_name or 'CLIENT').strip() }}
+                        </div>
+                        {% if doc.address %}
+                        <div style="font-size: 11px; margin-top: 3px; line-height: 1.3;">
+                            {{ doc.address.strip().replace('\n', '<br>') }}
+                        </div>
+                        {% endif %}
+                        {% if doc.company_gst and doc.company_gst.strip() %}
+                        <div style="font-size: 11px; margin-top: 3px;">
+                            GST No: - {{ doc.company_gst.strip() }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="box-spacer"><div style="width: 8px;"></div></td>
+                    <td class="proforma-box-body">
+                        <table class="meta-inner-table">
+                            <tr>
+                                <td style="width: 42px;">No.</td>
+                                <td style="width: 12px; text-align: center;">:</td>
+                                <td style="padding-left: 6px;">
+                                    {% if doc.pi_number %}{% if 'HBS/' in (doc.pi_number | string) %}{{ doc.pi_number }}{% else %}HBS/TS/{{ doc.pi_number }}/{{ fy_str }}{% endif %}{% elif 'HBS/' in (doc.name | string) %}{{ doc.name }}{% else %}HBS/TS/{{ doc.name }}/{{ fy_str }}{% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>DATE</td>
+                                <td style="text-align: center;">:</td>
+                                <td style="padding-left: 6px;">
+                                    {{ frappe.utils.formatdate(doc.quotation_date or frappe.utils.nowdate(), "dd-MMM-yy") }}
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
 
         {% set ns = namespace(has_discount=false, subtotal=0) %}
         {% for item in doc.items %}
