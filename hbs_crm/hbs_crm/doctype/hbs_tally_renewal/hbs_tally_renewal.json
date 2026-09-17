@@ -214,7 +214,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "License",
-   "options": "\nTALLY PRIME SILVER\nTALLY PRIME GOLD\nTALLY PRIME AUDITOR\nRENTAL"
+   "options": "\nTALLY PRIME SILVER\nTALLY PRIME GOLD\nTALLY PRIME AUDITOR\nRENTAL\nNEW CASE\nTALLY.ERP9 AUDITOR\nTALLY.ERP9 GOLD\nTALLY.ERP9 SILVER\nTALLY PRIME SERVER"
   },
   {
    "fieldname": "tally_version",
@@ -316,7 +316,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "CRM Status",
-   "options": "\nPENDING\nSold\nLost"
+   "options": "\nPENDING\nSOLD\nLOST"
   },
   {
    "fieldname": "crm_stage",
@@ -1048,7 +1048,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-17 16:09:32.619356",
+ "modified": "2026-09-17 17:48:15.873263",
  "modified_by": "Administrator",
  "module": "hbs_crm",
  "name": "Hbs Tally Renewal",
