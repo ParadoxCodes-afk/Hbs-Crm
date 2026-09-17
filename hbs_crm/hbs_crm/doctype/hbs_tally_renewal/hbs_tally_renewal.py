@@ -1030,7 +1030,8 @@ def check_portal(name):
 			doc.status = "success"
 			doc.error = None
 			doc.crm_ref = "Mapped"
-			doc.last_updated_api = frappe.utils.nowdate()
+			if len(synced_fields) > 0:
+				doc.last_updated_api = frappe.utils.nowdate()
 			doc.flags.in_api_sync = True
 			doc.save(ignore_permissions=True)
 			frappe.db.commit()
@@ -1047,7 +1048,6 @@ def check_portal(name):
 			doc.crm_ref = "Moved Out"
 			doc.status = "error"
 			doc.error = str(last_err)
-			doc.last_updated_api = frappe.utils.nowdate()
 			doc.flags.in_api_sync = True
 			doc.save(ignore_permissions=True)
 			frappe.db.commit()
@@ -1055,7 +1055,6 @@ def check_portal(name):
 	except Exception as e:
 		doc.status = "error"
 		doc.error = str(e)
-		doc.last_updated_api = frappe.utils.nowdate()
 		doc.flags.in_api_sync = True
 		doc.save(ignore_permissions=True)
 		frappe.db.commit()
@@ -1410,16 +1409,16 @@ def get_logged_in_user_context(user=None):
 	}
 
 
-DEFAULT_RENEWAL_EMAIL_SUBJECT = "Quotation for Tally TSS Renewal - Serial: {{ doc.tss_tally_serial or doc.tally_serial or '' }} ({{ doc.cc_acc_name or doc.portal_acc_name or 'Valued Client' }})"
+DEFAULT_RENEWAL_EMAIL_SUBJECT = "Quotation for Tally TSS Renewal - Serial: {{ doc.tss_tally_serial or doc.tally_serial or '' }} ({{ doc.cc_acc_name or doc.portal_acc_name or doc.cc_contact or doc.portal_contact or doc.tss_tally_serial or doc.tally_serial or 'Valued Client' }})"
 
-DEFAULT_RENEWAL_EMAIL_BODY = """<p>Dear {{ doc.cc_contact or doc.portal_contact or doc.cc_acc_name or 'Valued Client' }},</p>
+DEFAULT_RENEWAL_EMAIL_BODY = """<p>Dear {{ doc.cc_contact or doc.portal_contact or doc.cc_acc_name or doc.portal_acc_name or ('Serial ' ~ (doc.tss_tally_serial or doc.tally_serial or '')) or 'Valued Client' }},</p>
 <p>Greetings from HBS!</p>
 <p>Please find below the quotation for the renewal of your Tally Software Services (TSS):</p>
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-family: sans-serif;">
 	<table style="width: 100%; border-collapse: collapse; font-size: 13px;">
 		<tr>
 			<td style="padding: 4px 0; color: #64748b; width: 160px;"><b>Company / Account:</b></td>
-			<td style="padding: 4px 0; color: #1e293b;"><b>{{ doc.cc_acc_name or doc.portal_acc_name or 'N/A' }}</b></td>
+			<td style="padding: 4px 0; color: #1e293b;"><b>{{ doc.cc_acc_name or doc.portal_acc_name or doc.cc_contact or doc.portal_contact or doc.tss_tally_serial or doc.tally_serial or 'N/A' }}</b></td>
 		</tr>
 		<tr>
 			<td style="padding: 4px 0; color: #64748b;"><b>Tally Serial Number:</b></td>

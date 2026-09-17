@@ -681,7 +681,7 @@ function open_email_dialog(frm) {
 				let default_cc = (frappe.session.user && frappe.session.user.indexOf("@") !== -1) ? frappe.session.user : (res.message.cc_email || "");
 
 				let d = new frappe.ui.Dialog({
-					title: __("Send TSS Quotation to Client - {0}", [frm.doc.cc_acc_name || frm.doc.name]),
+					title: __("Send TSS Quotation to Client - {0}", [frm.doc.cc_acc_name || frm.doc.portal_acc_name || frm.doc.cc_contact || frm.doc.portal_contact || frm.doc.tss_tally_serial || frm.doc.tally_serial || frm.doc.name]),
 					size: "large",
 					fields: [
 						{
