@@ -6,6 +6,9 @@ app_email = "hbs@mail.in"
 app_license = "mit"
 app_home = "/app/hbs-crm"
 
+from hbs_crm.importer_patch import apply_data_import_patch
+apply_data_import_patch()
+
 website_route_rules = [
 	{"from_route": "/desk", "to_route": "app/hbs-crm"},
 ]

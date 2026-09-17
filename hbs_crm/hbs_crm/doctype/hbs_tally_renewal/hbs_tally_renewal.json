@@ -214,7 +214,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "License",
-   "options": "TALLY PRIME SILVER\nTALLY PRIME GOLD\nTALLY PRIME AUDITOR"
+   "options": "\nTALLY PRIME SILVER\nTALLY PRIME GOLD\nTALLY PRIME AUDITOR\nRENTAL"
   },
   {
    "fieldname": "tally_version",
@@ -1048,7 +1048,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-17 12:10:46.929581",
+ "modified": "2026-09-17 16:09:32.619356",
  "modified_by": "Administrator",
  "module": "hbs_crm",
  "name": "Hbs Tally Renewal",

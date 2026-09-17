@@ -1376,6 +1376,11 @@ def has_permission(doc, ptype="read", user=None):
 
 def has_data_import_permission(doc=None, ptype="read", user=None):
 	"""Only Administrator, System Manager, or Hierarchy Owner can use Data Import."""
+	try:
+		from hbs_crm.importer_patch import apply_data_import_patch
+		apply_data_import_patch()
+	except Exception:
+		pass
 	if not user:
 		user = frappe.session.user
 	return is_owner_or_admin(user)
