@@ -18,7 +18,10 @@
   "password",
   "email_template_section",
   "email_subject",
-  "email_body"
+  "email_body",
+  "renewal_email_template_section",
+  "renewal_email_subject",
+  "renewal_email_body"
  ],
  "fields": [
   {
@@ -101,6 +104,23 @@
    "fieldname": "email_body",
    "fieldtype": "Text Editor",
    "label": "Email Body Template"
+  },
+  {
+   "fieldname": "renewal_email_template_section",
+   "fieldtype": "Section Break",
+   "label": "TSS Renewal Quotation Email Template"
+  },
+  {
+   "default": "Quotation for Tally TSS Renewal - Serial: {{ doc.tss_tally_serial or doc.tally_serial or '' }} ({{ doc.cc_acc_name or doc.portal_acc_name or 'Valued Client' }})",
+   "fieldname": "renewal_email_subject",
+   "fieldtype": "Data",
+   "label": "Renewal Email Subject Template"
+  },
+  {
+   "default": "<p>Dear {{ doc.cc_contact or doc.portal_contact or doc.cc_acc_name or 'Valued Client' }},</p>\n<p>Greetings from HBS!</p>\n<p>Please find below the quotation for the renewal of your Tally Software Services (TSS):</p>\n<div style=\"background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-family: sans-serif;\">\n\t<table style=\"width: 100%; border-collapse: collapse; font-size: 13px;\">\n\t\t<tr>\n\t\t\t<td style=\"padding: 4px 0; color: #64748b; width: 160px;\"><b>Company / Account:</b></td>\n\t\t\t<td style=\"padding: 4px 0; color: #1e293b;\"><b>{{ doc.cc_acc_name or doc.portal_acc_name or 'N/A' }}</b></td>\n\t\t</tr>\n\t\t<tr>\n\t\t\t<td style=\"padding: 4px 0; color: #64748b;\"><b>Tally Serial Number:</b></td>\n\t\t\t<td style=\"padding: 4px 0; color: #1e293b;\"><b>{{ doc.tss_tally_serial or doc.tally_serial or 'N/A' }}</b></td>\n\t\t</tr>\n\t\t<tr>\n\t\t\t<td style=\"padding: 4px 0; color: #64748b;\"><b>License / Edition:</b></td>\n\t\t\t<td style=\"padding: 4px 0; color: #1e293b;\">{{ doc.license or doc.edition or doc.flavour or 'TallyPrime' }}</td>\n\t\t</tr>\n\t\t<tr>\n\t\t\t<td style=\"padding: 4px 0; color: #64748b;\"><b>TSS Expiry Date:</b></td>\n\t\t\t<td style=\"padding: 4px 0; color: #1e293b;\">{{ doc.acc_expiry_date or doc.portal_expiry_date or 'N/A' }}</td>\n\t\t</tr>\n\t\t{% if doc.cc_amount %}\n\t\t<tr>\n\t\t\t<td style=\"padding: 6px 0 4px 0; color: #059669; font-size: 14px;\"><b>Renewal Amount:</b></td>\n\t\t\t<td style=\"padding: 6px 0 4px 0; color: #059669; font-size: 14px; font-weight: bold;\">\u20b9{{ doc.cc_amount }}</td>\n\t\t</tr>\n\t\t{% endif %}\n\t</table>\n</div>\n<p><b>Benefits of Active Tally TSS:</b></p>\n<ul style=\"margin-top: 4px; margin-bottom: 12px; padding-left: 20px; color: #334155; font-size: 13px;\">\n\t<li>Access to latest TallyPrime releases, product upgrades & feature enhancements.</li>\n\t<li>Seamless connected e-Invoicing and e-Way Bill generation directly from Tally.</li>\n\t<li>Automated banking features, payment reconciliations, and bank statement import.</li>\n\t<li>Anytime, anywhere secure remote access and web browser reports.</li>\n\t<li>Continuous compliance with latest statutory and tax changes.</li>\n</ul>\n<p>Please review and let us know your confirmation to proceed with the renewal.</p>\n<p>Warm regards,<br>\n<b>{{ logged_in_user.full_name or 'HBS Sales Team' }}</b><br>\n{% if logged_in_user.designation %}{{ logged_in_user.designation }}<br>{% endif %}\n{% if logged_in_user.mobile_no %}Mobile: {{ logged_in_user.mobile_no }}<br>{% endif %}\n{% if logged_in_user.email %}Email: {{ logged_in_user.email }}{% endif %}\n</p>",
+   "fieldname": "renewal_email_body",
+   "fieldtype": "Text Editor",
+   "label": "Renewal Email Body Template"
   }
  ],
  "issingle": 1,

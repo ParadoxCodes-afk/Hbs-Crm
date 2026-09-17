@@ -1,0 +1,1101 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "autoincrement",
+ "creation": "2026-09-16 15:29:24.758581",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "tally_section",
+  "guid",
+  "alterid",
+  "column_break_sys_top",
+  "isdeleted",
+  "person_detail_section",
+  "tss_tally_serial",
+  "license",
+  "tally_version",
+  "acc_expiry_date",
+  "portal_expiry_date",
+  "column_break_kcqk",
+  "cc_acc_name",
+  "cc_contact",
+  "cc_mobile",
+  "cc_phone",
+  "cc_email",
+  "column_break_uppk",
+  "mau",
+  "qau",
+  "crm_priority",
+  "rfm_segment",
+  "crm_ref",
+  "column_break_bdxl",
+  "crm_ex_1",
+  "crm_status",
+  "crm_stage",
+  "crm_lost_remarks",
+  "follow_up_date",
+  "usage_and_priority_section",
+  "partner_name",
+  "cc_email_cc",
+  "frequency_of_usage",
+  "upgrade_priority",
+  "column_break_usage_priority",
+  "migration_priority",
+  "executive_details_section",
+  "column_break_person_detail",
+  "cc_state",
+  "cc_pincode",
+  "led_city",
+  "column_break_executive_detail",
+  "address",
+  "all_contacts_section",
+  "all_contacts",
+  "follow_up_section",
+  "remarks",
+  "last_remark",
+  "last_remarks_date",
+  "custom_activities",
+  "activity",
+  "extra_details_tally_section",
+  "tally_parent",
+  "multi_site",
+  "site_number",
+  "product_ver",
+  "last_called_on",
+  "contact_on",
+  "cc_amount",
+  "closure_serial_number",
+  "buisness_nature",
+  "buisness_activity",
+  "customer_serial",
+  "ts9_priority",
+  "business_segment",
+  "mca_registered",
+  "tpel",
+  "crm_executive",
+  "crm_type",
+  "crm_departments",
+  "phone_list",
+  "email_list",
+  "search_fields",
+  "update_search_fields",
+  "quote_tab",
+  "items_section",
+  "pi_number",
+  "quotation_date",
+  "items",
+  "additional_discount",
+  "terms_and_conditions",
+  "payment_terms",
+  "delivery",
+  "support",
+  "taxes",
+  "validity",
+  "uneditable_calculation_section",
+  "total_before_tax",
+  "total_tax",
+  "column_break_merw",
+  "total_after_tax",
+  "final_total",
+  "portal_tab",
+  "license_details_section",
+  "tally_serial",
+  "product_family",
+  "flavour",
+  "portal_acc_name",
+  "acc_start_date",
+  "portal_owner",
+  "license_type",
+  "column_break_ltuw",
+  "release",
+  "account_id",
+  "admin_id",
+  "previous_lcp",
+  "ping_in_this_quarter",
+  "edit_log",
+  "address_details_section",
+  "portal_contact",
+  "portal_mobile",
+  "portal_phone",
+  "portal_partner_name",
+  "column_break_ojrs",
+  "portal_email",
+  "gstin",
+  "state",
+  "pincode",
+  "portal_address",
+  "priority_section",
+  "column_break_xoff",
+  "mca_flag",
+  "tvu_section",
+  "tvu_priority",
+  "paid_tvu_end_date",
+  "paid_tvu_quantity",
+  "extra_details",
+  "last_updated_api",
+  "tss_ranking",
+  "tss_last_renewal_mode",
+  "previous_tss_expiry_date",
+  "column_break_ovwv",
+  "last_updated",
+  "last_ping_date",
+  "last_tss_renewal_date",
+  "usage_type",
+  "tepl",
+  "director_details_tab",
+  "director_details_section",
+  "director_contact_person",
+  "director_type",
+  "director_gst",
+  "director_mobile",
+  "director_email",
+  "director_nature",
+  "column_break_director",
+  "director_state",
+  "director_pincode",
+  "director_turnover_slab",
+  "director_turnover",
+  "director_address",
+  "old_remarks_tab",
+  "old_remarks_section",
+  "old_remarks",
+  "old_remarks_activities",
+  "old_remarks_html",
+  "tab_2_tab",
+  "erpnext_section",
+  "status",
+  "error",
+  "response",
+  "gseven_branch",
+  "edition"
+ ],
+ "fields": [
+  {
+   "fieldname": "tally_section",
+   "fieldtype": "Section Break",
+   "label": "Tally "
+  },
+  {
+   "fieldname": "guid",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "GUID"
+  },
+  {
+   "fieldname": "alterid",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Alter ID"
+  },
+  {
+   "fieldname": "column_break_sys_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "isdeleted",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Is Deleted"
+  },
+  {
+   "fieldname": "person_detail_section",
+   "fieldtype": "Section Break",
+   "label": "Person Detail"
+  },
+  {
+   "fieldname": "tss_tally_serial",
+   "fieldtype": "Data",
+   "label": "TSS Tally Serial"
+  },
+  {
+   "fieldname": "license",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "License",
+   "options": "TALLY PRIME SILVER\nTALLY PRIME GOLD\nTALLY PRIME AUDITOR"
+  },
+  {
+   "fieldname": "tally_version",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tally Version"
+  },
+  {
+   "fieldname": "acc_expiry_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "TSS Expiry Date"
+  },
+  {
+   "fieldname": "portal_expiry_date",
+   "fieldtype": "Date",
+   "label": "Portal Expiry Date"
+  },
+  {
+   "fieldname": "column_break_kcqk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cc_acc_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Account / Company Name"
+  },
+  {
+   "fieldname": "cc_contact",
+   "fieldtype": "Data",
+   "label": "Contact Person"
+  },
+  {
+   "fieldname": "cc_mobile",
+   "fieldtype": "Data",
+   "label": "Mobile Number"
+  },
+  {
+   "fieldname": "cc_phone",
+   "fieldtype": "Data",
+   "label": "Phone Number"
+  },
+  {
+   "fieldname": "cc_email",
+   "fieldtype": "Data",
+   "label": "Email ID"
+  },
+  {
+   "fieldname": "column_break_uppk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "mau",
+   "fieldtype": "Data",
+   "label": "Monthly Active Users (MAU)"
+  },
+  {
+   "fieldname": "qau",
+   "fieldtype": "Data",
+   "label": "Quarterly Active Users (QAU)"
+  },
+  {
+   "fieldname": "crm_priority",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "CRM Priority"
+  },
+  {
+   "fieldname": "rfm_segment",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "RFM Segment"
+  },
+  {
+   "fieldname": "crm_ref",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Reference Status (Active/Moved Out)",
+   "options": "\nACTIVE\nMOVED OUT\nCOMPETITION"
+  },
+  {
+   "fieldname": "column_break_bdxl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "crm_ex_1",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Executive 1",
+   "options": "User"
+  },
+  {
+   "fieldname": "crm_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "CRM Status",
+   "options": "\nPENDING\nSold\nLost"
+  },
+  {
+   "fieldname": "crm_stage",
+   "fieldtype": "Select",
+   "label": "CRM Stage",
+   "options": "\nCustomer Not Responding\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION"
+  },
+  {
+   "fieldname": "crm_lost_remarks",
+   "fieldtype": "Small Text",
+   "label": "Lost Remarks"
+  },
+  {
+   "columns": 2,
+   "fieldname": "follow_up_date",
+   "fieldtype": "Date",
+   "in_standard_filter": 1,
+   "label": "Follow-up Date"
+  },
+  {
+   "fieldname": "usage_and_priority_section",
+   "fieldtype": "Section Break",
+   "label": "Usage & Priority"
+  },
+  {
+   "fieldname": "partner_name",
+   "fieldtype": "Data",
+   "label": "Partner Name"
+  },
+  {
+   "fieldname": "cc_email_cc",
+   "fieldtype": "Data",
+   "label": "CC Email"
+  },
+  {
+   "fieldname": "frequency_of_usage",
+   "fieldtype": "Data",
+   "label": "Frequency of Usage"
+  },
+  {
+   "fieldname": "upgrade_priority",
+   "fieldtype": "Data",
+   "label": "Upgrade Priority"
+  },
+  {
+   "fieldname": "column_break_usage_priority",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "migration_priority",
+   "fieldtype": "Data",
+   "label": "Migration Priority"
+  },
+  {
+   "fieldname": "executive_details_section",
+   "fieldtype": "Section Break",
+   "label": "Address Details"
+  },
+  {
+   "fieldname": "column_break_person_detail",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cc_state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fieldname": "cc_pincode",
+   "fieldtype": "Data",
+   "label": "Pincode"
+  },
+  {
+   "fieldname": "led_city",
+   "fieldtype": "Data",
+   "label": "City (Ledger)"
+  },
+  {
+   "fieldname": "column_break_executive_detail",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Long Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "all_contacts_section",
+   "fieldtype": "Section Break",
+   "label": "All Contacts"
+  },
+  {
+   "fieldname": "all_contacts",
+   "fieldtype": "Table",
+   "label": "All Contacts",
+   "options": "Hbs Lead Contact"
+  },
+  {
+   "fieldname": "follow_up_section",
+   "fieldtype": "Section Break",
+   "label": "Follow Up & Remarks"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Remarks / Notes"
+  },
+  {
+   "fieldname": "last_remark",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Last Remark",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_remarks_date",
+   "fieldtype": "Date",
+   "in_standard_filter": 1,
+   "label": "Last Remarks Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom_activities",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Activities",
+   "options": "Hbs Lead Activity"
+  },
+  {
+   "fieldname": "activity",
+   "fieldtype": "HTML",
+   "label": "All Activities"
+  },
+  {
+   "fieldname": "extra_details_tally_section",
+   "fieldtype": "Section Break",
+   "label": "Extra Details"
+  },
+  {
+   "fieldname": "tally_parent",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Tally Parent"
+  },
+  {
+   "fieldname": "multi_site",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Multi Site"
+  },
+  {
+   "fieldname": "site_number",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Site Number"
+  },
+  {
+   "fieldname": "product_ver",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Product Version"
+  },
+  {
+   "fieldname": "last_called_on",
+   "fieldtype": "Date",
+   "hidden": 1,
+   "label": "Last Called On"
+  },
+  {
+   "fieldname": "contact_on",
+   "fieldtype": "Date",
+   "hidden": 1,
+   "label": "Contact On"
+  },
+  {
+   "fieldname": "cc_amount",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Amount"
+  },
+  {
+   "fieldname": "closure_serial_number",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Closure Serial Number"
+  },
+  {
+   "fieldname": "buisness_nature",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Business Nature"
+  },
+  {
+   "fieldname": "buisness_activity",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Business Activity"
+  },
+  {
+   "fieldname": "customer_serial",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Customer Serial"
+  },
+  {
+   "fieldname": "ts9_priority",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "TS9 Priority"
+  },
+  {
+   "fieldname": "business_segment",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Business Segment"
+  },
+  {
+   "fieldname": "mca_registered",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "MCA Registered"
+  },
+  {
+   "fieldname": "tpel",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "TPEL"
+  },
+  {
+   "fieldname": "crm_executive",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "CRM Executive"
+  },
+  {
+   "fieldname": "crm_type",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "CRM Type"
+  },
+  {
+   "fieldname": "crm_departments",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Departments"
+  },
+  {
+   "fieldname": "phone_list",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Phone List (JSON)"
+  },
+  {
+   "fieldname": "email_list",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Email List (JSON)"
+  },
+  {
+   "fieldname": "search_fields",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Search Fields (JSON)"
+  },
+  {
+   "default": "0",
+   "fieldname": "update_search_fields",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Update Search Fields"
+  },
+  {
+   "fieldname": "quote_tab",
+   "fieldtype": "Tab Break",
+   "label": "Quote"
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "items"
+  },
+  {
+   "fieldname": "pi_number",
+   "fieldtype": "Data",
+   "label": "Renewal PI Number",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "quotation_date",
+   "fieldtype": "Date",
+   "label": "Quotation Date"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "items",
+   "options": "hbs crm items"
+  },
+  {
+   "fieldname": "additional_discount",
+   "fieldtype": "Int",
+   "label": "additional discount"
+  },
+  {
+   "fieldname": "terms_and_conditions",
+   "fieldtype": "Section Break",
+   "label": "Terms and Conditions"
+  },
+  {
+   "default": "100% advance along with confirm order.",
+   "fieldname": "payment_terms",
+   "fieldtype": "Data",
+   "label": "Payment Terms"
+  },
+  {
+   "default": "2-3 working days.",
+   "fieldname": "delivery",
+   "fieldtype": "Data",
+   "label": "Delivery"
+  },
+  {
+   "default": "3 Months Telephonic Support from invoice date.",
+   "fieldname": "support",
+   "fieldtype": "Data",
+   "label": "Support"
+  },
+  {
+   "default": "All Inclusive",
+   "fieldname": "taxes",
+   "fieldtype": "Data",
+   "label": "Taxes"
+  },
+  {
+   "default": "ONE WEEK",
+   "fieldname": "validity",
+   "fieldtype": "Data",
+   "label": "Validity"
+  },
+  {
+   "fieldname": "uneditable_calculation_section",
+   "fieldtype": "Section Break",
+   "label": "uneditable calculation"
+  },
+  {
+   "fieldname": "total_before_tax",
+   "fieldtype": "Float",
+   "label": "total before tax"
+  },
+  {
+   "fieldname": "total_tax",
+   "fieldtype": "Float",
+   "label": "Total Tax"
+  },
+  {
+   "fieldname": "column_break_merw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_after_tax",
+   "fieldtype": "Float",
+   "label": "Total After Tax"
+  },
+  {
+   "fieldname": "final_total",
+   "fieldtype": "Float",
+   "label": "Final Total"
+  },
+  {
+   "fieldname": "portal_tab",
+   "fieldtype": "Tab Break",
+   "label": "Portal"
+  },
+  {
+   "fieldname": "license_details_section",
+   "fieldtype": "Section Break",
+   "label": "License Details"
+  },
+  {
+   "fieldname": "tally_serial",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Tally Serial Number",
+   "show_description_on_click": 1
+  },
+  {
+   "fieldname": "product_family",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Product Family"
+  },
+  {
+   "fieldname": "flavour",
+   "fieldtype": "Data",
+   "label": "Tally Flavour"
+  },
+  {
+   "fieldname": "portal_acc_name",
+   "fieldtype": "Data",
+   "in_filter": 1,
+   "label": "Portal Account Name"
+  },
+  {
+   "fieldname": "acc_start_date",
+   "fieldtype": "Date",
+   "label": "Activation Date"
+  },
+  {
+   "fieldname": "portal_owner",
+   "fieldtype": "Data",
+   "label": "Portal Owner"
+  },
+  {
+   "fieldname": "license_type",
+   "fieldtype": "Data",
+   "label": "License Type"
+  },
+  {
+   "fieldname": "column_break_ltuw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "release",
+   "fieldtype": "Data",
+   "label": "Release / Version"
+  },
+  {
+   "fieldname": "account_id",
+   "fieldtype": "Data",
+   "label": "Account ID"
+  },
+  {
+   "fieldname": "admin_id",
+   "fieldtype": "Data",
+   "label": "Admin Email ID"
+  },
+  {
+   "fieldname": "previous_lcp",
+   "fieldtype": "Data",
+   "label": "Previous LCP"
+  },
+  {
+   "fieldname": "ping_in_this_quarter",
+   "fieldtype": "Data",
+   "label": "Ping In This Quarter"
+  },
+  {
+   "fieldname": "edit_log",
+   "fieldtype": "Data",
+   "label": "Edit Log"
+  },
+  {
+   "fieldname": "address_details_section",
+   "fieldtype": "Section Break",
+   "label": "Address Details"
+  },
+  {
+   "fieldname": "portal_contact",
+   "fieldtype": "Data",
+   "label": "Portal Contact Person"
+  },
+  {
+   "fieldname": "portal_mobile",
+   "fieldtype": "Data",
+   "label": "Portal Mobile"
+  },
+  {
+   "fieldname": "portal_phone",
+   "fieldtype": "Data",
+   "label": "Portal Phone"
+  },
+  {
+   "fieldname": "portal_partner_name",
+   "fieldtype": "Data",
+   "label": "Portal Partner Name"
+  },
+  {
+   "fieldname": "column_break_ojrs",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "portal_email",
+   "fieldtype": "Data",
+   "label": "Portal Email"
+  },
+  {
+   "fieldname": "gstin",
+   "fieldtype": "Data",
+   "label": "GSTIN"
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Pincode"
+  },
+  {
+   "fieldname": "portal_address",
+   "fieldtype": "Long Text",
+   "label": "Portal Address"
+  },
+  {
+   "fieldname": "priority_section",
+   "fieldtype": "Section Break",
+   "label": "Priority"
+  },
+  {
+   "fieldname": "column_break_xoff",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "mca_flag",
+   "fieldtype": "Data",
+   "label": "MCA Flag"
+  },
+  {
+   "fieldname": "tvu_section",
+   "fieldtype": "Section Break",
+   "label": "TVU"
+  },
+  {
+   "fieldname": "tvu_priority",
+   "fieldtype": "Data",
+   "label": "TVU Priority"
+  },
+  {
+   "fieldname": "paid_tvu_end_date",
+   "fieldtype": "Date",
+   "label": "Paid TVU End Date"
+  },
+  {
+   "fieldname": "paid_tvu_quantity",
+   "fieldtype": "Int",
+   "label": "Paid TVU Quantity"
+  },
+  {
+   "fieldname": "extra_details",
+   "fieldtype": "Section Break",
+   "label": "Extra Details"
+  },
+  {
+   "fieldname": "last_updated_api",
+   "fieldtype": "Date",
+   "in_standard_filter": 1,
+   "label": "Last API Updated"
+  },
+  {
+   "fieldname": "tss_ranking",
+   "fieldtype": "Data",
+   "label": "TSS Ranking"
+  },
+  {
+   "fieldname": "tss_last_renewal_mode",
+   "fieldtype": "Data",
+   "label": "Last Renewal Mode"
+  },
+  {
+   "fieldname": "previous_tss_expiry_date",
+   "fieldtype": "Date",
+   "label": "Previous TSS Expiry Date"
+  },
+  {
+   "fieldname": "column_break_ovwv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_updated",
+   "fieldtype": "Date",
+   "label": "Last Excel Updated"
+  },
+  {
+   "fieldname": "last_ping_date",
+   "fieldtype": "Date",
+   "label": "Last Ping Date"
+  },
+  {
+   "fieldname": "last_tss_renewal_date",
+   "fieldtype": "Date",
+   "label": "Last TSS Renewal Date"
+  },
+  {
+   "fieldname": "usage_type",
+   "fieldtype": "Data",
+   "label": "Usage Type"
+  },
+  {
+   "fieldname": "tepl",
+   "fieldtype": "Data",
+   "label": "TEPL"
+  },
+  {
+   "fieldname": "director_details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Director Details"
+  },
+  {
+   "fieldname": "director_details_section",
+   "fieldtype": "Section Break",
+   "label": "Director Details"
+  },
+  {
+   "fieldname": "director_contact_person",
+   "fieldtype": "Data",
+   "label": "Director Contact Person"
+  },
+  {
+   "fieldname": "director_type",
+   "fieldtype": "Data",
+   "label": "Director Type"
+  },
+  {
+   "fieldname": "director_gst",
+   "fieldtype": "Data",
+   "label": "Director GST"
+  },
+  {
+   "fieldname": "director_mobile",
+   "fieldtype": "Data",
+   "label": "Director Mobile"
+  },
+  {
+   "fieldname": "director_email",
+   "fieldtype": "Data",
+   "label": "Director Email"
+  },
+  {
+   "fieldname": "director_nature",
+   "fieldtype": "Small Text",
+   "label": "Director Nature"
+  },
+  {
+   "fieldname": "column_break_director",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "director_state",
+   "fieldtype": "Data",
+   "label": "Director State"
+  },
+  {
+   "fieldname": "director_pincode",
+   "fieldtype": "Data",
+   "label": "Director Pincode"
+  },
+  {
+   "fieldname": "director_turnover_slab",
+   "fieldtype": "Data",
+   "label": "Director Turnover Slab"
+  },
+  {
+   "fieldname": "director_turnover",
+   "fieldtype": "Data",
+   "label": "Director Turnover"
+  },
+  {
+   "fieldname": "director_address",
+   "fieldtype": "Long Text",
+   "label": "Director Address"
+  },
+  {
+   "fieldname": "old_remarks_tab",
+   "fieldtype": "Tab Break",
+   "label": "Old Remarks"
+  },
+  {
+   "fieldname": "old_remarks_section",
+   "fieldtype": "Section Break",
+   "label": "Past 2 Years Remarks"
+  },
+  {
+   "fieldname": "old_remarks",
+   "fieldtype": "Long Text",
+   "label": "Old Remarks (Excel / Compiled)"
+  },
+  {
+   "fieldname": "old_remarks_activities",
+   "fieldtype": "Table",
+   "label": "Old Remarks History",
+   "options": "Hbs Lead Activity"
+  },
+  {
+   "fieldname": "old_remarks_html",
+   "fieldtype": "HTML",
+   "label": "Old Remarks Timeline"
+  },
+  {
+   "fieldname": "tab_2_tab",
+   "fieldtype": "Tab Break",
+   "label": "Tab 2"
+  },
+  {
+   "fieldname": "erpnext_section",
+   "fieldtype": "Section Break",
+   "label": "erpnext"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Data",
+   "label": "Process Status"
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Long Text",
+   "label": "Error Log"
+  },
+  {
+   "fieldname": "response",
+   "fieldtype": "Long Text",
+   "label": "Raw API Response"
+  },
+  {
+   "fieldname": "gseven_branch",
+   "fieldtype": "Small Text",
+   "label": "Branch / Location"
+  },
+  {
+   "fieldname": "edition",
+   "fieldtype": "Small Text",
+   "label": "Edition (Silver/Gold)"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-17 12:10:46.929581",
+ "modified_by": "Administrator",
+ "module": "hbs_crm",
+ "name": "Hbs Tally Renewal",
+ "naming_rule": "Autoincrement",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "tally_serial, cc_acc_name, portal_acc_name, cc_mobile, cc_email, admin_id",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "tally_serial"
+}

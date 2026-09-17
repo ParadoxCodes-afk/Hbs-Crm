@@ -1,6 +1,6 @@
 {
  "actions": [],
- "creation": "2026-09-07 16:31:36.125472",
+ "creation": "2026-09-16 15:29:24.296664",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -15,7 +15,9 @@
   "hbs_lead_pi_number",
   "last_generated_pi_number",
   "column_break_gen",
-  "default_lead_owner"
+  "default_lead_owner",
+  "renewal_pi_number_order",
+  "last_generated_renewal_pi_number"
  ],
  "fields": [
   {
@@ -79,6 +81,20 @@
    "read_only": 1
   },
   {
+   "default": "HBS/PI/91957",
+   "description": "Base sequence or starting order for renewals (e.g. HBS/PI/91957)",
+   "fieldname": "renewal_pi_number_order",
+   "fieldtype": "Data",
+   "label": "Renewal PI Number Order"
+  },
+  {
+   "description": "Last Renewal PI Number generated across quotations",
+   "fieldname": "last_generated_renewal_pi_number",
+   "fieldtype": "Data",
+   "label": "Last Generated Renewal PI Number",
+   "read_only": 1
+  },
+  {
    "fieldname": "column_break_gen",
    "fieldtype": "Column Break"
   },
@@ -91,7 +107,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-09-09 11:30:16.843178",
+ "modified": "2026-09-16 16:08:16.294885",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs CRM Settings",

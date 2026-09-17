@@ -572,7 +572,7 @@ frappe.ui.form.on("hbs crm items", {
 		if (row.item_name) {
 			frappe.db.get_doc("Hbs Product", row.item_name).then((doc) => {
 				frappe.model.set_value(cdt, cdn, "rate", doc.rate || 0);
-				frappe.model.set_value(cdt, cdn, "description", doc.description || "");
+				frappe.model.set_value(cdt, cdn, "description", "");
 				frappe.model.set_value(cdt, cdn, "tax", doc.tax || 0);
 				frappe.model.set_value(cdt, cdn, "hsn", doc.hsn || "");
 				if (!row.qty) {
@@ -948,10 +948,7 @@ function open_auto_fill_customer_dialog(frm) {
 				label: __("Search Customer"),
 				fieldname: "search_term",
 				fieldtype: "Data",
-				description: __("Type Customer Name, Company Name, Phone, Email, or GST and press Enter to search"),
-				onchange: function() {
-					perform_customer_search(dialog, frm);
-				}
+				description: __("Type Customer Name, Company, Phone, Email, or GST to search live")
 			},
 			{
 				fieldtype: "Button",
@@ -974,12 +971,62 @@ function open_auto_fill_customer_dialog(frm) {
 		"width": "90%"
 	});
 
+	let search_timer = null;
+
+	// Live search as user types with 300ms debounce
+	dialog.fields_dict.search_term.$input.on("input", function() {
+		clearTimeout(search_timer);
+		let val = $(this).val();
+		if (!val || val.trim().length === 0) {
+			dialog.set_df_property("results_html", "options", '<div class="text-muted text-center" style="padding: 10px;">Please enter a search term.</div>');
+			return;
+		}
+		search_timer = setTimeout(function() {
+			perform_customer_search(dialog, frm);
+		}, 300);
+	});
+
+	// Instant search on Enter key
+	dialog.fields_dict.search_term.$input.on("keydown", function(e) {
+		if (e.which === 13) {
+			e.preventDefault();
+			clearTimeout(search_timer);
+			perform_customer_search(dialog, frm);
+		}
+	});
+
+	// Delegated click listener - bound once, immune to typing re-render races
+	dialog.$wrapper.on("click", ".btn-fill-detail", function() {
+		clearTimeout(search_timer);
+		let key = $(this).attr("data-key");
+		let customer_doc = window.customer_search_results && window.customer_search_results[key];
+		if (customer_doc) {
+			// Auto fill values into lead form
+			frm.set_value("customer", customer_doc.name);
+			frm.set_value("company_name", customer_doc.company_name);
+			frm.set_value("company_gst", customer_doc.company_gst);
+			frm.set_value("contact_name", customer_doc.customer_name);
+			frm.set_value("contact_phone", customer_doc.contact_phone);
+			frm.set_value("contact_email", customer_doc.contact_email);
+			frm.set_value("address", customer_doc.address);
+			frm.set_value("tally_serial", customer_doc.tally_serial);
+			frm.set_value("license_type", customer_doc.license_type);
+
+			frappe.show_alert({
+				message: __("Customer details auto-filled successfully!"),
+				indicator: "green"
+			});
+
+			dialog.hide();
+		}
+	});
+
 	dialog.show();
 }
 
 function perform_customer_search(dialog, frm) {
-	let term = dialog.get_value("search_term");
-	if (!term || term.trim().length === 0) {
+	let term = (dialog.get_value("search_term") || "").trim();
+	if (!term) {
 		dialog.set_df_property("results_html", "options", '<div class="text-muted text-center" style="padding: 10px;">Please enter a search term.</div>');
 		return;
 	}
@@ -992,6 +1039,11 @@ function perform_customer_search(dialog, frm) {
 			search_term: term
 		},
 		callback: function(r) {
+			// If input changed while request was in-flight, discard stale result
+			if ((dialog.get_value("search_term") || "").trim() !== term) {
+				return;
+			}
+
 			if (r.message && r.message.length > 0) {
 				let html = `
 					<div style="max-height: 420px; overflow-y: auto; margin-top: 15px;">
@@ -1037,31 +1089,6 @@ function perform_customer_search(dialog, frm) {
 				`;
 
 				dialog.set_df_property("results_html", "options", html);
-
-				// Attach click listener to the dynamically generated buttons
-				dialog.$wrapper.find(".btn-fill-detail").on("click", function() {
-					let key = $(this).attr("data-key");
-					let customer_doc = window.customer_search_results[key];
-					if (customer_doc) {
-						// Auto fill values into lead form
-						frm.set_value("customer", customer_doc.name);
-						frm.set_value("company_name", customer_doc.company_name);
-						frm.set_value("company_gst", customer_doc.company_gst);
-						frm.set_value("contact_name", customer_doc.customer_name);
-						frm.set_value("contact_phone", customer_doc.contact_phone);
-						frm.set_value("contact_email", customer_doc.contact_email);
-						frm.set_value("address", customer_doc.address);
-						frm.set_value("tally_serial", customer_doc.tally_serial);
-						frm.set_value("license_type", customer_doc.license_type);
-
-						frappe.show_alert({
-							message: __("Customer details auto-filled successfully!"),
-							indicator: "green"
-						});
-
-						dialog.hide();
-					}
-				});
 			} else {
 				dialog.set_df_property("results_html", "options", '<div class="text-danger text-center" style="padding: 10px;">No matching customers found.</div>');
 			}

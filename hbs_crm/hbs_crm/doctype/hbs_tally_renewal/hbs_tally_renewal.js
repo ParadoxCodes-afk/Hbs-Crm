@@ -1,0 +1,1078 @@
+// Copyright (c) 2026, Hbs and contributors
+// For license information, please see license.txt
+
+frappe.ui.form.on("Hbs Tally Renewal", {
+	refresh(frm) {
+		setup_field_permissions(frm);
+		setup_all_contacts_grid(frm);
+		handle_lost_remarks_visibility(frm);
+		render_activity_timeline(frm);
+		render_old_remarks_timeline(frm);
+		frm.set_df_property("pi_number", "read_only", 1);
+		apply_custom_section_styles(frm);
+
+		if (frm._reloading_from_sync) {
+			delete frm._reloading_from_sync;
+		} else if (!frm.is_new() && (frm.doc.tally_serial || frm.doc.tss_tally_serial)) {
+			auto_sync_portal_on_open(frm);
+		}
+
+		frm.clear_custom_buttons();
+
+		if (!frm.is_new()) {
+			// All users with view permission can log follow-up
+			frm.add_custom_button(__("+ Follow-up"), function () {
+				open_follow_up_dialog(frm);
+			}).addClass("btn-primary");
+
+			// All users with view permission can send TSS quotation email to client
+			frm.add_custom_button(__("Send Quotation to Client"), function () {
+				open_email_dialog(frm);
+			}, __("Actions"));
+
+			// Admin and Hierarchy Owner only button
+			check_if_owner_or_admin(function (is_owner_admin) {
+				if (is_owner_admin) {
+					frm.add_custom_button(__("👤 Assign Executive"), function () {
+						open_assign_dialog(frm);
+					});
+				}
+			});
+		}
+	},
+
+	crm_status(frm) {
+		handle_lost_remarks_visibility(frm);
+	},
+
+	portal_expiry_date(frm) {
+		apply_custom_section_styles(frm);
+	},
+
+	product_ver(frm) {
+		format_client_tally_version(frm);
+	},
+
+	tally_version(frm) {
+		format_client_tally_version(frm);
+	},
+
+	additional_discount(frm) {
+		calculate_totals(frm);
+	},
+
+	tally_serial(frm) {
+		check_and_warn_duplicate_serial(frm);
+	},
+
+	tss_tally_serial(frm) {
+		check_and_warn_duplicate_serial(frm);
+	},
+
+	validate(frm) {
+		let serial = frm.doc.tss_tally_serial || frm.doc.tally_serial;
+		if (serial) {
+			let s = String(serial).trim();
+			if (!is_genuine_tally_serial(s)) {
+				frappe.msgprint({
+					title: __("Invalid Serial Number"),
+					indicator: "red",
+					message: __("Invalid Serial Number")
+				});
+				frappe.validated = false;
+				return;
+			}
+		}
+	}
+});
+
+function format_client_tally_version(frm) {
+	let ver = (frm.doc.tally_version || frm.doc.product_ver || "").toString().trim();
+	if (!ver) return;
+
+	if (ver.toLowerCase().startsWith("tally")) {
+		if (frm.doc.tally_version !== ver) {
+			frm.set_value("tally_version", ver);
+		}
+		return;
+	}
+
+	let formatted = ver.toLowerCase().startsWith("prime") ? "Tally " + ver : "Tally Prime " + ver;
+	if (frm.doc.tally_version !== formatted) {
+		frm.set_value("tally_version", formatted);
+	}
+}
+
+function handle_lost_remarks_visibility(frm) {
+	let is_lost = (frm.doc.crm_status || "").trim().toLowerCase() === "lost";
+	frm.set_df_property("crm_lost_remarks", "hidden", is_lost ? 0 : 1);
+	if (frm.fields_dict.crm_lost_remarks && frm.fields_dict.crm_lost_remarks.$wrapper) {
+		if (is_lost) {
+			frm.fields_dict.crm_lost_remarks.$wrapper.show().css("display", "block !important");
+		} else {
+			frm.fields_dict.crm_lost_remarks.$wrapper.hide().css("display", "none !important");
+		}
+	}
+}
+
+function check_if_owner_or_admin(callback) {
+	if (frappe.session.user === "Administrator" || frappe.user.has_role("System Manager")) {
+		callback(true);
+		return;
+	}
+
+	frappe.call({
+		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_user_hierarchy_role",
+		callback: function (r) {
+			let is_allowed = r.message && r.message.is_owner_or_admin;
+			callback(!!is_allowed);
+		}
+	});
+}
+
+function setup_field_permissions(frm) {
+	// Quote calculation fields are read-only
+	["total_before_tax", "total_tax", "total_after_tax", "final_total"].forEach(fn => {
+		frm.set_df_property(fn, "read_only", 1);
+	});
+
+	// 1. ALWAYS Read-Only (view-only on both creation & alteration):
+	// Synced via API / Excel or updated strictly via Follow-up Dialog
+	const always_view_only = [
+		"mau",
+		"qau",
+		"crm_priority",
+		"rfm_segment",
+		"crm_status",
+		"crm_stage",
+		"follow_up_date",
+		"last_remarks_date",
+		"contact_on",
+		"last_updated",
+		"portal_expiry_date",
+		"last_updated_api",
+		"crm_ref",
+		"tss_ranking",
+		"tss_last_renewal_mode",
+		"previous_tss_expiry_date",
+		"last_ping_date",
+		"last_tss_renewal_date",
+		"usage_type",
+		"tepl",
+		"old_remarks"
+	];
+
+	// Make sure Frappe never auto-hides them by keeping df.read_only = 0
+	always_view_only.forEach(fn => {
+		if (frm.fields_dict[fn]) {
+			frm.set_df_property(fn, "read_only", 0);
+			if (frm.fields_dict[fn].$wrapper) {
+				frm.fields_dict[fn].$wrapper.show().css("display", "block !important");
+				frm.fields_dict[fn].$wrapper.find("input, select, textarea")
+					.prop("readonly", true)
+					.prop("disabled", true)
+					.css({
+						"pointer-events": "none",
+						"cursor": "default"
+					});
+			}
+		}
+	});
+
+	// Handle crm_lost_remarks read-only state while keeping its visibility conditional
+	if (frm.fields_dict.crm_lost_remarks) {
+		frm.set_df_property("crm_lost_remarks", "read_only", 0);
+		if (frm.fields_dict.crm_lost_remarks.$wrapper) {
+			frm.fields_dict.crm_lost_remarks.$wrapper.find("input, select, textarea")
+				.prop("readonly", true)
+				.prop("disabled", true)
+				.css({
+					"pointer-events": "none",
+					"cursor": "default"
+				});
+		}
+	}
+
+	// 2. Creation fields that become READ-ONLY on ALTERATION:
+	const lock_on_alteration = [
+		"tss_tally_serial",
+		"tally_serial",
+		"license",
+		"tally_version",
+		"acc_expiry_date",
+		"cc_acc_name",
+		"cc_phone",
+		"cc_email_cc",
+		"cc_state",
+		"cc_pincode",
+		"led_city",
+		"address",
+		"partner_name",
+		"frequency_of_usage",
+		"upgrade_priority",
+		"migration_priority",
+		"tally_parent",
+		"multi_site",
+		"site_number",
+		"product_ver",
+		"last_called_on",
+		"cc_amount",
+		"closure_serial_number",
+		"buisness_nature",
+		"buisness_activity",
+		"customer_serial",
+		"ts9_priority",
+		"business_segment",
+		"mca_registered",
+		"tpel",
+		"crm_executive",
+		"crm_type",
+		"crm_departments",
+		"product_family",
+		"flavour",
+		"portal_acc_name",
+		"acc_start_date",
+		"portal_owner",
+		"license_type",
+		"release",
+		"account_id",
+		"admin_id",
+		"previous_lcp",
+		"ping_in_this_quarter",
+		"portal_contact",
+		"portal_mobile",
+		"portal_phone",
+		"portal_partner_name",
+		"portal_email",
+		"gstin",
+		"state",
+		"pincode",
+		"portal_address",
+		"mca_flag",
+		"tvu_priority",
+		"paid_tvu_end_date",
+		"paid_tvu_quantity",
+		"director_contact_person",
+		"director_type",
+		"director_gst",
+		"director_nature",
+		"director_mobile",
+		"director_email",
+		"director_state",
+		"director_pincode",
+		"director_turnover_slab",
+		"director_turnover",
+		"director_address"
+	];
+
+	// 3. Fields that remain EDITABLE during ALTERATION for normal users:
+	const editable_on_alteration = [
+		"cc_mobile",
+		"cc_contact",
+		"cc_email",
+		"crm_ex_1"
+	];
+
+	check_if_owner_or_admin(function (is_admin) {
+		if (frm.is_new()) {
+			// During creation: allow user to input initial identity & contact info
+			lock_on_alteration.forEach(fn => {
+				if (frm.fields_dict[fn]) {
+					frm.set_df_property(fn, "read_only", 0);
+					if (frm.fields_dict[fn].$wrapper) {
+						frm.fields_dict[fn].$wrapper.find("input, select, textarea")
+							.prop("readonly", false)
+							.prop("disabled", false)
+							.css({
+								"pointer-events": "auto",
+								"cursor": "auto"
+							});
+					}
+				}
+			});
+			editable_on_alteration.forEach(fn => {
+				if (frm.fields_dict[fn]) {
+					frm.set_df_property(fn, "read_only", 0);
+					if (frm.fields_dict[fn].$wrapper) {
+						frm.fields_dict[fn].$wrapper.find("input, select, textarea")
+							.prop("readonly", false)
+							.prop("disabled", false)
+							.css({
+								"pointer-events": "auto",
+								"cursor": "auto"
+							});
+					}
+				}
+			});
+		} else {
+			// During alteration: lock ALL fields except cc_mobile (unless Admin/Owner)
+			lock_on_alteration.forEach(fn => {
+				if (frm.fields_dict[fn]) {
+					if (!is_admin) {
+						frm.set_df_property(fn, "read_only", 0);
+						if (frm.fields_dict[fn].$wrapper) {
+							frm.fields_dict[fn].$wrapper.show().css("display", "block !important");
+							frm.fields_dict[fn].$wrapper.find("input, select, textarea")
+								.prop("readonly", true)
+								.prop("disabled", true)
+								.css({
+									"pointer-events": "none",
+									"cursor": "default"
+								});
+						}
+					} else {
+						frm.set_df_property(fn, "read_only", 0);
+						if (frm.fields_dict[fn].$wrapper) {
+							frm.fields_dict[fn].$wrapper.find("input, select, textarea")
+								.prop("readonly", false)
+								.prop("disabled", false)
+								.css({
+									"pointer-events": "auto",
+									"cursor": "auto"
+								});
+						}
+					}
+				}
+			});
+
+			editable_on_alteration.forEach(fn => {
+				if (frm.fields_dict[fn]) {
+					frm.set_df_property(fn, "read_only", 0);
+					if (frm.fields_dict[fn].$wrapper) {
+						frm.fields_dict[fn].$wrapper.find("input, select, textarea")
+							.prop("readonly", false)
+							.prop("disabled", false)
+							.css({
+								"pointer-events": "auto",
+								"cursor": "auto"
+							});
+					}
+				}
+			});
+
+			// Lock Quote tab editing for non-admin/owner users (description remains editable)
+			if (!is_admin) {
+				frm.set_df_property("items", "read_only", 0);
+				frm.set_df_property("additional_discount", "read_only", 1);
+				["payment_terms", "delivery", "support", "taxes", "validity"].forEach(fn => {
+					frm.set_df_property(fn, "read_only", 1);
+				});
+				if (frm.fields_dict.items && frm.fields_dict.items.grid) {
+					let grid = frm.fields_dict.items.grid;
+					grid.cannot_add_rows = true;
+					["item_name", "qty", "rate", "discount_amount", "tax", "amount", "hsn"].forEach(col => {
+						grid.update_docfield_property(col, "read_only", 1);
+					});
+					grid.update_docfield_property("description", "read_only", 0);
+					if (grid.wrapper) {
+						grid.wrapper.find(".grid-remove-rows, .grid-add-row, .grid-delete-row, .grid-duplicate-row").hide();
+					}
+					grid.refresh();
+				}
+			} else {
+				frm.set_df_property("items", "read_only", 0);
+				frm.set_df_property("additional_discount", "read_only", 0);
+				["payment_terms", "delivery", "support", "taxes", "validity"].forEach(fn => {
+					frm.set_df_property(fn, "read_only", 0);
+				});
+				if (frm.fields_dict.items && frm.fields_dict.items.grid) {
+					let grid = frm.fields_dict.items.grid;
+					grid.cannot_add_rows = false;
+					["item_name", "qty", "rate", "discount_amount", "tax", "amount", "hsn", "description"].forEach(col => {
+						grid.update_docfield_property(col, "read_only", 0);
+					});
+					if (grid.wrapper) {
+						grid.wrapper.find(".grid-remove-rows, .grid-add-row, .grid-delete-row, .grid-duplicate-row").show();
+					}
+					grid.refresh();
+				}
+			}
+		}
+	});
+}
+
+function setup_all_contacts_grid(frm) {
+	// Ensure All Contacts section and table are ALWAYS visible to the user
+	frm.set_df_property("all_contacts_section", "hidden", 0);
+	frm.set_df_property("all_contacts", "hidden", 0);
+	frm.set_df_property("all_contacts", "read_only", 0);
+
+	if (frm.fields_dict.all_contacts_section && frm.fields_dict.all_contacts_section.$wrapper) {
+		frm.fields_dict.all_contacts_section.$wrapper.show().css("display", "block !important");
+	}
+	if (frm.fields_dict.all_contacts && frm.fields_dict.all_contacts.$wrapper) {
+		frm.fields_dict.all_contacts.$wrapper.show().css("display", "block !important");
+	}
+	if (frm.fields_dict.all_contacts && frm.fields_dict.all_contacts.grid) {
+		let c_grid = frm.fields_dict.all_contacts.grid;
+		c_grid.cannot_add_rows = true;
+		["contact_name", "contact_phone", "contact_email", "contact_designation"].forEach(col => {
+			c_grid.update_docfield_property(col, "read_only", 1);
+		});
+		if (c_grid.wrapper) {
+			c_grid.wrapper.find(".grid-remove-rows, .grid-add-row, .grid-delete-row, .grid-duplicate-row, .grid-append-row").hide();
+		}
+		c_grid.refresh();
+	}
+}
+
+function render_activity_timeline(frm) {
+	if (frm.is_new() || !frm.doc.name) {
+		if (frm.fields_dict.activity && frm.fields_dict.activity.$wrapper) {
+			frm.fields_dict.activity.$wrapper.html("<div style='color:#a0aec0; font-style:italic; padding:10px;'>No activities recorded yet. Click <b>+ Follow-up</b> to log notes.</div>");
+		}
+		return;
+	}
+
+	frappe.call({
+		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.get_activity_html",
+		args: {
+			name: frm.doc.name
+		},
+		callback: function (r) {
+			if (r.message && frm.fields_dict.activity && frm.fields_dict.activity.$wrapper) {
+				frm.fields_dict.activity.$wrapper.html(r.message);
+			}
+		}
+	});
+}
+
+function open_follow_up_dialog(frm) {
+	let stage_options = [
+		"",
+		"Customer Not Responding",
+		"CUSTOMER REQ PENDING",
+		"DEMO/MEETING DONE",
+		"DEMO/ MEETING FIXED",
+		"IN FOLLOW-UP",
+		"LEAD",
+		"NEGOTIATION",
+		"PAYMENT RECEIVED",
+		"PENDING FOR INSTALLATION",
+		"PENDING PAYMENT",
+		"QUOTATION PENDING",
+		"QUOTATION SENT",
+		"WAITING FOR CONFIRMATION"
+	];
+
+	let d = new frappe.ui.Dialog({
+		title: __("Log Follow-up & Update Status"),
+		fields: [
+			{
+				label: __("CRM Status"),
+				fieldname: "crm_status",
+				fieldtype: "Select",
+				options: ["PENDING", "Sold", "Lost"],
+				default: frm.doc.crm_status || "PENDING",
+				reqd: 1
+			},
+			{
+				label: __("CRM Stage"),
+				fieldname: "crm_stage",
+				fieldtype: "Select",
+				options: stage_options,
+				default: frm.doc.crm_stage || "LEAD",
+				reqd: 1
+			},
+			{
+				fieldtype: "Section Break",
+				label: __("Follow-up Details")
+			},
+			{
+				label: __("Next Follow-up Date"),
+				fieldname: "follow_up_date",
+				fieldtype: "Date",
+				default: (frm.doc.follow_up_date && frm.doc.follow_up_date >= frappe.datetime.get_today()) ? frm.doc.follow_up_date : frappe.datetime.get_today(),
+				reqd: 1
+			},
+			{
+				label: __("Remarks / Notes"),
+				fieldname: "remarks",
+				fieldtype: "Small Text",
+				reqd: 1
+			}
+		],
+		primary_action_label: __("Save Follow-up"),
+		primary_action(values) {
+			if (values.follow_up_date && values.follow_up_date < frappe.datetime.get_today()) {
+				frappe.msgprint({
+					title: __("Invalid Follow-up Date"),
+					indicator: "red",
+					message: __("Follow-up date cannot be smaller than current date ({0}).", [frappe.datetime.str_to_user(frappe.datetime.get_today())])
+				});
+				return;
+			}
+
+			frappe.call({
+				method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.log_follow_up",
+				args: {
+					name: frm.doc.name,
+					follow_up_date: values.follow_up_date,
+					remark: values.remarks,
+					crm_status: values.crm_status,
+					crm_stage: values.crm_stage
+				},
+				freeze: true,
+				freeze_message: __("Saving follow-up and status..."),
+				callback: function (r) {
+					if (r.message && r.message.status === "success") {
+						d.hide();
+						frappe.show_alert({
+							message: r.message.message,
+							indicator: "green"
+						});
+						frm.reload_doc();
+					}
+				}
+			});
+		}
+	});
+	d.show();
+}
+
+function open_assign_dialog(frm) {
+	let d = new frappe.ui.Dialog({
+		title: __("Assign Executive"),
+		fields: [
+			{
+				label: __("Executive 1"),
+				fieldname: "executive_1",
+				fieldtype: "Link",
+				options: "User",
+				default: frm.doc.crm_ex_1 || frappe.session.user,
+				reqd: 1
+			}
+		],
+		primary_action_label: __("Assign"),
+		primary_action(values) {
+			frappe.call({
+				method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.assign_executive",
+				args: {
+					name: frm.doc.name,
+					executive_1: values.executive_1
+				},
+				freeze: true,
+				freeze_message: __("Assigning executive..."),
+				callback: function (r) {
+					if (!r.exc) {
+						d.hide();
+						frappe.show_alert({
+							message: __("Executive assigned successfully!"),
+							indicator: "green"
+						});
+						frm.reload_doc();
+					}
+				}
+			});
+		}
+	});
+	d.show();
+}
+
+function apply_custom_section_styles(frm) {
+	$('#hbs-tally-renewal-custom-css').remove();
+	$('head').append(`
+		<style id="hbs-tally-renewal-custom-css">
+			/* Professional Executive Theme for all Form Fields */
+			.form-page input,
+			.form-page select,
+			.form-page textarea,
+			.form-page .control-value,
+			.form-page .like-disabled-input {
+				border: 1px solid #d1d5db !important;
+				border-radius: 6px !important;
+				background-color: #f9fafb !important;
+				color: #111827 !important;
+				font-weight: 500 !important;
+				min-height: 28px !important;
+				padding: 4px 8px !important;
+			}
+
+			.form-page input:focus,
+			.form-page select:focus,
+			.form-page textarea:focus {
+				border-color: #2563eb !important;
+				background-color: #ffffff !important;
+				outline: none !important;
+				box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12) !important;
+			}
+
+			/* Dynamic Bright Red for Portal Expiry Date when populated */
+			.form-page [data-fieldname="portal_expiry_date"].has-portal-expiry input,
+			.form-page [data-fieldname="portal_expiry_date"].has-portal-expiry .control-value,
+			.form-page [data-fieldname="portal_expiry_date"].has-portal-expiry .like-disabled-input {
+				border: 2px solid #ef4444 !important;
+				border-radius: 6px !important;
+				background-color: #fee2e2 !important;
+				color: #b91c1c !important;
+				font-weight: 700 !important;
+				min-height: 28px !important;
+				padding: 4px 8px !important;
+			}
+
+			/* Clean Modal Dialog inputs */
+			.modal-dialog input,
+			.modal-dialog select,
+			.modal-dialog textarea,
+			.modal-dialog .control-value {
+				border: 1px solid #d1d5db !important;
+				background-color: #ffffff !important;
+				color: #1f2937 !important;
+				font-weight: 400 !important;
+			}
+		</style>
+	`);
+
+	// Dynamic toggle for Portal Expiry Date
+	let has_portal_expiry = !!(frm.doc.portal_expiry_date && frm.doc.portal_expiry_date.toString().trim());
+	if (frm.fields_dict.portal_expiry_date && frm.fields_dict.portal_expiry_date.$wrapper) {
+		if (has_portal_expiry) {
+			frm.fields_dict.portal_expiry_date.$wrapper.addClass("has-portal-expiry");
+		} else {
+			frm.fields_dict.portal_expiry_date.$wrapper.removeClass("has-portal-expiry");
+		}
+	}
+}
+
+function render_old_remarks_timeline(frm) {
+	if (frm.is_new() || !frm.doc.name) {
+		if (frm.fields_dict.old_remarks_html && frm.fields_dict.old_remarks_html.$wrapper) {
+			frm.fields_dict.old_remarks_html.$wrapper.html("<div style='color:#94a3b8; font-style:italic; padding:10px;'>No past remarks imported yet.</div>");
+		}
+		return;
+	}
+
+	frappe.call({
+		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.get_old_remarks_html",
+		args: {
+			name: frm.doc.name
+		},
+		callback: function (r) {
+			if (r.message && frm.fields_dict.old_remarks_html && frm.fields_dict.old_remarks_html.$wrapper) {
+				frm.fields_dict.old_remarks_html.$wrapper.html(r.message);
+			}
+		}
+	});
+}
+
+function open_email_dialog(frm) {
+	let client_email = (frm.doc.cc_email || frm.doc.portal_email || "").trim();
+
+	if (!client_email) {
+		frappe.msgprint({
+			title: __("Client Email Required"),
+			indicator: "orange",
+			message: __("<b>Client Email is not set on this record!</b><br>Please enter the client's email in <b>Email ID</b> (cc_email) field, or enter it manually in the <b>To</b> field in the dialog.")
+		});
+	}
+
+	frappe.call({
+		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.get_rendered_renewal_email_template",
+		args: { name: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Loading email template..."),
+		callback: function (res) {
+			if (res.message) {
+				let default_subject = res.message.subject;
+				let default_message = res.message.message;
+				let default_from = res.message.from_email;
+				let default_sender = res.message.sender_name;
+				let default_to = res.message.to_email || client_email;
+				let default_cc = (frappe.session.user && frappe.session.user.indexOf("@") !== -1) ? frappe.session.user : (res.message.cc_email || "");
+
+				let d = new frappe.ui.Dialog({
+					title: __("Send TSS Quotation to Client - {0}", [frm.doc.cc_acc_name || frm.doc.name]),
+					size: "large",
+					fields: [
+						{
+							label: __("Sender Name"),
+							fieldname: "sender_name",
+							fieldtype: "Data",
+							default: default_sender,
+							reqd: 1
+						},
+						{
+							label: __("From Email"),
+							fieldname: "from_email",
+							fieldtype: "Data",
+							default: default_from,
+							reqd: 1
+						},
+						{
+							label: __("To (Client Email)"),
+							fieldname: "to_email",
+							fieldtype: "Data",
+							default: default_to,
+							reqd: 1,
+							description: __("Client's email address")
+						},
+						{
+							label: __("CC (Executive / Internal)"),
+							fieldname: "cc_email",
+							fieldtype: "Data",
+							default: default_cc,
+							description: __("Executive email copy")
+						},
+						{
+							label: __("Subject"),
+							fieldname: "subject",
+							fieldtype: "Data",
+							default: default_subject,
+							reqd: 1
+						},
+						{
+							label: __("Message"),
+							fieldname: "message",
+							fieldtype: "Text Editor",
+							default: default_message,
+							reqd: 1
+						},
+						{
+							label: __("Attach Quotation PDF (HBS Renewal Quotation)"),
+							fieldname: "attach_print",
+							fieldtype: "Check",
+							default: 1
+						}
+					],
+					primary_action_label: __("Send Quotation"),
+					primary_action(values) {
+						let do_send = function() {
+							frappe.call({
+								method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.send_manual_renewal_email",
+								args: {
+									name: frm.doc.name,
+									sender_name: values.sender_name,
+									from_email: values.from_email,
+									to_email: values.to_email,
+									cc_email: values.cc_email,
+									subject: values.subject,
+									message: values.message,
+									attach_print: values.attach_print ? 1 : 0
+								},
+								freeze: true,
+								freeze_message: __("Sending quotation email..."),
+								callback: function (r) {
+									if (!r.exc) {
+										d.hide();
+										frappe.show_alert({
+											message: __("Email sent successfully to {0}!", [values.to_email]),
+											indicator: "green"
+										});
+										frm.reload_doc();
+									}
+								}
+							});
+						};
+
+						// Hard Guard: Prevent sending if 'To' is set to the logged-in executive's email
+						if (frappe.session.user && values.to_email && values.to_email.trim().toLowerCase() === frappe.session.user.toLowerCase()) {
+							frappe.msgprint({
+								title: __("Invalid Client Email"),
+								indicator: "red",
+								message: __("<b>The 'To' recipient cannot be your own executive email ({0})!</b><br><br>Please enter the <b>client's email address</b> in the <b>To</b> field so the quotation is delivered to the client and traceable in the future.", [values.to_email])
+							});
+							return;
+						}
+						do_send();
+					}
+				});
+
+				d.show();
+			}
+		}
+	});
+}
+
+frappe.ui.form.on("hbs crm items", {
+	item_name(frm, cdt, cdn) {
+		let row = locals[cdt][cdn];
+		if (row.item_name) {
+			frappe.db.get_doc("Hbs Product", row.item_name).then((doc) => {
+				frappe.model.set_value(cdt, cdn, "rate", doc.rate || 0);
+				frappe.model.set_value(cdt, cdn, "description", "");
+				frappe.model.set_value(cdt, cdn, "tax", doc.tax || 0);
+				frappe.model.set_value(cdt, cdn, "hsn", doc.hsn || "");
+				if (!row.qty) {
+					frappe.model.set_value(cdt, cdn, "qty", 1);
+				}
+				validate_row_min_rate(frm, cdt, cdn, doc);
+				calculate_item_amount(frm, cdt, cdn);
+			});
+		}
+	},
+
+	qty(frm, cdt, cdn) {
+		calculate_item_amount(frm, cdt, cdn);
+	},
+
+	rate(frm, cdt, cdn) {
+		let row = locals[cdt][cdn];
+		if (row.item_name) {
+			frappe.db.get_doc("Hbs Product", row.item_name).then((doc) => {
+				validate_row_min_rate(frm, cdt, cdn, doc);
+				calculate_item_amount(frm, cdt, cdn);
+			});
+		} else {
+			calculate_item_amount(frm, cdt, cdn);
+		}
+	},
+
+	discount_amount(frm, cdt, cdn) {
+		calculate_item_amount(frm, cdt, cdn);
+	},
+
+	tax(frm, cdt, cdn) {
+		calculate_item_amount(frm, cdt, cdn);
+	},
+
+	items_remove(frm) {
+		calculate_totals(frm);
+	}
+});
+
+function calculate_item_amount(frm, cdt, cdn) {
+	let row = locals[cdt][cdn];
+	let qty = flt(row.qty) || 1;
+	let rate = flt(row.rate) || 0;
+	let discount = flt(row.discount_amount) || 0;
+	let tax_percent = flt(row.tax) || 0;
+
+	let subtotal = (qty * rate) - discount;
+	let tax_amount = (subtotal * tax_percent) / 100.0;
+	let total_amount = subtotal + tax_amount;
+
+	row.tax_amount = tax_amount;
+	row.amount = total_amount;
+
+	calculate_totals(frm);
+}
+
+function calculate_totals(frm) {
+	let total_before_tax = 0;
+	(frm.doc.items || []).forEach((row) => {
+		let qty = flt(row.qty) || 1;
+		let rate = flt(row.rate) || 0;
+		let discount = flt(row.discount_amount) || 0;
+		total_before_tax += (qty * rate) - discount;
+	});
+
+	let additional_discount = flt(frm.doc.additional_discount) || 0;
+	let total_tax = 0;
+
+	(frm.doc.items || []).forEach((row) => {
+		let qty = flt(row.qty) || 1;
+		let rate = flt(row.rate) || 0;
+		let discount = flt(row.discount_amount) || 0;
+		let row_subtotal = (qty * rate) - discount;
+
+		let row_additional_discount = 0;
+		if (total_before_tax > 0) {
+			row_additional_discount = (row_subtotal / total_before_tax) * additional_discount;
+		}
+
+		let net_subtotal = row_subtotal - row_additional_discount;
+		let tax_percent = flt(row.tax) || 0;
+		let tax_amt = (net_subtotal * tax_percent) / 100.0;
+		let row_amount = net_subtotal + tax_amt;
+
+		row.tax_amount = tax_amt;
+		row.amount = row_amount;
+		total_tax += tax_amt;
+	});
+
+	frm.refresh_field("items");
+
+	let final_total = Math.round((total_before_tax - additional_discount) + total_tax);
+
+	frm.set_value("total_before_tax", total_before_tax);
+	frm.set_value("total_tax", total_tax);
+	frm.set_value("total_after_tax", total_before_tax - additional_discount);
+	frm.set_value("final_total", final_total);
+}
+
+function validate_row_min_rate(frm, cdt, cdn, product_doc) {
+	let row = locals[cdt][cdn];
+	let min_rate = flt(product_doc.min_rate || 0);
+	let current_rate = flt(row.rate || 0);
+
+	if (min_rate > 0 && current_rate < min_rate) {
+		let item_title = product_doc.item_name || product_doc.product_name || row.item_name;
+		frappe.msgprint({
+			title: __("Minimum Rate Warning"),
+			indicator: "orange",
+			message: __("Rate for item <b>{0}</b> cannot be lower than the Minimum Allowed Rate (<b>₹{1}</b>). Auto-resetting rate to ₹{1}.", [item_title, min_rate])
+		});
+		frappe.model.set_value(cdt, cdn, "rate", min_rate);
+	}
+}
+
+function is_genuine_tally_serial(serial) {
+	if (!serial) return true;
+	let s = String(serial).trim();
+	if (s.length !== 9 || !/^\d+$/.test(s)) return false;
+	if (!s.startsWith("7")) return false;
+	let sum = s.split("").reduce((acc, d) => acc + parseInt(d, 10), 0);
+	while (sum >= 10) {
+		sum = String(sum).split("").reduce((acc, d) => acc + parseInt(d, 10), 0);
+	}
+	return sum === 9;
+}
+
+function check_and_warn_duplicate_serial(frm) {
+	let serial = (frm.doc.tally_serial || frm.doc.tss_tally_serial || "").toString().trim();
+	if (!serial || serial.length < 9) return;
+
+	frappe.call({
+		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_duplicate_renewal",
+		args: {
+			serial: serial,
+			current_renewal_name: frm.doc.name
+		},
+		callback: function (r) {
+			if (r.message) {
+				let dup = r.message;
+				let party = dup.company_name || dup.customer_name || "this party";
+				let exec = dup.executive_full_name || dup.crm_ex_1 || dup.owner || "another executive";
+
+				if (dup.is_inactive) {
+					let is_lost = !!dup.is_lost;
+					let title = is_lost ? __("Lost Renewal Found") : __("Dormant Renewal Found");
+					let btn_label = is_lost
+						? __(`⚡ Take Over & Revive Renewal (#${dup.name})`)
+						: __(`⚡ Take Over & Open Renewal (#${dup.name})`);
+
+					let msg = is_lost ? `
+						<div style="padding: 10px; font-size: 14px; line-height: 1.6;">
+							<p style="color: #dd6b20; font-weight: 600; font-size: 15px; margin-bottom: 8px;">
+								⚠️ Lost Renewal Found for Serial <b>${serial}</b>!
+							</p>
+							<p>
+								This renewal for <b>${party}</b> was marked as <b>Lost</b> (previously managed by <b>${exec}</b>, Renewal #${dup.name}).
+							</p>
+							<p style="background: #fffaf0; border: 1px solid #fbd38d; border-radius: 6px; padding: 10px; margin-top: 10px; color: #744210;">
+								Lost renewals can be taken over immediately without any waiting period.
+							</p>
+							<p style="margin-top: 10px; color: #2d3748;">
+								You can take over this renewal and revive it as pending directly.
+							</p>
+						</div>
+					` : `
+						<div style="padding: 10px; font-size: 14px; line-height: 1.6;">
+							<p style="color: #dd6b20; font-weight: 600; font-size: 15px; margin-bottom: 8px;">
+								⚠️ Inactive Duplicate Renewal Found (15+ Days)!
+							</p>
+							<p>
+								A renewal for Tally Serial <b>${serial}</b> (${party}) was managed by <b>${exec}</b> (Renewal #${dup.name}).
+							</p>
+							<p style="background: #fffaf0; border: 1px solid #fbd38d; border-radius: 6px; padding: 10px; margin-top: 10px; color: #744210;">
+								<b>No follow-up remarks</b> have been logged on this renewal for <b>${dup.days_inactive} days</b> (Last remark: ${dup.last_remarks_date_formatted || dup.creation_date}).
+							</p>
+							<p style="margin-top: 10px; color: #2d3748;">
+								You can take over this renewal and manage it directly.
+							</p>
+						</div>
+					`;
+
+					let d = new frappe.ui.Dialog({
+						title: title,
+						indicator: "orange",
+						fields: [
+							{
+								fieldtype: "HTML",
+								fieldname: "warning_html",
+								options: msg
+							}
+						],
+						primary_action_label: btn_label,
+						primary_action() {
+							d.hide();
+							frappe.call({
+								method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.take_over_renewal",
+								args: { renewal_name: dup.name },
+								callback: function (res) {
+									if (res.message) {
+										frappe.show_alert({
+											message: res.message.message,
+											indicator: "green"
+										});
+										frappe.set_route("Form", "Hbs Tally Renewal", dup.name);
+									}
+								}
+							});
+						},
+						secondary_action_label: __("Close"),
+						secondary_action() {
+							d.hide();
+						}
+					});
+					d.show();
+				} else {
+					let msg = `
+						<div style="padding: 10px; font-size: 14px; line-height: 1.6;">
+							<p style="color: #c53030; font-weight: 600; font-size: 15px; margin-bottom: 8px;">
+								⚠️ Active Duplicate Tally Serial Blocked!
+							</p>
+							<p>
+								A renewal for Tally Serial <b>${serial}</b> (${party}) is currently handled by <b>${exec}</b> (Renewal #${dup.name}).
+							</p>
+							<p style="color: #c53030; margin-top: 10px; font-weight: 600;">
+								❌ Active follow-ups are ongoing (${dup.days_inactive} days since last remark). You cannot save a duplicate renewal for this serial.
+							</p>
+						</div>
+					`;
+
+					let d = new frappe.ui.Dialog({
+						title: __("Duplicate Tally Serial Blocked"),
+						indicator: "red",
+						fields: [
+							{
+								fieldtype: "HTML",
+								fieldname: "warning_html",
+								options: msg
+							}
+						],
+						primary_action_label: __("OK"),
+						primary_action() {
+							d.hide();
+						}
+					});
+					d.show();
+				}
+			}
+		}
+	});
+}
+
+function auto_sync_portal_on_open(frm) {
+	if (frm._is_syncing_portal) return;
+	frm._is_syncing_portal = true;
+
+	frappe.call({
+		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_portal",
+		args: { name: frm.doc.name },
+		freeze: false,
+		callback: function (r) {
+			frm._is_syncing_portal = false;
+			if (r && r.message) {
+				if (r.message.status === "success") {
+					if (!frm.is_dirty()) {
+						frm._reloading_from_sync = true;
+						frm.reload_doc();
+					}
+					frappe.show_alert({
+						message: __("Portal synced ({0} fields updated)", [r.message.synced_count || 0]),
+						indicator: "green"
+					}, 3);
+				} else if (r.message.status === "error") {
+					if (!frm.is_dirty()) {
+						frm._reloading_from_sync = true;
+						frm.reload_doc();
+					}
+				}
+			}
+		},
+		error: function () {
+			frm._is_syncing_portal = false;
+		}
+	});
+}

@@ -313,9 +313,7 @@
                         </div>
 
                         {% if item.description %}
-                        <div style="font-size:10px;">
-                            {{ (item.description or '').replace('\n','<br>') }}
-                        </div>
+                        <div style="font-size:10px; text-align:left;">{{ (item.description or '').strip().replace('\n','<br>') }}</div>
                         {% endif %}
 
                     </td>
@@ -330,9 +328,7 @@
                         </div>
 
                         {% if item.description %}
-                        <div style="font-size:10px;">
-                            {{ (item.description or '').replace('\n','<br>') }}
-                        </div>
+                        <div style="font-size:10px; text-align:left;">{{ (item.description or '').strip().replace('\n','<br>') }}</div>
                         {% endif %}
 
                     </td>
