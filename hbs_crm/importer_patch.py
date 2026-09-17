@@ -119,14 +119,17 @@ def apply_data_import_patch():
 		orig_col_validate_values = imp_mod.Column.validate_values
 		def patched_col_validate_values(self):
 			if self.df and self.df.fieldtype == "Link" and self.df.options == "User":
-				original_values = self.column_values
-				values = set(original_values.values())
+				if not any(self.column_values):
+					return
+				transform = (lambda v: cstr(v).lower()) if frappe.db.db_type == "mariadb" else cstr
+				original_values = {transform(v): cstr(v) for v in self.column_values if v}
+				values = list(original_values.keys())
 				exists = [
-					d.name for d in frappe.get_all("User", filters={"name": ("in", list(values))})
+					transform(d.name) for d in frappe.get_all("User", filters={"name": ("in", values)})
 				]
 				for val in list(values):
 					if val not in exists:
-						resolved = resolve_user_link(val)
+						resolved = resolve_user_link(original_values[val])
 						if resolved and frappe.db.exists("User", resolved, cache=True):
 							exists.append(val)
 				not_exists = list(set(values) - set(exists))
@@ -134,8 +137,9 @@ def apply_data_import_patch():
 					missing_values = ", ".join(escape_html(cstr(original_values[v])) for v in not_exists)
 					self.warnings.append(
 						{
-							"message": _("Value {0} missing for {1}").format(
-								frappe.bold(missing_values), frappe.bold(self.df.label or self.df.fieldname)
+							"col": self.column_number,
+							"message": _("The following values do not exist for {0}: {1}").format(
+								self.df.options, missing_values
 							),
 							"type": "warning",
 						}
