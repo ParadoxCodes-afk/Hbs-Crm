@@ -322,7 +322,7 @@
    "fieldname": "crm_stage",
    "fieldtype": "Select",
    "label": "CRM Stage",
-   "options": "\nCustomer Not Responding\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION"
+   "options": "\nCUSTOMER NOT RESPONDING\nFORWARD TO\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION"
   },
   {
    "fieldname": "crm_lost_remarks",
@@ -1048,7 +1048,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-18 16:45:34.399237",
+ "modified": "2026-09-18 17:05:50.924885",
  "modified_by": "Administrator",
  "module": "hbs_crm",
  "name": "Hbs Tally Renewal",
