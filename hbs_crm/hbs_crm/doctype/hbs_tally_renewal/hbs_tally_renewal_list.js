@@ -141,7 +141,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			}, __("Operations"));
 
 			// --- CUSTOM EXCEL IMPORT DATA (Fallback when standard Frappe Data Import tool fails) ---
-			listview.page.add_inner_button(__("📥 Import Data"), () => {
+			listview.page.add_inner_button(__("📥 Import Master Data"), () => {
 				open_custom_import_data_dialog(listview);
 			}, __("Operations"));
 
@@ -340,7 +340,7 @@ function open_import_remarks_dialog(listview) {
 // --- CUSTOM EXCEL IMPORT DATA DIALOG ---
 function open_custom_import_data_dialog(listview) {
 	let d = new frappe.ui.Dialog({
-		title: __("📥 Import Renewal Data (Excel)"),
+		title: __("📥 Import Master Data (Excel)"),
 		fields: [
 			{
 				label: __("Excel File (.xlsx or .xls)"),
