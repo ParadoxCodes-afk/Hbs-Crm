@@ -13,12 +13,63 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 	formatters: {
 		tally_serial(val, df, doc) {
 			return val || doc.tss_tally_serial || doc.tally_serial || doc.name;
+		},
+		license(val) {
+			if (!val) return "";
+			let lower = val.toString().trim().toLowerCase();
+			if (lower.includes("auditor")) return "AUDITOR";
+			if (lower.includes("gold")) return "GOLD";
+			if (lower.includes("silver")) return "SILVER";
+			return val;
 		}
 	},
 	refresh(listview) {
+		if (listview.column_max_widths) {
+			listview.column_max_widths["license"] = 80;
+			listview.column_max_widths["crm_status"] = 80;
+			listview.column_max_widths["crm_priority"] = 75;
+			listview.column_max_widths["rfm_segment"] = 75;
+			listview.column_max_widths["acc_expiry_date"] = 100;
+			if (typeof listview.apply_column_widths === "function") {
+				listview.apply_column_widths();
+			}
+		}
 		attach_serial_remarks_and_preview(listview);
 	},
 	onload(listview) {
+		frappe.dom.set_style(`
+			.frappe-list[data-doctype="Hbs Tally Renewal"] .list-row-col.license,
+			.list-view[data-doctype="Hbs Tally Renewal"] .list-row-col.license {
+				max-width: 90px !important;
+				min-width: 75px !important;
+				width: 80px !important;
+				flex: 0 0 80px !important;
+			}
+			.frappe-list[data-doctype="Hbs Tally Renewal"] .list-row-col.crm_status,
+			.list-view[data-doctype="Hbs Tally Renewal"] .list-row-col.crm_status {
+				max-width: 90px !important;
+				min-width: 75px !important;
+				width: 80px !important;
+				flex: 0 0 80px !important;
+			}
+			.frappe-list[data-doctype="Hbs Tally Renewal"] .list-row-col.crm_priority,
+			.list-view[data-doctype="Hbs Tally Renewal"] .list-row-col.crm_priority,
+			.frappe-list[data-doctype="Hbs Tally Renewal"] .list-row-col.rfm_segment,
+			.list-view[data-doctype="Hbs Tally Renewal"] .list-row-col.rfm_segment {
+				max-width: 85px !important;
+				min-width: 70px !important;
+				width: 75px !important;
+				flex: 0 0 75px !important;
+			}
+			.frappe-list[data-doctype="Hbs Tally Renewal"] .list-row-col.acc_expiry_date,
+			.list-view[data-doctype="Hbs Tally Renewal"] .list-row-col.acc_expiry_date {
+				max-width: 105px !important;
+				min-width: 95px !important;
+				width: 100px !important;
+				flex: 0 0 100px !important;
+			}
+		`);
+
 		setup_renewal_caller_preview(listview);
 
 		if (!frappe.route_options) {
@@ -87,6 +138,11 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 						}
 					);
 				}
+			}, __("Operations"));
+
+			// --- CUSTOM EXCEL IMPORT DATA (Fallback when standard Frappe Data Import tool fails) ---
+			listview.page.add_inner_button(__("📥 Import Data"), () => {
+				open_custom_import_data_dialog(listview);
 			}, __("Operations"));
 
 			// Import Past Remarks Excel (Admin & Owner only under Operations)
@@ -279,6 +335,159 @@ function open_import_remarks_dialog(listview) {
 		}
 	});
 	d.show();
+}
+
+// --- CUSTOM EXCEL IMPORT DATA DIALOG ---
+function open_custom_import_data_dialog(listview) {
+	let d = new frappe.ui.Dialog({
+		title: __("📥 Import Renewal Data (Excel)"),
+		fields: [
+			{
+				label: __("Excel File (.xlsx or .xls)"),
+				fieldname: "file_url",
+				fieldtype: "Attach",
+				reqd: 1,
+				description: __("Upload Excel with columns like Serial No, Status, Expiry Date, EXE, Customer Name, Mobile, etc.")
+			}
+		],
+		primary_action_label: __("Start Import"),
+		primary_action(values) {
+			if (!values.file_url) {
+				frappe.msgprint(__("Please upload an Excel file first."));
+				return;
+			}
+
+			d.hide();
+
+			frappe.call({
+				method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.import_renewals_from_excel",
+				args: {
+					file_url: values.file_url
+				},
+				callback: function (r) {
+					if (r.message) {
+						show_import_result_report(r.message, listview);
+					}
+				}
+			});
+		}
+	});
+	d.show();
+}
+
+function show_import_result_report(data, listview) {
+	let created = data.created_count || 0;
+	let updated = data.updated_count || 0;
+	let skipped = data.skipped_count || 0;
+	let total = created + updated + skipped;
+	let failed_rows = data.failed_rows || [];
+
+	let failed_html = "";
+	if (failed_rows.length > 0) {
+		let rows_tr = failed_rows.map(row => `
+			<tr>
+				<td style="text-align: center; font-weight: bold; color: #4b5563;">${row.row}</td>
+				<td style="font-family: monospace; font-weight: 600;">${frappe.utils.escape_html(String(row.serial || "-"))}</td>
+				<td>${frappe.utils.escape_html(String(row.party || "-"))}</td>
+				<td style="color: #b91c1c; font-weight: 500;">${frappe.utils.escape_html(String(row.reason || ""))}</td>
+			</tr>
+		`).join("");
+
+		failed_html = `
+			<div style="margin-top: 20px;">
+				<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+					<h5 style="margin: 0; color: #b91c1c; font-weight: bold;">
+						⚠️ Skipped / Unimported Records (${failed_rows.length})
+					</h5>
+					<button class="btn btn-xs btn-default btn-download-failed" style="font-weight: 600;">
+						📥 Download Failed Rows (CSV)
+					</button>
+				</div>
+				<div style="max-height: 320px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px;">
+					<table class="table table-bordered table-sm" style="margin: 0; font-size: 12px; width: 100%;">
+						<thead style="position: sticky; top: 0; background-color: #f9fafb; z-index: 1;">
+							<tr style="color: #374151;">
+								<th style="width: 75px; text-align: center;">Excel Row</th>
+								<th style="width: 140px;">Serial No</th>
+								<th style="width: 200px;">Party / Company</th>
+								<th>Exact Reason</th>
+							</tr>
+						</thead>
+						<tbody>
+							${rows_tr}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		`;
+	} else {
+		failed_html = `
+			<div class="alert alert-success" style="margin-top: 20px; font-weight: 500;">
+				🎉 <b>All records imported successfully!</b> No rows were skipped.
+			</div>
+		`;
+	}
+
+	let content = `
+		<div style="padding: 10px 0;">
+			<div style="display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+				<div style="flex: 1; min-width: 120px; background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 10px; text-align: center;">
+					<div style="font-size: 20px; font-weight: bold; color: #065f46;">${created}</div>
+					<div style="font-size: 12px; color: #047857; font-weight: 600;">New Created</div>
+				</div>
+				<div style="flex: 1; min-width: 120px; background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px; text-align: center;">
+					<div style="font-size: 20px; font-weight: bold; color: #1e40af;">${updated}</div>
+					<div style="font-size: 12px; color: #1d4ed8; font-weight: 600;">Existing Updated</div>
+				</div>
+				<div style="flex: 1; min-width: 120px; background-color: ${skipped > 0 ? '#fef2f2' : '#f9fafb'}; border: 1px solid ${skipped > 0 ? '#fecaca' : '#e5e7eb'}; border-radius: 6px; padding: 10px; text-align: center;">
+					<div style="font-size: 20px; font-weight: bold; color: ${skipped > 0 ? '#b91c1c' : '#6b7280'};">${skipped}</div>
+					<div style="font-size: 12px; color: ${skipped > 0 ? '#dc2626' : '#6b7280'}; font-weight: 600;">Skipped / Failed</div>
+				</div>
+				<div style="flex: 1; min-width: 120px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; text-align: center;">
+					<div style="font-size: 20px; font-weight: bold; color: #374151;">${total}</div>
+					<div style="font-size: 12px; color: #4b5563; font-weight: 600;">Total Rows</div>
+				</div>
+			</div>
+			${failed_html}
+		</div>
+	`;
+
+	let report_dialog = new frappe.ui.Dialog({
+		title: __("📊 Renewal Data Import Report"),
+		size: "large",
+		fields: [
+			{
+				fieldname: "report_html",
+				fieldtype: "HTML",
+				options: content
+			}
+		],
+		primary_action_label: __("Close"),
+		primary_action() {
+			report_dialog.hide();
+			listview.refresh();
+		}
+	});
+
+	report_dialog.show();
+
+	report_dialog.$wrapper.find(".btn-download-failed").on("click", function () {
+		let csv = "Excel Row,Serial Number,Party Name,Reason\n";
+		failed_rows.forEach(r => {
+			let safe_reason = `"${(r.reason || '').replace(/"/g, '""')}"`;
+			let safe_party = `"${(r.party || '').replace(/"/g, '""')}"`;
+			csv += `${r.row},"${r.serial || ''}",${safe_party},${safe_reason}\n`;
+		});
+		let blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+		let url = URL.createObjectURL(blob);
+		let a = document.createElement("a");
+		a.href = url;
+		a.download = `Unimported_Renewals_${frappe.datetime.now_datetime().replace(/[: ]/g, "_")}.csv`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	});
 }
 
 function open_assign_executive_list_dialog(listview) {
@@ -582,15 +791,15 @@ function setup_renewal_caller_preview(listview) {
 }
 
 function render_preview_card(popover, doc, target) {
-	let company = frappe.utils.escape_html(doc.cc_acc_name || doc.portal_acc_name || "No Company Name");
+	let company = frappe.utils.escape_html(doc.portal_acc_name || doc.cc_acc_name || "No Company Name");
 	let serial = frappe.utils.escape_html(String(doc.tally_serial || doc.tss_tally_serial || doc.name));
-	let contact = frappe.utils.escape_html(doc.cc_contact || doc.portal_contact || "—");
-	let mobile = (doc.cc_mobile || doc.portal_mobile || "").trim();
-	let phone = (doc.cc_phone || doc.portal_phone || "").trim();
-	let email = (doc.cc_email || doc.portal_email || "").trim();
+	let contact = frappe.utils.escape_html(doc.portal_contact || doc.cc_contact || "—");
 
-	let license = frappe.utils.escape_html(doc.license || "—");
-	let version = frappe.utils.escape_html([doc.tally_version || doc.product_ver, doc.flavour].filter(Boolean).join(" ") || "—");
+	let mobile_parts = [doc.portal_mobile, doc.cc_mobile].filter(Boolean).map(m => m.trim()).filter((v, i, a) => a.indexOf(v) === i);
+	let phone_parts = [doc.portal_phone, doc.cc_phone].filter(Boolean).map(p => p.trim()).filter((v, i, a) => a.indexOf(v) === i);
+
+	let mobile_html = mobile_parts.length ? mobile_parts.map(m => `<a href="tel:${frappe.utils.escape_html(m)}" style="color: #2563eb; font-weight: 600; text-decoration: none;">📞 ${frappe.utils.escape_html(m)}</a>`).join(" / ") : "—";
+	let phone_html = phone_parts.length ? phone_parts.map(p => `<a href="tel:${frappe.utils.escape_html(p)}" style="color: #2563eb; font-weight: 600; text-decoration: none;">☎️ ${frappe.utils.escape_html(p)}</a>`).join(" / ") : "—";
 
 	let expiry = doc.acc_expiry_date || doc.portal_expiry_date || "";
 	let expiry_html = "—";
@@ -610,17 +819,6 @@ function render_preview_card(popover, doc, target) {
 	let priority = frappe.utils.escape_html(doc.crm_priority || "");
 	let executive = frappe.utils.escape_html(doc.crm_ex_1 || "—");
 
-	let phone_html = "—";
-	if (mobile && phone && mobile !== phone) {
-		phone_html = `<a href="tel:${frappe.utils.escape_html(mobile)}" style="color: #2563eb; font-weight: 600; text-decoration: none;">📞 ${frappe.utils.escape_html(mobile)}</a> / <a href="tel:${frappe.utils.escape_html(phone)}" style="color: #2563eb; text-decoration: none;">${frappe.utils.escape_html(phone)}</a>`;
-	} else if (mobile) {
-		phone_html = `<a href="tel:${frappe.utils.escape_html(mobile)}" style="color: #2563eb; font-weight: 600; text-decoration: none;">📞 ${frappe.utils.escape_html(mobile)}</a>`;
-	} else if (phone) {
-		phone_html = `<a href="tel:${frappe.utils.escape_html(phone)}" style="color: #2563eb; font-weight: 600; text-decoration: none;">📞 ${frappe.utils.escape_html(phone)}</a>`;
-	}
-
-	let email_html = email ? `<a href="mailto:${frappe.utils.escape_html(email)}" style="color: #2563eb; text-decoration: none; word-break: break-all;">✉️ ${frappe.utils.escape_html(email)}</a>` : "—";
-
 	let remark_html = `<span style="color: #94a3b8; font-style: italic; text-align: left; display: block;">No remarks</span>`;
 	if (doc.last_remark) {
 		let dt = doc.last_remarks_date ? `<span style="color: #64748b; font-size: 11px;"> (${frappe.datetime.str_to_user(doc.last_remarks_date)})</span>` : "";
@@ -634,11 +832,18 @@ function render_preview_card(popover, doc, target) {
 		`;
 	}
 
+	let sub_company = (doc.portal_acc_name && doc.cc_acc_name && doc.portal_acc_name.trim().toLowerCase() !== doc.cc_acc_name.trim().toLowerCase())
+		? `<div style="font-size: 11px; color: #64748b; margin-top: 2px;">Ledger: ${frappe.utils.escape_html(doc.cc_acc_name)}</div>`
+		: "";
+
 	popover.innerHTML = `
 		<div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 8px; text-align: left;">
 			<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; text-align: left;">
-				<div style="font-weight: 700; font-size: 13.5px; color: #0f172a; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: left;">
-					${company}
+				<div>
+					<div style="font-weight: 700; font-size: 13.5px; color: #0f172a; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: left;">
+						${company}
+					</div>
+					${sub_company}
 				</div>
 				<span style="background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;">
 					SN: ${serial}
@@ -650,14 +855,11 @@ function render_preview_card(popover, doc, target) {
 			<div style="color: #64748b;">Contact:</div>
 			<div style="font-weight: 500; color: #1e293b;">${contact}</div>
 
+			<div style="color: #64748b;">Mobile:</div>
+			<div>${mobile_html}</div>
+
 			<div style="color: #64748b;">Phone:</div>
 			<div>${phone_html}</div>
-
-			<div style="color: #64748b;">Email:</div>
-			<div>${email_html}</div>
-
-			<div style="color: #64748b;">License:</div>
-			<div style="color: #1e293b;">${license} <span style="color: #64748b; font-size: 11px;">(${version})</span></div>
 
 			<div style="color: #64748b;">TSS Expiry:</div>
 			<div>${expiry_html}</div>

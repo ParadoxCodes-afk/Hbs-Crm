@@ -156,14 +156,16 @@ class HbsTallyRenewal(Document):
 		if not self.edition and self.flavour:
 			self.edition = self.flavour
 
-		# Format Tally Version (e.g. imported '7.1' -> 'Tally Prime 7.1')
-		raw_ver = self.product_ver or self.tally_version or self.release
-		if raw_ver:
-			self.tally_version = format_tally_version(raw_ver)
-			if not self.product_ver:
-				self.product_ver = raw_ver
-			if not self.release:
-				self.release = raw_ver
+		# Preserve exact Tally Version from Product Version; fallback to product_ver / release if empty
+		if self.tally_version:
+			self.tally_version = str(self.tally_version).strip()
+		elif self.product_ver:
+			self.tally_version = str(self.product_ver).strip()
+		elif self.release:
+			self.tally_version = str(self.release).strip()
+
+		if not self.product_ver and self.release:
+			self.product_ver = str(self.release).strip()
 
 		# Portal Contact Person defaults to Account / Company Name
 		if not self.portal_contact and (self.cc_acc_name or self.portal_acc_name):
@@ -211,10 +213,17 @@ class HbsTallyRenewal(Document):
 		"""Auto-populate the items table with the matching TSS product on first save.
 		Only fills when items is empty; never overwrites manual edits.
 		"""
-		if getattr(self, "items", None):
+		if getattr(self, "items", None) and len(self.items) > 0:
 			return  # already has items – don't overwrite
 
-		license_raw = (self.license or "").strip().lower()
+		license_raw = " ".join(filter(None, [
+			getattr(self, "license", None),
+			getattr(self, "flavour", None),
+			getattr(self, "license_type", None),
+			getattr(self, "tally_parent", None),
+			getattr(self, "edition", None)
+		])).strip().lower()
+
 		product_name = None
 		for keyword, prod in self._LICENSE_TO_PRODUCT.items():
 			if keyword in license_raw:
@@ -305,6 +314,17 @@ class HbsTallyRenewal(Document):
 		if self.crm_ex_1 and self.owner != self.crm_ex_1:
 			frappe.db.set_value("Hbs Tally Renewal", self.name, "owner", self.crm_ex_1, update_modified=False)
 			self.owner = self.crm_ex_1
+
+	def before_delete(self):
+		"""Prevent regular users from deleting Hbs Tally Renewal records.
+		Only Administrator, System Manager, or Owner in Hbs User Hierarchy can delete.
+		"""
+		user = frappe.session.user if frappe.session else "System"
+		if not is_owner_or_admin(user):
+			frappe.throw(
+				_("Users are not permitted to delete Hbs Tally Renewal records. Only Owner or Administrator can delete."),
+				title=_("Deletion Not Allowed")
+			)
 
 	def validate_alteration_locks(self):
 		"""Enforce that non-admin/owner users can only alter cc_mobile on existing records."""
@@ -1880,4 +1900,263 @@ def import_past_remarks_from_file(file_url, overwrite=0):
 		"skipped_count": skipped_count,
 		"not_found_count": not_found_count
 	}
+
+
+# --- CUSTOM EXCEL DATA IMPORT (Fallback when Frappe Data Import tool fails) ---
+@frappe.whitelist()
+def import_renewals_from_excel(file_url):
+	"""
+	Custom fallback Excel importer for Hbs Tally Renewal records.
+	Handles Excel files (.xlsx / .xls), maps columns via hooks data_import_column_aliases
+	and DocType fields (case-insensitively), resolves usernames (kps, dev, yogi, etc.),
+	and creates or updates records matching by tally_serial or name.
+	Publishes real-time progress and returns a detailed failure report with exact reasons.
+	"""
+	user = frappe.session.user if frappe.session else "System"
+	if not is_owner_or_admin(user):
+		frappe.throw(_("Only Owner and Administrator can import data."), title=_("Permission Denied"))
+
+	if not file_url:
+		frappe.throw(_("Excel file is required."))
+
+	file_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+	if not file_name:
+		frappe.throw(_("Uploaded file not found in system."))
+
+	file_doc = frappe.get_doc("File", file_name)
+	content = file_doc.get_content()
+	if not content:
+		frappe.throw(_("Uploaded file is empty or could not be read."))
+
+	if isinstance(content, str):
+		content = content.encode("utf-8")
+
+	import io
+	import datetime
+
+	raw_headers = []
+	raw_data_rows = []
+
+	if content.startswith(b"PK"):
+		import openpyxl
+		wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+		ws = wb.active
+		raw_rows = list(ws.iter_rows(values_only=True))
+		if raw_rows:
+			raw_headers = [str(c or "").strip() for c in raw_rows[0]]
+			raw_data_rows = raw_rows[1:]
+	else:
+		import xlrd
+		wb = xlrd.open_workbook(file_contents=content)
+		ws = wb.sheets()[0]
+		raw_headers = [str(ws.cell_value(0, c)).strip() for c in range(ws.ncols)]
+		for r in range(1, ws.nrows):
+			raw_data_rows.append([ws.cell_value(r, c) for c in range(ws.ncols)])
+
+	if not raw_headers or not raw_data_rows:
+		return {"status": "error", "message": _("No data found in uploaded Excel.")}
+
+	# Load aliases from hooks and doctype meta
+	aliases_hooks = frappe.get_hooks("data_import_column_aliases") or {}
+	aliases_dict = aliases_hooks.get("Hbs Tally Renewal", {})
+	alias_map = {}
+	if isinstance(aliases_dict, dict):
+		for k, v in aliases_dict.items():
+			fname = v[0] if isinstance(v, list) else v
+			if fname:
+				alias_map[str(k).strip().lower()] = fname
+
+	meta = frappe.get_meta("Hbs Tally Renewal")
+	field_types = {df.fieldname: df.fieldtype for df in meta.fields}
+
+	# Mapping map: clean header -> DocField fieldname
+	field_map = {}
+	for df in meta.fields:
+		field_map[df.fieldname.lower()] = df.fieldname
+		if df.label:
+			field_map[df.label.strip().lower()] = df.fieldname
+
+	for k, v in alias_map.items():
+		field_map[k] = v
+
+	field_map["id"] = "name"
+	field_map["name"] = "name"
+	field_map["serial no"] = "tally_serial"
+	field_map["serial"] = "tally_serial"
+	field_map["serial number"] = "tally_serial"
+	field_map["product version"] = "tally_version"
+	field_map["product ver"] = "tally_version"
+	field_map["number version"] = "release"
+	field_map["number ver"] = "release"
+
+	col_to_field = {}
+	for idx, h in enumerate(raw_headers):
+		clean_h = str(h or "").strip().lower()
+		if clean_h in field_map:
+			col_to_field[idx] = field_map[clean_h]
+
+	if not any(f in ("tally_serial", "tss_tally_serial", "name") for f in col_to_field.values()):
+		frappe.throw(_("Excel must contain a 'Serial No' or 'ID' column to identify renewal records."))
+
+	user_map = {
+		"kps": "kps@hbsmail.in",
+		"dev": "dev@hbsmail.in",
+		"yogi": "yogi@hbsmail.in",
+		"yogendra": "yogi@hbsmail.in",
+		"admin": "Administrator",
+		"administrator": "Administrator",
+	}
+
+	def resolve_user(val):
+		if not val:
+			return None
+		val_clean = str(val).strip()
+		if frappe.db.exists("User", val_clean, cache=True):
+			return val_clean
+		if val_clean.lower() in user_map:
+			target = user_map[val_clean.lower()]
+			if frappe.db.exists("User", target, cache=True):
+				return target
+		resolved = (
+			frappe.db.get_value("User", {"username": val_clean.lower()})
+			or frappe.db.get_value("User", {"username": val_clean})
+			or frappe.db.get_value("User", {"first_name": val_clean})
+			or frappe.db.get_value("User", {"full_name": val_clean})
+		)
+		return resolved or val_clean
+
+	def safe_date(val):
+		if not val:
+			return None
+		if isinstance(val, (datetime.date, datetime.datetime)):
+			return val.strftime("%Y-%m-%d")
+		try:
+			return frappe.utils.data.getdate(val)
+		except Exception:
+			return None
+
+	total_rows = len(raw_data_rows)
+	created_count = 0
+	updated_count = 0
+	failed_rows = []
+
+	for row_idx, r in enumerate(raw_data_rows, start=2):
+		if not any(r):
+			continue
+
+		if total_rows > 0 and (row_idx % max(1, total_rows // 25) == 0 or row_idx == total_rows + 1):
+			pct = min(100.0, float(row_idx - 1) / total_rows * 100)
+			frappe.publish_progress(
+				pct,
+				title=_("Importing Renewal Data"),
+				description=_("Processed {0} of {1} rows... (Created: {2}, Updated: {3}, Skipped: {4})").format(
+					row_idx - 1, total_rows, created_count, updated_count, len(failed_rows)
+				)
+			)
+
+		row_data = {}
+		for idx, val in enumerate(r):
+			if idx not in col_to_field:
+				continue
+			fname = col_to_field[idx]
+			if val is None or val == "":
+				continue
+
+			ftype = field_types.get(fname, "Data")
+			if ftype in ("Date", "Datetime"):
+				parsed_d = safe_date(val)
+				if parsed_d:
+					row_data[fname] = parsed_d
+			elif ftype == "Link" and getattr(meta.get_field(fname), "options", None) == "User":
+				row_data[fname] = resolve_user(val)
+			elif ftype in ("Int", "Check"):
+				try:
+					row_data[fname] = frappe.utils.cint(float(str(val).strip()))
+				except Exception:
+					pass
+			elif ftype in ("Float", "Currency"):
+				try:
+					row_data[fname] = frappe.utils.flt(str(val).strip())
+				except Exception:
+					pass
+			else:
+				s_val = str(val).strip()
+				if s_val.endswith(".0") and (fname in ("tally_serial", "tss_tally_serial", "pincode", "cc_pincode", "portal_phone", "cc_phone", "cc_mobile", "portal_mobile") or fname.endswith("_serial")):
+					s_val = s_val[:-2]
+				row_data[fname] = s_val
+
+		serial = row_data.get("tally_serial") or row_data.get("tss_tally_serial")
+		doc_name = row_data.get("name")
+		party = row_data.get("cc_acc_name") or row_data.get("portal_acc_name") or row_data.get("cc_contact") or ""
+
+		if not serial and not doc_name:
+			failed_rows.append({
+				"row": row_idx,
+				"serial": "-",
+				"party": party or "-",
+				"reason": _("Missing Serial Number or ID in row")
+			})
+			continue
+
+		if serial:
+			raw_serial = str(serial).strip()
+			if not is_genuine_tally_serial(raw_serial):
+				failed_rows.append({
+					"row": row_idx,
+					"serial": raw_serial,
+					"party": party or "-",
+					"reason": _("Invalid Tally Serial (Must be 9 digits starting with 7, digital root 9)")
+				})
+				continue
+
+		if not doc_name and serial:
+			doc_name = (
+				frappe.db.get_value("Hbs Tally Renewal", {"tally_serial": serial}, "name") or
+				frappe.db.get_value("Hbs Tally Renewal", {"tss_tally_serial": serial}, "name")
+			)
+
+		try:
+			if doc_name and frappe.db.exists("Hbs Tally Renewal", doc_name):
+				doc = frappe.get_doc("Hbs Tally Renewal", doc_name)
+				for k, v in row_data.items():
+					if k != "name":
+						doc.set(k, v)
+				doc.flags.in_import = True
+				doc.flags.ignore_permissions = True
+				doc.save()
+				updated_count += 1
+			else:
+				doc = frappe.new_doc("Hbs Tally Renewal")
+				for k, v in row_data.items():
+					if k != "name":
+						doc.set(k, v)
+				doc.flags.in_import = True
+				doc.flags.ignore_permissions = True
+				doc.insert()
+				created_count += 1
+
+			if (created_count + updated_count) % 50 == 0:
+				frappe.db.commit()
+
+		except Exception as e:
+			err_msg = frappe.utils.strip_html(str(e)).strip()
+			frappe.log_error(f"Error importing row {row_idx} ({serial}): {err_msg}", "Custom Excel Import")
+			failed_rows.append({
+				"row": row_idx,
+				"serial": serial or doc_name or "-",
+				"party": party or "-",
+				"reason": err_msg or _("Database save error")
+			})
+
+	frappe.publish_progress(100, title=_("Importing Renewal Data"), description=_("Import completed!"))
+	frappe.db.commit()
+
+	return {
+		"status": "success",
+		"created_count": created_count,
+		"updated_count": updated_count,
+		"skipped_count": len(failed_rows),
+		"failed_rows": failed_rows
+	}
+
 

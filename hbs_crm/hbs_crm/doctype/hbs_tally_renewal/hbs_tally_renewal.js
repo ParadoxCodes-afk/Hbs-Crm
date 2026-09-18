@@ -10,6 +10,7 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 		render_old_remarks_timeline(frm);
 		frm.set_df_property("pi_number", "read_only", 1);
 		apply_custom_section_styles(frm);
+		auto_fill_quote_items_client(frm);
 
 		if (frm._reloading_from_sync) {
 			delete frm._reloading_from_sync;
@@ -39,6 +40,14 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 				}
 			});
 		}
+	},
+
+	license(frm) {
+		auto_fill_quote_items_client(frm);
+	},
+
+	flavour(frm) {
+		auto_fill_quote_items_client(frm);
 	},
 
 	crm_status(frm) {
@@ -87,20 +96,10 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 });
 
 function format_client_tally_version(frm) {
-	let ver = (frm.doc.tally_version || frm.doc.product_ver || "").toString().trim();
+	if (frm.doc.tally_version) return;
+	let ver = (frm.doc.product_ver || "").toString().trim();
 	if (!ver) return;
-
-	if (ver.toLowerCase().startsWith("tally")) {
-		if (frm.doc.tally_version !== ver) {
-			frm.set_value("tally_version", ver);
-		}
-		return;
-	}
-
-	let formatted = ver.toLowerCase().startsWith("prime") ? "Tally " + ver : "Tally Prime " + ver;
-	if (frm.doc.tally_version !== formatted) {
-		frm.set_value("tally_version", formatted);
-	}
+	frm.set_value("tally_version", ver);
 }
 
 function handle_lost_remarks_visibility(frm) {
@@ -888,6 +887,31 @@ function calculate_totals(frm) {
 	frm.set_value("total_tax", total_tax);
 	frm.set_value("total_after_tax", total_before_tax - additional_discount);
 	frm.set_value("final_total", final_total);
+}
+
+function auto_fill_quote_items_client(frm) {
+	if (frm.doc.items && frm.doc.items.length > 0) return;
+	let lic_raw = [frm.doc.license, frm.doc.flavour, frm.doc.license_type, frm.doc.tally_parent, frm.doc.edition].filter(Boolean).join(" ").toLowerCase();
+	let target_name = null;
+	if (lic_raw.indexOf("gold") !== -1) target_name = "TALLY SOFTWARE SERVICES GOLD";
+	else if (lic_raw.indexOf("silver") !== -1) target_name = "TALLY SOFTWARE SERVICES SILVER";
+	else if (lic_raw.indexOf("auditor") !== -1) target_name = "TALLY SOFTWARE SERVICES AUDITOR";
+
+	if (!target_name) return;
+
+	frappe.db.get_value("Hbs Product", {"item_name": target_name, "is_active": 1}, ["name", "rate", "tax", "hsn"]).then(r => {
+		if (r && r.message && (!frm.doc.items || frm.doc.items.length === 0)) {
+			let prod = r.message;
+			let row = frm.add_child("items");
+			row.item_name = prod.name;
+			row.qty = 1;
+			row.rate = frm.doc.cc_amount || prod.rate || 0;
+			row.tax = prod.tax || 0;
+			row.hsn = prod.hsn || "";
+			frm.refresh_field("items");
+			calculate_totals(frm);
+		}
+	});
 }
 
 function validate_row_min_rate(frm, cdt, cdn, product_doc) {
