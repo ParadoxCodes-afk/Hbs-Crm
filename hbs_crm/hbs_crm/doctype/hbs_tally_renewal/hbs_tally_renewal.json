@@ -293,7 +293,7 @@
   },
   {
    "fieldname": "crm_ref",
-   "fieldtype": "Select",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Reference Status (Active/Moved Out)",
    "options": "\nACTIVE\nMOVED OUT\nCOMPETITION"
@@ -1048,7 +1048,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-17 17:48:15.873263",
+ "modified": "2026-09-18 16:45:34.399237",
  "modified_by": "Administrator",
  "module": "hbs_crm",
  "name": "Hbs Tally Renewal",
