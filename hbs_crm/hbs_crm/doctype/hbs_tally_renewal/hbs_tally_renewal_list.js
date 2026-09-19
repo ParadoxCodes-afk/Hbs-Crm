@@ -111,8 +111,8 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 							if (r.message) {
 								frappe.show_alert({
 									message: r.message.message || __("Portal sync completed!"),
-									indicator: "green"
-								});
+									indicator: r.message.status === "info" ? "orange" : "green"
+								}, 7);
 								listview.refresh();
 							}
 						}

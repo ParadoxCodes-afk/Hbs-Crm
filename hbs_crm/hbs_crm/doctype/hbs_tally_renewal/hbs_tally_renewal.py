@@ -1056,7 +1056,7 @@ def check_portal(name, only_expiry=False):
 			doc.status = "success"
 			doc.error = None
 			if not only_expiry:
-				doc.crm_ref = "Mapped"
+				doc.crm_ref = "ACTIVE"
 			if len(synced_fields) > 0:
 				doc.last_updated_api = frappe.utils.nowdate()
 			doc.flags.in_api_sync = True
@@ -1073,7 +1073,7 @@ def check_portal(name, only_expiry=False):
 			}
 		else:
 			if not only_expiry:
-				doc.crm_ref = "Moved Out"
+				doc.crm_ref = "MOVED OUT"
 				doc.status = "error"
 				doc.error = str(last_err)
 				doc.flags.in_api_sync = True
@@ -1210,14 +1210,39 @@ def check_selected_portal(names):
 	if not is_owner_or_admin(user):
 		frappe.throw(_("Only Owner and Administrator can sync Tally Portal API."), title=_("Permission Denied"))
 
-	base_url, keys_to_try = get_tally_portal_credentials()
 	if isinstance(names, str):
 		names = json.loads(names)
-	
+
+	if not names:
+		return {"status": "info", "message": _("No records selected.")}
+
+	# Filter: only sync records where reference status (crm_ref) is Active or Moved Out
+	records = frappe.get_all(
+		"Hbs Tally Renewal",
+		filters={"name": ["in", names]},
+		fields=["name", "crm_ref"]
+	)
+
+	valid_statuses = {"ACTIVE", "MOVED OUT", "MAPPED"}
+	to_sync = [r.name for r in records if (r.crm_ref or "").strip().upper() in valid_statuses]
+	skipped = len(names) - len(to_sync)
+
+	if not to_sync:
+		return {
+			"status": "info",
+			"message": _("No selected records have Reference Status as Active or Moved Out ({0} skipped).").format(skipped),
+			"success_count": 0,
+			"failed_count": 0,
+			"skipped_count": skipped,
+			"total_fields_updated": 0
+		}
+
+	base_url, keys_to_try = get_tally_portal_credentials()
+
 	success = 0
 	failed = 0
 	total_fields_updated = 0
-	for name in names:
+	for name in to_sync:
 		try:
 			res = check_portal(name)
 			if res and res.get("status") == "success":
@@ -1227,11 +1252,17 @@ def check_selected_portal(names):
 				failed += 1
 		except Exception:
 			failed += 1
+
+	msg = _("Portal sync completed! {0} records updated ({1} fields populated), {2} failed.").format(success, total_fields_updated, failed)
+	if skipped > 0:
+		msg += _(" {0} records skipped (Reference Status not Active or Moved Out).").format(skipped)
+
 	return {
 		"status": "success",
-		"message": _("Portal sync completed! {0} records updated ({1} fields populated), {2} failed/moved out.").format(success, total_fields_updated, failed),
+		"message": msg,
 		"success_count": success,
 		"failed_count": failed,
+		"skipped_count": skipped,
 		"total_fields_updated": total_fields_updated
 	}
 
