@@ -1575,12 +1575,15 @@ def get_renewal_quotation_html(name):
 		frappe.throw(_("Permission Denied"), frappe.PermissionError)
 
 	assign_renewal_pi_and_date(doc)
-	return frappe.get_print(
+	raw_html = frappe.get_print(
 		doctype="Hbs Tally Renewal",
 		name=name,
 		print_format="HBS Renewal Quotation",
 		as_pdf=False
 	)
+	import re
+	cleaned_html = re.sub(r'<div class="action-banner[^>]*>[\s\S]*?</div>', '', raw_html)
+	return cleaned_html
 
 
 @frappe.whitelist()

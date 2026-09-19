@@ -1160,8 +1160,19 @@ function open_quotation_preview_dialog(frm, doctype) {
 
 			let raw_html = r.message;
 
+			// Strip out action-banner (Print and Get PDF) if present in raw_html
+			let cleaned_html = raw_html.replace(/<div class="action-banner[^>]*>[\s\S]*?<\/div>/gi, "");
+
 			let security_tags = `
 				<style>
+					.action-banner, .print-hide {
+						display: none !important;
+						visibility: hidden !important;
+					}
+					.print-format-gutter {
+						padding: 0 !important;
+						background: transparent !important;
+					}
 					@media print {
 						html, body, * {
 							display: none !important;
@@ -1187,7 +1198,7 @@ function open_quotation_preview_dialog(frm, doctype) {
 				<\/script>
 			`;
 
-			let final_html = raw_html;
+			let final_html = cleaned_html;
 			if (final_html.indexOf("<head>") !== -1) {
 				final_html = final_html.replace("<head>", "<head>" + security_tags);
 			} else {
@@ -1196,7 +1207,7 @@ function open_quotation_preview_dialog(frm, doctype) {
 
 			let d = new frappe.ui.Dialog({
 				title: __("📄 Quotation Preview (View Only)"),
-				size: "large",
+				size: "extra-large",
 				fields: [
 					{
 						fieldtype: "HTML",
@@ -1209,10 +1220,22 @@ function open_quotation_preview_dialog(frm, doctype) {
 				}
 			});
 
-			d.$wrapper.addClass("no-print-quotation-dialog");
+			d.$wrapper.addClass("quotation-preview-modal no-print-quotation-dialog");
 
 			let preview_container = `
 				<style>
+					.quotation-preview-modal .modal-dialog {
+						max-width: 1250px !important;
+						width: 96vw !important;
+						margin: 15px auto !important;
+					}
+					.quotation-preview-modal .modal-content {
+						border-radius: 8px !important;
+						box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
+					}
+					.quotation-preview-modal .modal-body {
+						padding: 8px !important;
+					}
 					@media print {
 						.no-print-quotation-dialog, .no-print-quotation-dialog * {
 							display: none !important;
@@ -1220,14 +1243,14 @@ function open_quotation_preview_dialog(frm, doctype) {
 						}
 					}
 					.quotation-iframe-wrapper {
-						background: #525659;
-						padding: 12px;
+						background: #334155;
+						padding: 8px;
 						border-radius: 6px;
-						box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+						box-shadow: inset 0 2px 5px rgba(0,0,0,0.25);
 					}
 					.quotation-preview-iframe {
 						width: 100%;
-						height: 75vh;
+						height: 87vh;
 						border: none;
 						border-radius: 4px;
 						background: #fff;
