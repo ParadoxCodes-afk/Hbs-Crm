@@ -21,6 +21,11 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 		frm.clear_custom_buttons();
 
 		if (!frm.is_new()) {
+			// Prominent View Quotation button on the top toolbar
+			frm.add_custom_button(__("👁️ View Quotation"), function () {
+				open_quotation_preview_dialog(frm, "Hbs Tally Renewal");
+			});
+
 			// All users with view permission can log follow-up
 			frm.add_custom_button(__("+ Follow-up"), function () {
 				open_follow_up_dialog(frm);
@@ -29,10 +34,6 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 			// All users with view permission can send TSS quotation email to client
 			frm.add_custom_button(__("Send Quotation to Client"), function () {
 				open_email_dialog(frm);
-			}, __("Actions"));
-
-			frm.add_custom_button(__("View Quotation"), function () {
-				open_quotation_preview_dialog(frm, "Hbs Tally Renewal");
 			}, __("Actions"));
 
 			// Admin and Hierarchy Owner only button
@@ -1129,14 +1130,6 @@ function auto_sync_portal_on_open(frm) {
 function open_quotation_preview_dialog(frm, doctype) {
 	if (frm.is_new()) {
 		frappe.msgprint(__("Please save the record first before viewing quotation."));
-		return;
-	}
-	if (!frm.doc.items || frm.doc.items.length === 0) {
-		frappe.msgprint({
-			title: __("No Items"),
-			indicator: "orange",
-			message: __("Please add at least one item in the Items table to preview quotation.")
-		});
 		return;
 	}
 

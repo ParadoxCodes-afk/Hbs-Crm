@@ -89,5 +89,67 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 				delete frappe.route_options.follow_up_date;
 			}
 		}, 100);
+
+		// View Quotation for selected lead
+		listview.page.add_inner_button(__("👁️ View Quotation"), () => {
+			let checked = listview.get_checked_items(true);
+			if (!checked || checked.length !== 1) {
+				frappe.msgprint({
+					title: __("Select One Lead"),
+					indicator: "orange",
+					message: __("Please select exactly 1 lead using checkbox to preview its quotation.")
+				});
+				return;
+			}
+			preview_lead_quotation_from_list(checked[0]);
+		});
 	}
 };
+
+function preview_lead_quotation_from_list(name) {
+	frappe.call({
+		method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.get_lead_quotation_html",
+		args: { name: name },
+		freeze: true,
+		freeze_message: __("Generating Quotation Preview..."),
+		callback: function (r) {
+			if (!r || !r.message) {
+				frappe.msgprint(__("Unable to load quotation preview."));
+				return;
+			}
+			let raw_html = r.message;
+			let cleaned_html = raw_html.replace(/<div class="action-banner[^>]*>[\s\S]*?<\/div>/gi, "");
+			let security_tags = `
+				<style>
+					.action-banner, .print-hide { display: none !important; visibility: hidden !important; }
+					.print-format-gutter { padding: 0 !important; background: transparent !important; }
+					@media print { html, body, * { display: none !important; visibility: hidden !important; } }
+					body { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; }
+				</style>
+				<script>
+					document.addEventListener('contextmenu', function(e) { e.preventDefault(); return false; });
+					document.addEventListener('keydown', function(e) {
+						if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
+							e.preventDefault(); e.stopPropagation(); return false;
+						}
+					});
+				<\/script>
+			`;
+			let final_html = cleaned_html.indexOf("<head>") !== -1 ? cleaned_html.replace("<head>", "<head>" + security_tags) : security_tags + cleaned_html;
+
+			let d = new frappe.ui.Dialog({
+				title: __("📄 Quotation Preview (View Only) - {0}", [name]),
+				size: "extra-large",
+				fields: [
+					{
+						fieldtype: "HTML",
+						fieldname: "preview_area",
+						options: `<div style="padding: 0; margin: 0; width: 100%; height: 87vh; overflow: auto; background: #ffffff; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"><iframe id="print-view-frame" style="width: 100%; height: 100%; border: none; min-height: 85vh;" srcdoc="${frappe.utils.escape_html(final_html)}"></iframe></div>`
+					}
+				]
+			});
+			d.$wrapper.find(".modal-dialog").css({ "max-width": "1250px", "width": "96vw" });
+			d.show();
+		}
+	});
+}

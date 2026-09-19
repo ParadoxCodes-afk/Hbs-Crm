@@ -37,6 +37,10 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		}
 
 		if (!frm.is_new()) {
+			frm.add_custom_button(__("👁️ View Quotation"), function () {
+				open_quotation_preview_dialog(frm, "Hbs Crm Lead");
+			});
+
 			if (frm.doc.status !== "won" && frm.doc.status !== "lost") {
 				frm.add_custom_button(__("+ Follow-up"), function () {
 					open_log_follow_up_dialog(frm);
@@ -83,10 +87,6 @@ frappe.ui.form.on("Hbs Crm Lead", {
 
 				frm.add_custom_button(__("Send Email to Client"), function () {
 					open_email_dialog(frm);
-				}, __("Actions"));
-
-				frm.add_custom_button(__("View Quotation"), function () {
-					open_quotation_preview_dialog(frm, "Hbs Crm Lead");
 				}, __("Actions"));
 			}
 		}
