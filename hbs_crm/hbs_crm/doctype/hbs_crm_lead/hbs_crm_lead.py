@@ -798,6 +798,23 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 
 
 @frappe.whitelist()
+def get_lead_quotation_html(name):
+	"""Render the HBS Quotation print format to HTML for preview inside modal."""
+	doc = frappe.get_doc("Hbs Crm Lead", name)
+	user = frappe.session.user if frappe.session else "System"
+	if not is_owner_or_admin(user) and not has_permission(doc, "read", user):
+		frappe.throw(_("Permission Denied"), frappe.PermissionError)
+
+	assign_lead_pi_and_date(doc)
+	return frappe.get_print(
+		doctype="Hbs Crm Lead",
+		name=name,
+		print_format="HBS Quotation",
+		as_pdf=False
+	)
+
+
+@frappe.whitelist()
 def assign_lead_pi_number(lead_name):
 	"""Explicitly assign PI number and quotation date to a Lead."""
 	doc = frappe.get_doc("Hbs Crm Lead", lead_name)

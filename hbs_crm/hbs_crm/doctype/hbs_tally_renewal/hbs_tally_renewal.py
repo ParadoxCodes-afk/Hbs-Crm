@@ -1567,6 +1567,23 @@ def get_renewal_quotation_pdf_attachment(doc):
 
 
 @frappe.whitelist()
+def get_renewal_quotation_html(name):
+	"""Render the HBS Renewal Quotation print format to HTML for preview inside modal."""
+	doc = frappe.get_doc("Hbs Tally Renewal", name)
+	user = frappe.session.user if frappe.session else "System"
+	if not is_owner_or_admin(user) and not has_permission(doc, "read", user):
+		frappe.throw(_("Permission Denied"), frappe.PermissionError)
+
+	assign_renewal_pi_and_date(doc)
+	return frappe.get_print(
+		doctype="Hbs Tally Renewal",
+		name=name,
+		print_format="HBS Renewal Quotation",
+		as_pdf=False
+	)
+
+
+@frappe.whitelist()
 def send_manual_renewal_email(name, to_email, subject, message, cc_email=None, from_email=None, sender_name=None, extra_attachments=None, attach_print=1):
 	"""Backend endpoint for sending interactive quotation email to client for Hbs Tally Renewal."""
 	doc = frappe.get_doc("Hbs Tally Renewal", name)

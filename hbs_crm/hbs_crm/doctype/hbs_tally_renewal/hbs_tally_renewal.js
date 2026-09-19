@@ -31,6 +31,10 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 				open_email_dialog(frm);
 			}, __("Actions"));
 
+			frm.add_custom_button(__("View Quotation"), function () {
+				open_quotation_preview_dialog(frm, "Hbs Tally Renewal");
+			}, __("Actions"));
+
 			// Admin and Hierarchy Owner only button
 			check_if_owner_or_admin(function (is_owner_admin) {
 				if (is_owner_admin) {
@@ -797,6 +801,9 @@ function open_email_dialog(frm) {
 				});
 
 				d.show();
+				d.add_custom_action(__("👁️ View Quotation"), function () {
+					open_quotation_preview_dialog(frm, "Hbs Tally Renewal");
+				});
 			}
 		}
 	});
@@ -1118,3 +1125,152 @@ function auto_sync_portal_on_open(frm) {
 		}
 	});
 }
+
+function open_quotation_preview_dialog(frm, doctype) {
+	if (frm.is_new()) {
+		frappe.msgprint(__("Please save the record first before viewing quotation."));
+		return;
+	}
+	if (!frm.doc.items || frm.doc.items.length === 0) {
+		frappe.msgprint({
+			title: __("No Items"),
+			indicator: "orange",
+			message: __("Please add at least one item in the Items table to preview quotation.")
+		});
+		return;
+	}
+
+	let method_name = (doctype === "Hbs Tally Renewal" || frm.doctype === "Hbs Tally Renewal")
+		? "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.get_renewal_quotation_html"
+		: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.get_lead_quotation_html";
+
+	frappe.call({
+		method: method_name,
+		args: { name: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Generating Quotation Preview..."),
+		callback: function (r) {
+			if (!r || !r.message) {
+				frappe.msgprint(__("Unable to load quotation preview."));
+				return;
+			}
+
+			let raw_html = r.message;
+
+			let security_tags = `
+				<style>
+					@media print {
+						html, body, * {
+							display: none !important;
+							visibility: hidden !important;
+						}
+					}
+					body {
+						-webkit-user-select: none !important;
+						-moz-user-select: none !important;
+						-ms-user-select: none !important;
+						user-select: none !important;
+					}
+				</style>
+				<script>
+					document.addEventListener('contextmenu', function(e) { e.preventDefault(); return false; });
+					document.addEventListener('keydown', function(e) {
+						if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
+							e.preventDefault();
+							e.stopPropagation();
+							return false;
+						}
+					});
+				<\/script>
+			`;
+
+			let final_html = raw_html;
+			if (final_html.indexOf("<head>") !== -1) {
+				final_html = final_html.replace("<head>", "<head>" + security_tags);
+			} else {
+				final_html = security_tags + final_html;
+			}
+
+			let d = new frappe.ui.Dialog({
+				title: __("📄 Quotation Preview (View Only)"),
+				size: "large",
+				fields: [
+					{
+						fieldtype: "HTML",
+						fieldname: "quotation_preview_html"
+					}
+				],
+				primary_action_label: __("Close"),
+				primary_action() {
+					d.hide();
+				}
+			});
+
+			d.$wrapper.addClass("no-print-quotation-dialog");
+
+			let preview_container = `
+				<style>
+					@media print {
+						.no-print-quotation-dialog, .no-print-quotation-dialog * {
+							display: none !important;
+							visibility: hidden !important;
+						}
+					}
+					.quotation-iframe-wrapper {
+						background: #525659;
+						padding: 12px;
+						border-radius: 6px;
+						box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+					}
+					.quotation-preview-iframe {
+						width: 100%;
+						height: 75vh;
+						border: none;
+						border-radius: 4px;
+						background: #fff;
+						display: block;
+					}
+				</style>
+				<div class="quotation-iframe-wrapper" oncontextmenu="return false;">
+					<iframe class="quotation-preview-iframe" srcdoc="${frappe.utils.escape_html(final_html)}"></iframe>
+				</div>
+			`;
+
+			d.fields_dict.quotation_preview_html.$wrapper.html(preview_container);
+
+			let iframe_el = d.fields_dict.quotation_preview_html.$wrapper.find("iframe")[0];
+			if (iframe_el) {
+				iframe_el.onload = function() {
+					try {
+						let doc = iframe_el.contentDocument || iframe_el.contentWindow.document;
+						doc.addEventListener("contextmenu", function(e) { e.preventDefault(); return false; });
+						doc.addEventListener("keydown", function(e) {
+							if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
+								e.preventDefault();
+								e.stopPropagation();
+								return false;
+							}
+						});
+					} catch(err) {}
+				};
+			}
+
+			let block_print = function(e) {
+				if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
+					e.preventDefault();
+					e.stopPropagation();
+					frappe.show_alert({ message: __("Printing and exporting is disabled in Quotation Preview."), indicator: "orange" }, 3);
+					return false;
+				}
+			};
+
+			$(window).on("keydown.block_quotation_print", block_print);
+			d.onhide = function () {
+				$(window).off("keydown.block_quotation_print");
+			};
+
+			d.show();
+		}
+	});
+}
+
