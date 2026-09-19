@@ -882,8 +882,13 @@ def get_tally_portal_credentials():
 
 
 @frappe.whitelist()
-def check_portal(name):
-	"""Check Tally Portal API using credentials from Hbs CRM Settings and populate fields."""
+def check_portal(name, only_expiry=False):
+	"""Check Tally Portal API using credentials from Hbs CRM Settings and populate fields.
+	If only_expiry is True, only portal_expiry_date is updated (used on lead open).
+	If only_expiry is False, all portal data fields are updated (used on manual portal sync).
+	"""
+	only_expiry = bool(frappe.utils.cint(only_expiry) or (isinstance(only_expiry, str) and only_expiry.lower() in ("true", "1")) or only_expiry is True)
+
 	doc = frappe.get_doc("Hbs Tally Renewal", name)
 	user = frappe.session.user if frappe.session else "System"
 	if not is_owner_or_admin(user) and not has_permission(doc, "read", user):
@@ -916,118 +921,127 @@ def check_portal(name):
 			synced_fields = []
 			unsynced_fields = []
 
-			# 1. Tally Flavour (Ensure 'Tally Prime' prefix)
-			raw_flavour = data.get("flavour")
-			if raw_flavour and str(raw_flavour).strip():
-				val_f = str(raw_flavour).strip()
-				if not val_f.lower().startswith("tally prime") and not val_f.lower().startswith("tally.prime"):
-					formatted_flavour = f"Tally Prime {val_f}"
+			if not only_expiry:
+				# 1. Tally Flavour (Ensure 'Tally Prime' prefix)
+				raw_flavour = data.get("flavour")
+				if raw_flavour and str(raw_flavour).strip():
+					val_f = str(raw_flavour).strip()
+					if not val_f.lower().startswith("tally prime") and not val_f.lower().startswith("tally.prime"):
+						formatted_flavour = f"Tally Prime {val_f}"
+					else:
+						formatted_flavour = val_f
+					doc.flavour = formatted_flavour
+					synced_fields.append("Tally Flavour")
 				else:
-					formatted_flavour = val_f
-				doc.flavour = formatted_flavour
-				synced_fields.append("Tally Flavour")
-			else:
-				unsynced_fields.append("Tally Flavour")
+					unsynced_fields.append("Tally Flavour")
 
-			# 2. Edition
-			if data.get("edition"):
-				doc.edition = data.get("edition")
-				synced_fields.append("Edition")
-			else:
-				unsynced_fields.append("Edition")
+				# 2. Edition
+				if data.get("edition"):
+					doc.edition = data.get("edition")
+					synced_fields.append("Edition")
+				else:
+					unsynced_fields.append("Edition")
 
-			# 3. Release
-			if data.get("release"):
-				doc.release = data.get("release")
-				synced_fields.append("Release / Version")
-			else:
-				unsynced_fields.append("Release / Version")
+				# 3. Release
+				if data.get("release"):
+					doc.release = data.get("release")
+					synced_fields.append("Release / Version")
+				else:
+					unsynced_fields.append("Release / Version")
 
-			# 4. Product Version
-			if data.get("release"):
-				doc.product_ver = data.get("release")
-				synced_fields.append("Product Version")
-			else:
-				unsynced_fields.append("Product Version")
+				# 4. Product Version
+				if data.get("release"):
+					doc.product_ver = data.get("release")
+					synced_fields.append("Product Version")
+				else:
+					unsynced_fields.append("Product Version")
 
-			# 5. Account Name
-			if data.get("org_name"):
-				doc.portal_acc_name = data.get("org_name")
-				synced_fields.append("Portal Account Name")
-			else:
-				unsynced_fields.append("Portal Account Name")
+				# 5. Account Name
+				if data.get("org_name"):
+					doc.portal_acc_name = data.get("org_name")
+					synced_fields.append("Portal Account Name")
+				else:
+					unsynced_fields.append("Portal Account Name")
 
-			# 6. Contact Name
-			if data.get("contact_name"):
-				doc.portal_contact = data.get("contact_name")
-				synced_fields.append("Portal Contact Person")
-			else:
-				unsynced_fields.append("Portal Contact Person")
+				# 6. Contact Name
+				if data.get("contact_name"):
+					doc.portal_contact = data.get("contact_name")
+					synced_fields.append("Portal Contact Person")
+				else:
+					unsynced_fields.append("Portal Contact Person")
 
-			# 7. Contact Email
-			if data.get("contact_email"):
-				doc.portal_email = data.get("contact_email")
-				synced_fields.append("Portal Email")
-			else:
-				unsynced_fields.append("Portal Email")
+				# 7. Contact Email
+				if data.get("contact_email"):
+					doc.portal_email = data.get("contact_email")
+					synced_fields.append("Portal Email")
+				else:
+					unsynced_fields.append("Portal Email")
 
-			# 8. Contact Mobile
-			if data.get("contact_mobile"):
-				doc.portal_mobile = data.get("contact_mobile")
-				synced_fields.append("Portal Mobile")
-			else:
-				unsynced_fields.append("Portal Mobile")
+				# 8. Contact Mobile
+				if data.get("contact_mobile"):
+					doc.portal_mobile = data.get("contact_mobile")
+					synced_fields.append("Portal Mobile")
+				else:
+					unsynced_fields.append("Portal Mobile")
 
-			# 9. Priority
-			if data.get("tss_priority"):
-				doc.ts9_priority = data.get("tss_priority")
-				synced_fields.append("TS9 Priority")
-			else:
-				unsynced_fields.append("TS9 Priority")
+				# 9. Priority
+				if data.get("tss_priority"):
+					doc.ts9_priority = data.get("tss_priority")
+					synced_fields.append("TS9 Priority")
+				else:
+					unsynced_fields.append("TS9 Priority")
 
-			# 10. Business Segment
-			if data.get("business_segment"):
-				doc.business_segment = data.get("business_segment")
-				synced_fields.append("Business Segment")
-			else:
-				unsynced_fields.append("Business Segment")
+				# 10. Business Segment
+				if data.get("business_segment"):
+					doc.business_segment = data.get("business_segment")
+					synced_fields.append("Business Segment")
+				else:
+					unsynced_fields.append("Business Segment")
 
-			# 11. Account ID
-			if data.get("account_id"):
-				doc.account_id = data.get("account_id")
-				synced_fields.append("Account ID")
-			else:
-				unsynced_fields.append("Account ID")
+				# 11. Account ID
+				if data.get("account_id"):
+					doc.account_id = data.get("account_id")
+					synced_fields.append("Account ID")
+				else:
+					unsynced_fields.append("Account ID")
 
-			# 12. Admin ID
-			if data.get("account_admin_email_id"):
-				doc.admin_id = data.get("account_admin_email_id")
-				synced_fields.append("Admin Email ID")
-			else:
-				unsynced_fields.append("Admin Email ID")
+				# 12. Admin ID
+				if data.get("account_admin_email_id"):
+					doc.admin_id = data.get("account_admin_email_id")
+					synced_fields.append("Admin Email ID")
+				else:
+					unsynced_fields.append("Admin Email ID")
 
-			# 13. MAU
-			if data.get("mau") is not None:
-				doc.mau = str(data.get("mau"))
-				synced_fields.append("Monthly Active Users (MAU)")
-			else:
-				unsynced_fields.append("Monthly Active Users (MAU)")
+				# 13. MAU
+				if data.get("mau") is not None:
+					doc.mau = str(data.get("mau"))
+					synced_fields.append("Monthly Active Users (MAU)")
+				else:
+					unsynced_fields.append("Monthly Active Users (MAU)")
 
-			# 14. QAU
-			if data.get("qau") is not None:
-				doc.qau = str(data.get("qau"))
-				synced_fields.append("Quarterly Active Users (QAU)")
-			else:
-				unsynced_fields.append("Quarterly Active Users (QAU)")
+				# 14. QAU
+				if data.get("qau") is not None:
+					doc.qau = str(data.get("qau"))
+					synced_fields.append("Quarterly Active Users (QAU)")
+				else:
+					unsynced_fields.append("Quarterly Active Users (QAU)")
 
-			# 15. RFM Segment
-			if data.get("rfm_segment"):
-				doc.rfm_segment = data.get("rfm_segment")
-				synced_fields.append("RFM Segment")
-			else:
-				unsynced_fields.append("RFM Segment")
+				# 15. RFM Segment
+				if data.get("rfm_segment"):
+					doc.rfm_segment = data.get("rfm_segment")
+					synced_fields.append("RFM Segment")
+				else:
+					unsynced_fields.append("RFM Segment")
 
-			# 16. Portal Expiry Date
+				# Activation Date
+				act_str = data.get("activation_date")
+				if act_str:
+					parsed_act = safe_parse_portal_date(act_str)
+					if parsed_act:
+						doc.acc_start_date = parsed_act
+						synced_fields.append("Activation Date")
+
+			# Portal Expiry Date (Always synced)
 			exp_str = data.get("expiry")
 			if exp_str:
 				parsed_date = safe_parse_portal_date(exp_str)
@@ -1039,17 +1053,10 @@ def check_portal(name):
 			else:
 				unsynced_fields.append("Portal Expiry Date")
 
-			# Activation Date
-			act_str = data.get("activation_date")
-			if act_str:
-				parsed_act = safe_parse_portal_date(act_str)
-				if parsed_act:
-					doc.acc_start_date = parsed_act
-					synced_fields.append("Activation Date")
-
 			doc.status = "success"
 			doc.error = None
-			doc.crm_ref = "Mapped"
+			if not only_expiry:
+				doc.crm_ref = "Mapped"
 			if len(synced_fields) > 0:
 				doc.last_updated_api = frappe.utils.nowdate()
 			doc.flags.in_api_sync = True
@@ -1058,26 +1065,28 @@ def check_portal(name):
 
 			return {
 				"status": "success",
-				"message": _("Portal details fetched successfully!"),
+				"message": _("Portal expiry synced successfully!") if only_expiry else _("Portal details fetched successfully!"),
 				"synced_count": len(synced_fields),
 				"unsynced_count": len(unsynced_fields),
 				"synced_fields": synced_fields,
 				"unsynced_fields": unsynced_fields
 			}
 		else:
-			doc.crm_ref = "Moved Out"
+			if not only_expiry:
+				doc.crm_ref = "Moved Out"
+				doc.status = "error"
+				doc.error = str(last_err)
+				doc.flags.in_api_sync = True
+				doc.save(ignore_permissions=True)
+				frappe.db.commit()
+			return {"status": "error", "message": last_err}
+	except Exception as e:
+		if not only_expiry:
 			doc.status = "error"
-			doc.error = str(last_err)
+			doc.error = str(e)
 			doc.flags.in_api_sync = True
 			doc.save(ignore_permissions=True)
 			frappe.db.commit()
-			return {"status": "error", "message": last_err}
-	except Exception as e:
-		doc.status = "error"
-		doc.error = str(e)
-		doc.flags.in_api_sync = True
-		doc.save(ignore_permissions=True)
-		frappe.db.commit()
 		frappe.throw(str(e))
 
 

@@ -37,6 +37,26 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 					frm.add_custom_button(__("👤 Assign Executive"), function () {
 						open_assign_dialog(frm);
 					});
+
+					frm.add_custom_button(__("🔄 Sync Portal API"), function () {
+						frappe.call({
+							method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_portal",
+							args: { name: frm.doc.name, only_expiry: 0 },
+							freeze: true,
+							freeze_message: __("Syncing all fields from Tally Portal API..."),
+							callback: function (r) {
+								if (r && r.message && r.message.status === "success") {
+									frappe.show_alert({
+										message: __("Portal details synced ({0} fields updated)", [r.message.synced_count || 0]),
+										indicator: "green"
+									});
+									frm.reload_doc();
+								} else if (r && r.message) {
+									frappe.msgprint(r.message.message || __("Sync failed"));
+								}
+							}
+						});
+					}, __("Actions"));
 				}
 			});
 		}
@@ -1073,7 +1093,10 @@ function auto_sync_portal_on_open(frm) {
 
 	frappe.call({
 		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_portal",
-		args: { name: frm.doc.name },
+		args: {
+			name: frm.doc.name,
+			only_expiry: 1
+		},
 		freeze: false,
 		callback: function (r) {
 			frm._is_syncing_portal = false;
@@ -1084,14 +1107,9 @@ function auto_sync_portal_on_open(frm) {
 						frm.reload_doc();
 					}
 					frappe.show_alert({
-						message: __("Portal synced ({0} fields updated)", [r.message.synced_count || 0]),
+						message: __("Portal expiry synced"),
 						indicator: "green"
 					}, 3);
-				} else if (r.message.status === "error") {
-					if (!frm.is_dirty()) {
-						frm._reloading_from_sync = true;
-						frm.reload_doc();
-					}
 				}
 			}
 		},
