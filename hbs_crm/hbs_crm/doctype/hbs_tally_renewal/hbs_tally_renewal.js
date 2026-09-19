@@ -679,7 +679,7 @@ function render_old_remarks_timeline(frm) {
 }
 
 function open_email_dialog(frm) {
-	let client_email = (frm.doc.cc_email || frm.doc.portal_email || "").trim();
+	let client_email = (frm.doc.cc_email || frm.doc.portal_email || frm.doc.admin_id || frm.doc.director_email || "").trim();
 
 	if (!client_email) {
 		frappe.msgprint({

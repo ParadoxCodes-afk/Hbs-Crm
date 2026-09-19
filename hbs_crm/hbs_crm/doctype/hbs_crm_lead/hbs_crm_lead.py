@@ -693,6 +693,7 @@ class HbsCrmLead(Document):
 			attachments=attachments if attachments else None,
 			reference_doctype=self.doctype,
 			reference_name=self.name,
+			expose_recipients="header",
 			now=True
 		)
 

@@ -1538,7 +1538,7 @@ def get_rendered_renewal_email_template(name):
 	return {
 		"subject": rendered["subject"],
 		"message": rendered["message"],
-		"to_email": doc.cc_email or doc.portal_email or "",
+		"to_email": (doc.cc_email or doc.portal_email or doc.admin_id or doc.director_email or "").strip(),
 		"cc_email": user_email,
 		"from_email": settings.email_id or "tally@hbsmail.in",
 		"sender_name": settings.sender_name or "HBS Sales Team"
@@ -1734,7 +1734,7 @@ def send_bulk_renewal_email(names, subject_template, message_template, cc_email=
 				failed_records.append({"name": name, "error": "Permission Denied"})
 				continue
 
-			to_email = (doc.cc_email or doc.portal_email or "").strip()
+			to_email = (doc.cc_email or doc.portal_email or doc.admin_id or doc.director_email or "").strip()
 			if not to_email:
 				skipped_no_email.append(doc.name)
 				continue
@@ -1760,6 +1760,7 @@ def send_bulk_renewal_email(names, subject_template, message_template, cc_email=
 				attachments=pdf_attach if pdf_attach else None,
 				reference_doctype=doc.doctype,
 				reference_name=doc.name,
+				expose_recipients="header",
 				now=True
 			)
 
