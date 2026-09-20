@@ -5,7 +5,6 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 	refresh(frm) {
 		setup_field_permissions(frm);
 		setup_all_contacts_grid(frm);
-		handle_lost_remarks_visibility(frm);
 		render_activity_timeline(frm);
 		render_old_remarks_timeline(frm);
 		frm.set_df_property("pi_number", "read_only", 1);
@@ -22,7 +21,7 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 
 		if (!frm.is_new()) {
 			// Prominent View Quotation button on the top toolbar
-			frm.add_custom_button(__("👁️ View Quotation"), function () {
+			frm.add_custom_button(__("📄 View Quotation"), function () {
 				open_quotation_preview_dialog(frm, "Hbs Tally Renewal");
 			});
 
@@ -75,10 +74,6 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 		auto_fill_quote_items_client(frm);
 	},
 
-	crm_status(frm) {
-		handle_lost_remarks_visibility(frm);
-	},
-
 	portal_expiry_date(frm) {
 		apply_custom_section_styles(frm);
 	},
@@ -125,18 +120,6 @@ function format_client_tally_version(frm) {
 	let ver = (frm.doc.product_ver || "").toString().trim();
 	if (!ver) return;
 	frm.set_value("tally_version", ver);
-}
-
-function handle_lost_remarks_visibility(frm) {
-	let is_lost = (frm.doc.crm_status || "").trim().toLowerCase() === "lost";
-	frm.set_df_property("crm_lost_remarks", "hidden", is_lost ? 0 : 1);
-	if (frm.fields_dict.crm_lost_remarks && frm.fields_dict.crm_lost_remarks.$wrapper) {
-		if (is_lost) {
-			frm.fields_dict.crm_lost_remarks.$wrapper.show().css("display", "block !important");
-		} else {
-			frm.fields_dict.crm_lost_remarks.$wrapper.hide().css("display", "none !important");
-		}
-	}
 }
 
 function check_if_owner_or_admin(callback) {
@@ -208,20 +191,6 @@ function setup_field_permissions(frm) {
 			}
 		}
 	});
-
-	// Handle crm_lost_remarks read-only state while keeping its visibility conditional
-	if (frm.fields_dict.crm_lost_remarks) {
-		frm.set_df_property("crm_lost_remarks", "read_only", 0);
-		if (frm.fields_dict.crm_lost_remarks.$wrapper) {
-			frm.fields_dict.crm_lost_remarks.$wrapper.find("input, select, textarea")
-				.prop("readonly", true)
-				.prop("disabled", true)
-				.css({
-					"pointer-events": "none",
-					"cursor": "default"
-				});
-		}
-	}
 
 	// 2. Creation fields that become READ-ONLY on ALTERATION:
 	const lock_on_alteration = [
@@ -608,7 +577,182 @@ function apply_custom_section_styles(frm) {
 	$('#hbs-tally-renewal-custom-css').remove();
 	$('head').append(`
 		<style id="hbs-tally-renewal-custom-css">
-			/* Professional Executive Theme for all Form Fields */
+			/* Card Containers for the 4 Key Columns in Person Detail Section */
+			.hbs-card-col {
+				border-radius: 8px !important;
+				padding: 10px 14px 10px 14px !important;
+				margin-bottom: 14px !important;
+				transition: all 0.2s ease !important;
+				box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+			}
+			.hbs-card-col:hover {
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+			}
+
+			/* 1. Serial Details (Indigo Theme) */
+			.hbs-card-serial {
+				border: 1.5px solid #c7d2fe !important;
+				border-top: 4px solid #6366f1 !important;
+				background-color: #faf5ff !important;
+			}
+			.hbs-card-serial .hbs-card-badge {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+				font-size: 11px;
+				font-weight: 700;
+				letter-spacing: 0.5px;
+				text-transform: uppercase;
+				color: #4338ca;
+				background-color: #e0e7ff;
+				border: 1px solid #c7d2fe;
+				padding: 4px 8px;
+				border-radius: 5px;
+				margin-bottom: 10px;
+			}
+			.hbs-card-serial input,
+			.hbs-card-serial select,
+			.hbs-card-serial textarea,
+			.hbs-card-serial .control-value,
+			.hbs-card-serial .like-disabled-input {
+				border: 1px solid #c7d2fe !important;
+				border-radius: 6px !important;
+				background-color: #ffffff !important;
+			}
+			.hbs-card-serial input:focus,
+			.hbs-card-serial select:focus,
+			.hbs-card-serial textarea:focus {
+				border-color: #6366f1 !important;
+				box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15) !important;
+			}
+
+			/* 2. Party Details (Ocean Blue Theme) */
+			.hbs-card-party {
+				border: 1.5px solid #bae6fd !important;
+				border-top: 4px solid #0284c7 !important;
+				background-color: #f0f9ff !important;
+			}
+			.hbs-card-party .hbs-card-badge {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+				font-size: 11px;
+				font-weight: 700;
+				letter-spacing: 0.5px;
+				text-transform: uppercase;
+				color: #0369a1;
+				background-color: #e0f2fe;
+				border: 1px solid #bae6fd;
+				padding: 4px 8px;
+				border-radius: 5px;
+				margin-bottom: 10px;
+			}
+			.hbs-card-party input,
+			.hbs-card-party select,
+			.hbs-card-party textarea,
+			.hbs-card-party .control-value,
+			.hbs-card-party .like-disabled-input {
+				border: 1px solid #7dd3fc !important;
+				border-radius: 6px !important;
+				background-color: #ffffff !important;
+			}
+			.hbs-card-party input:focus,
+			.hbs-card-party select:focus,
+			.hbs-card-party textarea:focus {
+				border-color: #0284c7 !important;
+				box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
+			}
+
+			/* 3. Usage & Priority Details (Amber Theme) */
+			.hbs-card-usage {
+				border: 1.5px solid #fed7aa !important;
+				border-top: 4px solid #f59e0b !important;
+				background-color: #fffdf5 !important;
+			}
+			.hbs-card-usage .hbs-card-badge {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+				font-size: 11px;
+				font-weight: 700;
+				letter-spacing: 0.5px;
+				text-transform: uppercase;
+				color: #b45309;
+				background-color: #fef3c7;
+				border: 1px solid #fed7aa;
+				padding: 4px 8px;
+				border-radius: 5px;
+				margin-bottom: 10px;
+			}
+			.hbs-card-usage input,
+			.hbs-card-usage select,
+			.hbs-card-usage textarea,
+			.hbs-card-usage .control-value,
+			.hbs-card-usage .like-disabled-input {
+				border: 1px solid #fde68a !important;
+				border-radius: 6px !important;
+				background-color: #ffffff !important;
+			}
+			.hbs-card-usage input:focus,
+			.hbs-card-usage select:focus,
+			.hbs-card-usage textarea:focus {
+				border-color: #f59e0b !important;
+				box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15) !important;
+			}
+
+			/* 4. Executive Details (Emerald Theme) */
+			.hbs-card-executive {
+				border: 1.5px solid #a7f3d0 !important;
+				border-top: 4px solid #10b981 !important;
+				background-color: #f0fdf4 !important;
+			}
+			.hbs-card-executive .hbs-card-badge {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+				font-size: 11px;
+				font-weight: 700;
+				letter-spacing: 0.5px;
+				text-transform: uppercase;
+				color: #047857;
+				background-color: #d1fae5;
+				border: 1px solid #a7f3d0;
+				padding: 4px 8px;
+				border-radius: 5px;
+				margin-bottom: 10px;
+			}
+			.hbs-card-executive input,
+			.hbs-card-executive select,
+			.hbs-card-executive textarea,
+			.hbs-card-executive .control-value,
+			.hbs-card-executive .like-disabled-input {
+				border: 1px solid #6ee7b7 !important;
+				border-radius: 6px !important;
+				background-color: #ffffff !important;
+			}
+			.hbs-card-executive input:focus,
+			.hbs-card-executive select:focus,
+			.hbs-card-executive textarea:focus {
+				border-color: #10b981 !important;
+				box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15) !important;
+			}
+
+			/* Related Sections Accents */
+			.form-page [data-fieldname="license_details_section"] {
+				border-left: 4px solid #6366f1 !important;
+				padding-left: 12px !important;
+			}
+			.form-page [data-fieldname="address_details_section"],
+			.form-page [data-fieldname="executive_details_section"] {
+				border-left: 4px solid #0284c7 !important;
+				padding-left: 12px !important;
+			}
+			.form-page [data-fieldname="follow_up_section"] {
+				border-left: 4px solid #10b981 !important;
+				padding-left: 12px !important;
+			}
+
+			/* Base field formatting */
 			.form-page input,
 			.form-page select,
 			.form-page textarea,
@@ -616,7 +760,6 @@ function apply_custom_section_styles(frm) {
 			.form-page .like-disabled-input {
 				border: 1px solid #d1d5db !important;
 				border-radius: 6px !important;
-				background-color: #f9fafb !important;
 				color: #111827 !important;
 				font-weight: 500 !important;
 				min-height: 28px !important;
@@ -657,6 +800,29 @@ function apply_custom_section_styles(frm) {
 			}
 		</style>
 	`);
+
+	// Attach visually differentiated card classes and headers to the 4 main columns
+	setTimeout(() => {
+		let col_configs = [
+			{ field: "tss_tally_serial", cls: "hbs-card-serial", badge: "🔢 Serial & License Details" },
+			{ field: "cc_acc_name", cls: "hbs-card-party", badge: "🏢 Party Details" },
+			{ field: "mau", cls: "hbs-card-usage", badge: "📊 Usage & Priority" },
+			{ field: "crm_ex_1", cls: "hbs-card-executive", badge: "👤 Executive Details" }
+		];
+
+		col_configs.forEach(cfg => {
+			if (frm.fields_dict[cfg.field] && frm.fields_dict[cfg.field].$wrapper) {
+				let $col = frm.fields_dict[cfg.field].$wrapper.closest(".form-column");
+				if ($col.length) {
+					$col.find(".hbs-card-ribbon").remove();
+					$col.addClass("hbs-card-col " + cfg.cls);
+					if (!$col.find(".hbs-card-badge").length) {
+						$col.prepend(`<div class="hbs-card-badge">${cfg.badge}</div>`);
+					}
+				}
+			}
+		});
+	}, 100);
 
 	// Dynamic toggle for Portal Expiry Date
 	let has_portal_expiry = !!(frm.doc.portal_expiry_date && frm.doc.portal_expiry_date.toString().trim());
@@ -818,7 +984,7 @@ function open_email_dialog(frm) {
 				});
 
 				d.show();
-				d.add_custom_action(__("👁️ View Quotation"), function () {
+				d.add_custom_action(__("📄 View Quotation"), function () {
 					open_quotation_preview_dialog(frm, "Hbs Tally Renewal");
 				});
 			}

@@ -37,7 +37,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		}
 
 		if (!frm.is_new()) {
-			frm.add_custom_button(__("👁️ View Quotation"), function () {
+			frm.add_custom_button(__("📄 View Quotation"), function () {
 				open_quotation_preview_dialog(frm, "Hbs Crm Lead");
 			});
 
@@ -566,7 +566,7 @@ function open_email_dialog(frm) {
 				}
 
 				d.show();
-				d.add_custom_action(__("👁️ View Quotation"), function () {
+				d.add_custom_action(__("📄 View Quotation"), function () {
 					open_quotation_preview_dialog(frm, "Hbs Crm Lead");
 				});
 				if (default_cc) {

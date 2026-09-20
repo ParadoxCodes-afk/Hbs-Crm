@@ -1154,7 +1154,7 @@ def bulk_update_renewal_fields(names, updates=None, remark=None):
 		if isinstance(updates, dict):
 			allowed_fields = {
 				"crm_status", "crm_stage", "crm_ref",
-				"follow_up_date", "last_remarks_date"
+				"follow_up_date", "last_remarks_date", "last_remark"
 			}
 			for k, v in updates.items():
 				if k in allowed_fields and v is not None and str(v).strip() != "":
@@ -1185,7 +1185,10 @@ def bulk_update_renewal_fields(names, updates=None, remark=None):
 				"date_time": frappe.utils.now_datetime(),
 				"remark": remark_text
 			})
-			doc.last_remark = remark_text
+			if "last_remark" in update_dict:
+				doc.last_remark = update_dict["last_remark"]
+			else:
+				doc.last_remark = remark_text
 			doc.render_activity_html()
 			if hasattr(doc, "render_old_remarks_html"):
 				doc.render_old_remarks_html()
@@ -1195,6 +1198,10 @@ def bulk_update_renewal_fields(names, updates=None, remark=None):
 			doc_updates = dict(update_dict)
 			if "last_remarks_date" in doc_updates:
 				doc_updates["contact_on"] = doc_updates["last_remarks_date"]
+			elif "last_remark" in doc_updates and "last_remarks_date" not in doc_updates:
+				doc_updates["last_remarks_date"] = frappe.utils.nowdate()
+				doc_updates["contact_on"] = doc_updates["last_remarks_date"]
+			doc_updates["last_updated"] = frappe.utils.nowdate()
 			frappe.db.set_value("Hbs Tally Renewal", name, doc_updates, update_modified=True)
 
 	frappe.db.commit()

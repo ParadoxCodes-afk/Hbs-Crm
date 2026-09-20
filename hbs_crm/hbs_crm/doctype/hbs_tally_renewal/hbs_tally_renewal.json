@@ -34,7 +34,6 @@
   "crm_ex_1",
   "crm_status",
   "crm_stage",
-  "crm_lost_remarks",
   "follow_up_date",
   "usage_and_priority_section",
   "partner_name",
@@ -213,7 +212,9 @@
   {
    "fieldname": "license",
    "fieldtype": "Select",
+   "in_filter": 1,
    "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "License",
    "options": "\nTALLY PRIME SILVER\nTALLY PRIME GOLD\nTALLY PRIME AUDITOR\nRENTAL\nNEW CASE\nTALLY.ERP9 AUDITOR\nTALLY.ERP9 GOLD\nTALLY.ERP9 SILVER\nTALLY PRIME SERVER"
   },
@@ -297,7 +298,7 @@
    "fieldname": "crm_ref",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Reference Status (Active/Moved Out)",
+   "label": "Reference Status ",
    "options": "\nACTIVE\nMOVED OUT\nCOMPETITION",
    "search_index": 1
   },
@@ -327,12 +328,13 @@
    "fieldname": "crm_stage",
    "fieldtype": "Select",
    "label": "CRM Stage",
-   "options": "\nCUSTOMER NOT RESPONDING\nFORWARD TO\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION",
+   "options": "\nCUSTOMER NOT\nRESPONDING\nFORWARD TO\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION",
    "search_index": 1
   },
   {
    "fieldname": "crm_lost_remarks",
    "fieldtype": "Small Text",
+   "hidden": 1,
    "label": "Lost Remarks"
   },
   {
@@ -1056,7 +1058,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-18 17:05:50.924885",
+ "modified": "2026-09-20 21:15:54.971414",
  "modified_by": "Administrator",
  "module": "hbs_crm",
  "name": "Hbs Tally Renewal",

@@ -91,7 +91,7 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 		}, 100);
 
 		// View Quotation for selected lead
-		listview.page.add_inner_button(__("👁️ View Quotation"), () => {
+		listview.page.add_inner_button(__("📄 View Quotation"), () => {
 			let checked = listview.get_checked_items(true);
 			if (!checked || checked.length !== 1) {
 				frappe.msgprint({

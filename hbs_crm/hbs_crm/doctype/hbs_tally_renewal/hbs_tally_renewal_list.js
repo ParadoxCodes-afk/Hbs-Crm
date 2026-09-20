@@ -20,6 +20,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			if (lower.includes("auditor")) return "AUDITOR";
 			if (lower.includes("gold")) return "GOLD";
 			if (lower.includes("silver")) return "SILVER";
+			if(lower.includes("server")) return "SERVER";
 			return val;
 		}
 	},
@@ -96,7 +97,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		}, __("Operations"));
 
 		// 2. View Quotation for selected record
-		listview.page.add_inner_button(__("👁️ View Quotation"), () => {
+		listview.page.add_inner_button(__("📄 View Quotation"), () => {
 			let checked = listview.get_checked_items(true);
 			if (!checked || checked.length !== 1) {
 				frappe.msgprint({
@@ -577,6 +578,11 @@ function open_owner_bulk_edit_dialog(listview) {
 		return;
 	}
 
+	let single_doc = null;
+	if (checked.length === 1 && listview.data) {
+		single_doc = listview.data.find(d => d.name === checked[0]);
+	}
+
 	let d = new frappe.ui.Dialog({
 		title: __("⚡ Quick Edit Records ({0} selected)", [checked.length]),
 		size: "large",
@@ -596,19 +602,22 @@ function open_owner_bulk_edit_dialog(listview) {
 				label: __("CRM Status"),
 				fieldname: "crm_status",
 				fieldtype: "Select",
-				options: "\nPENDING\nSold\nLost"
+				options: "\nPENDING\nSold\nLost",
+				default: single_doc ? single_doc.crm_status : undefined
 			},
 			{
 				label: __("CRM Stage"),
 				fieldname: "crm_stage",
 				fieldtype: "Select",
-				options: "\nCustomer Not Responding\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION"
+				options: "\nCustomer Not Responding\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION",
+				default: single_doc ? single_doc.crm_stage : undefined
 			},
 			{
 				label: __("Reference Status"),
 				fieldname: "crm_ref",
 				fieldtype: "Select",
-				options: "\nActive\nMoved Out"
+				options: "\nActive\nMoved Out",
+				default: single_doc ? single_doc.crm_ref : undefined
 			},
 			{
 				fieldname: "col2",
@@ -617,12 +626,21 @@ function open_owner_bulk_edit_dialog(listview) {
 			{
 				label: __("Follow-up Date"),
 				fieldname: "follow_up_date",
-				fieldtype: "Date"
+				fieldtype: "Date",
+				default: single_doc ? single_doc.follow_up_date : undefined
 			},
 			{
 				label: __("Last Remarks Date"),
 				fieldname: "last_remarks_date",
-				fieldtype: "Date"
+				fieldtype: "Date",
+				default: single_doc ? single_doc.last_remarks_date : undefined
+			},
+			{
+				label: __("Last Remarks"),
+				fieldname: "last_remark",
+				fieldtype: "Small Text",
+				description: __("Owner can directly edit or update the Last Remarks on the selected record(s)."),
+				default: single_doc ? single_doc.last_remark : undefined
 			},
 			{
 				fieldname: "sec_remarks",
@@ -639,7 +657,7 @@ function open_owner_bulk_edit_dialog(listview) {
 		primary_action_label: __("Update Records"),
 		primary_action(values) {
 			let fields_to_update = {};
-			["crm_status", "crm_stage", "crm_ref", "follow_up_date", "last_remarks_date"].forEach(f => {
+			["crm_status", "crm_stage", "crm_ref", "follow_up_date", "last_remarks_date", "last_remark"].forEach(f => {
 				if (values[f] !== undefined && values[f] !== null && String(values[f]).trim() !== "") {
 					fields_to_update[f] = values[f];
 				}
