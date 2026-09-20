@@ -207,7 +207,8 @@
   {
    "fieldname": "tss_tally_serial",
    "fieldtype": "Data",
-   "label": "TSS Tally Serial"
+   "label": "TSS Tally Serial",
+   "search_index": 1
   },
   {
    "fieldname": "license",
@@ -227,7 +228,8 @@
    "fieldtype": "Date",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "TSS Expiry Date"
+   "label": "TSS Expiry Date",
+   "search_index": 1
   },
   {
    "fieldname": "portal_expiry_date",
@@ -296,7 +298,8 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Reference Status (Active/Moved Out)",
-   "options": "\nACTIVE\nMOVED OUT\nCOMPETITION"
+   "options": "\nACTIVE\nMOVED OUT\nCOMPETITION",
+   "search_index": 1
   },
   {
    "fieldname": "column_break_bdxl",
@@ -308,7 +311,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Executive 1",
-   "options": "User"
+   "options": "User",
+   "search_index": 1
   },
   {
    "fieldname": "crm_status",
@@ -316,13 +320,15 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "CRM Status",
-   "options": "\nPENDING\nSOLD\nLOST"
+   "options": "\nPENDING\nSOLD\nLOST",
+   "search_index": 1
   },
   {
    "fieldname": "crm_stage",
    "fieldtype": "Select",
    "label": "CRM Stage",
-   "options": "\nCUSTOMER NOT RESPONDING\nFORWARD TO\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION"
+   "options": "\nCUSTOMER NOT RESPONDING\nFORWARD TO\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION",
+   "search_index": 1
   },
   {
    "fieldname": "crm_lost_remarks",
@@ -334,7 +340,8 @@
    "fieldname": "follow_up_date",
    "fieldtype": "Date",
    "in_standard_filter": 1,
-   "label": "Follow-up Date"
+   "label": "Follow-up Date",
+   "search_index": 1
   },
   {
    "fieldname": "usage_and_priority_section",
@@ -703,7 +710,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Tally Serial Number",
-   "show_description_on_click": 1
+   "show_description_on_click": 1,
+   "search_index": 1
   },
   {
    "fieldname": "product_family",

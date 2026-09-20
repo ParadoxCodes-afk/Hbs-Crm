@@ -292,11 +292,17 @@ function check_if_owner_or_admin(callback) {
 		return;
 	}
 
+	if (window._hbs_is_owner_or_admin !== undefined) {
+		callback(window._hbs_is_owner_or_admin);
+		return;
+	}
+
 	frappe.call({
 		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_user_hierarchy_role",
 		callback: function (r) {
-			let is_allowed = r.message && r.message.is_owner_or_admin;
-			callback(!!is_allowed);
+			let is_allowed = !!(r.message && r.message.is_owner_or_admin);
+			window._hbs_is_owner_or_admin = is_allowed;
+			callback(is_allowed);
 		}
 	});
 }

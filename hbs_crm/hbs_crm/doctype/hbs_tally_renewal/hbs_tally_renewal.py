@@ -2068,15 +2068,20 @@ def import_renewals_from_excel(file_url):
 		"administrator": "Administrator",
 	}
 
+	user_resolve_cache = {}
 	def resolve_user(val):
 		if not val:
 			return None
 		val_clean = str(val).strip()
+		if val_clean in user_resolve_cache:
+			return user_resolve_cache[val_clean]
 		if frappe.db.exists("User", val_clean, cache=True):
+			user_resolve_cache[val_clean] = val_clean
 			return val_clean
 		if val_clean.lower() in user_map:
 			target = user_map[val_clean.lower()]
 			if frappe.db.exists("User", target, cache=True):
+				user_resolve_cache[val_clean] = target
 				return target
 		resolved = (
 			frappe.db.get_value("User", {"username": val_clean.lower()})
@@ -2084,7 +2089,9 @@ def import_renewals_from_excel(file_url):
 			or frappe.db.get_value("User", {"first_name": val_clean})
 			or frappe.db.get_value("User", {"full_name": val_clean})
 		)
-		return resolved or val_clean
+		res = resolved or val_clean
+		user_resolve_cache[val_clean] = res
+		return res
 
 	def safe_date(val):
 		if not val:

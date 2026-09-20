@@ -145,11 +145,17 @@ function check_if_owner_or_admin(callback) {
 		return;
 	}
 
+	if (window._hbs_is_owner_or_admin !== undefined) {
+		callback(window._hbs_is_owner_or_admin);
+		return;
+	}
+
 	frappe.call({
 		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_user_hierarchy_role",
 		callback: function (r) {
-			let is_allowed = r.message && r.message.is_owner_or_admin;
-			callback(!!is_allowed);
+			let is_allowed = !!(r.message && r.message.is_owner_or_admin);
+			window._hbs_is_owner_or_admin = is_allowed;
+			callback(is_allowed);
 		}
 	});
 }
@@ -448,6 +454,11 @@ function render_activity_timeline(frm) {
 		return;
 	}
 
+	if (frm.doc.activity && frm.doc.activity.trim() && frm.fields_dict.activity && frm.fields_dict.activity.$wrapper) {
+		frm.fields_dict.activity.$wrapper.html(frm.doc.activity);
+		return;
+	}
+
 	frappe.call({
 		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.get_activity_html",
 		args: {
@@ -663,6 +674,11 @@ function render_old_remarks_timeline(frm) {
 		if (frm.fields_dict.old_remarks_html && frm.fields_dict.old_remarks_html.$wrapper) {
 			frm.fields_dict.old_remarks_html.$wrapper.html("<div style='color:#94a3b8; font-style:italic; padding:10px;'>No past remarks imported yet.</div>");
 		}
+		return;
+	}
+
+	if (frm.doc.old_remarks_html && frm.doc.old_remarks_html.trim() && frm.fields_dict.old_remarks_html && frm.fields_dict.old_remarks_html.$wrapper) {
+		frm.fields_dict.old_remarks_html.$wrapper.html(frm.doc.old_remarks_html);
 		return;
 	}
 

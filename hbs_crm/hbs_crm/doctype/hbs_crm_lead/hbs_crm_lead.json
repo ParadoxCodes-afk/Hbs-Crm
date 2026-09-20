@@ -88,7 +88,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Company Name",
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "fieldname": "company_gst",
@@ -111,7 +112,8 @@
    "in_standard_filter": 1,
    "label": "Contact Phone",
    "length": 10,
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "fieldname": "column_break_etml",
@@ -133,7 +135,8 @@
    "in_standard_filter": 1,
    "label": "Lead Type",
    "options": "hbs product type",
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "fieldname": "license_type",
@@ -186,7 +189,8 @@
    "label": "Executive 1",
    "options": "User",
    "read_only": 1,
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "columns": 1,
@@ -196,7 +200,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Executive 2",
-   "options": "User"
+   "options": "User",
+   "search_index": 1
   },
   {
    "fieldname": "tally_serial",
@@ -238,7 +243,8 @@
    "in_filter": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "new\npending\nwon\nlost"
+   "options": "new\npending\nwon\nlost",
+   "search_index": 1
   },
   {
    "columns": 1,
@@ -247,7 +253,8 @@
    "fieldtype": "Date",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Follow up Date"
+   "label": "Follow up Date",
+   "search_index": 1
   },
   {
    "default": "Now",
@@ -419,7 +426,8 @@
    "fieldtype": "Link",
    "in_filter": 1,
    "label": "Executive 3",
-   "options": "User"
+   "options": "User",
+   "search_index": 1
   }
  ],
  "grid_page_length": 50,

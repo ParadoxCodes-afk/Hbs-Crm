@@ -21,7 +21,8 @@
    "label": "User",
    "options": "User",
    "reqd": 1,
-   "unique": 1
+   "unique": 1,
+   "search_index": 1
   },
   {
    "fetch_from": "user.full_name",
@@ -49,7 +50,8 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Reports To (Manager)",
-   "options": "User"
+   "options": "User",
+   "search_index": 1
   },
   {
    "fetch_from": "reports_to.full_name",

@@ -71,11 +71,15 @@ def apply_data_import_patch():
 		imp_mod.get_df_for_column_header = patched_get_df_for_column_header
 
 		# 3. Helper: resolve_user_link
+		user_resolve_cache = {}
 		def resolve_user_link(value):
 			if not value:
 				return value
 			val_clean = cstr(value).strip()
+			if val_clean in user_resolve_cache:
+				return user_resolve_cache[val_clean]
 			if frappe.db.exists("User", val_clean, cache=True):
+				user_resolve_cache[val_clean] = val_clean
 				return val_clean
 
 			user_map = {
@@ -89,6 +93,7 @@ def apply_data_import_patch():
 			if val_clean.lower() in user_map:
 				target = user_map[val_clean.lower()]
 				if frappe.db.exists("User", target, cache=True):
+					user_resolve_cache[val_clean] = target
 					return target
 
 			resolved = (
@@ -97,7 +102,9 @@ def apply_data_import_patch():
 				or frappe.db.get_value("User", {"first_name": val_clean})
 				or frappe.db.get_value("User", {"full_name": val_clean})
 			)
-			return resolved or val_clean
+			res = resolved or val_clean
+			user_resolve_cache[val_clean] = res
+			return res
 
 		# 4. Patch Row.link_exists & Row.parse_value
 		orig_row_link_exists = imp_mod.Row.link_exists

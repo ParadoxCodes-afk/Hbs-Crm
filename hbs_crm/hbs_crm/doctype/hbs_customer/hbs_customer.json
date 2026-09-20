@@ -46,12 +46,14 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Company Name",
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "fieldname": "company_gst",
    "fieldtype": "Data",
-   "label": "Company GST"
+   "label": "Company GST",
+   "search_index": 1
   },
   {
    "fieldname": "contact_phone",
@@ -59,7 +61,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Contact Phone",
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "fieldname": "column_break_info",
@@ -78,7 +81,8 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Tally Serial"
+   "label": "Tally Serial",
+   "search_index": 1
   },
   {
    "fieldname": "license_type",

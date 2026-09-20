@@ -364,6 +364,11 @@ function render_activity_timeline_js(frm) {
 		return;
 	}
 
+	if (frm.doc.activity && frm.doc.activity.trim() && frm.fields_dict.activity) {
+		frm.fields_dict.activity.$wrapper.html(frm.doc.activity);
+		return;
+	}
+
 	frappe.call({
 		method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.get_activity_html",
 		args: {
@@ -1109,8 +1114,14 @@ function handle_executive_1_permission(frm) {
 		return;
 	}
 
+	if (window._hbs_user_role_type !== undefined) {
+		frm.set_df_property("executive_1", "read_only", window._hbs_user_role_type === "Owner" ? 0 : 1);
+		return;
+	}
+
 	frappe.db.get_value("Hbs User Hierarchy", {"user": frappe.session.user}, "role_type", function(r) {
 		let role = r && (r.role_type || (r.message && r.message.role_type));
+		window._hbs_user_role_type = role;
 		if (role === "Owner") {
 			frm.set_df_property("executive_1", "read_only", 0);
 		} else {
