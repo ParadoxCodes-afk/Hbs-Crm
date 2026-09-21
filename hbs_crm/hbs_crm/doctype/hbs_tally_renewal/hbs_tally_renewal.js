@@ -442,22 +442,32 @@ function render_activity_timeline(frm) {
 }
 
 function open_follow_up_dialog(frm) {
-	let stage_options = [
-		"",
-		"CUSTOMER NOT RESPONDING",
-		"CUSTOMER REQ PENDING",
-		"DEMO/MEETING DONE",
-		"DEMO/ MEETING FIXED",
-		"IN FOLLOW-UP",
-		"LEAD",
-		"NEGOTIATION",
-		"PAYMENT RECEIVED",
-		"PENDING FOR INSTALLATION",
-		"PENDING PAYMENT",
-		"QUOTATION PENDING",
-		"QUOTATION SENT",
-		"WAITING FOR CONFIRMATION"
-	];
+	let df = frappe.meta.get_docfield("Hbs Tally Renewal", "crm_stage");
+	let stage_options = [];
+	if (df && df.options) {
+		stage_options = df.options.split("\n").map(s => s.trim());
+	}
+	if (!stage_options.length) {
+		stage_options = [
+			"",
+			"CUSTOMER NOT RESPONDING",
+			"FORWARD TO",
+			"CUSTOMER REQ PENDING",
+			"DEMO/MEETING DONE",
+			"DEMO/ MEETING FIXED",
+			"IN FOLLOW-UP",
+			"LEAD",
+			"NEGOTIATION",
+			"PAYMENT RECEIVED",
+			"PENDING FOR INSTALLATION",
+			"PENDING PAYMENT",
+			"QUOTATION PENDING",
+			"QUOTATION SENT",
+			"WAITING FOR CONFIRMATION"
+		];
+	}
+	if (!stage_options.includes("")) stage_options.unshift("");
+	if (!stage_options.includes("FORWARD TO")) stage_options.splice(2, 0, "FORWARD TO");
 
 	let d = new frappe.ui.Dialog({
 		title: __("Log Follow-up & Update Status"),
