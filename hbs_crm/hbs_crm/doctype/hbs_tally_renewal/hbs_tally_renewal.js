@@ -444,7 +444,7 @@ function render_activity_timeline(frm) {
 function open_follow_up_dialog(frm) {
 	let stage_options = [
 		"",
-		"Customer Not Responding",
+		"CUSTOMER NOT RESPONDING",
 		"CUSTOMER REQ PENDING",
 		"DEMO/MEETING DONE",
 		"DEMO/ MEETING FIXED",
