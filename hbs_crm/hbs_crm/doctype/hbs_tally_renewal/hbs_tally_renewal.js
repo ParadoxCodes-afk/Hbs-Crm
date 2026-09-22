@@ -199,13 +199,6 @@ function setup_field_permissions(frm) {
 		"license",
 		"tally_version",
 		"acc_expiry_date",
-		"cc_acc_name",
-		"cc_phone",
-		"cc_email_cc",
-		"cc_state",
-		"cc_pincode",
-		"led_city",
-		"address",
 		"partner_name",
 		"frequency_of_usage",
 		"upgrade_priority",
@@ -266,9 +259,16 @@ function setup_field_permissions(frm) {
 
 	// 3. Fields that remain EDITABLE during ALTERATION for normal users:
 	const editable_on_alteration = [
-		"cc_mobile",
+		"cc_acc_name",
 		"cc_contact",
+		"cc_mobile",
+		"cc_phone",
 		"cc_email",
+		"cc_email_cc",
+		"address",
+		"led_city",
+		"cc_state",
+		"cc_pincode",
 		"crm_ex_1"
 	];
 

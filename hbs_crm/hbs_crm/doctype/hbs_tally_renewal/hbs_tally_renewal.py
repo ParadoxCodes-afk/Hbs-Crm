@@ -348,8 +348,7 @@ class HbsTallyRenewal(Document):
 			"Hbs Tally Renewal",
 			self.name,
 			[
-				"tss_tally_serial", "license", "tally_version", "acc_expiry_date",
-				"cc_acc_name", "cc_contact", "cc_phone", "cc_email"
+				"tss_tally_serial", "license", "tally_version", "acc_expiry_date"
 			],
 			as_dict=True
 		)
@@ -362,8 +361,6 @@ class HbsTallyRenewal(Document):
 			("license", "License"),
 			("tally_version", "Tally Version"),
 			("acc_expiry_date", "TSS Expiry Date"),
-			("cc_acc_name", "Account / Company Name"),
-			("cc_phone", "Phone Number"),
 		]
 
 		for fn, label in locked_fields:
@@ -371,7 +368,7 @@ class HbsTallyRenewal(Document):
 			new_val = str(self.get(fn) or "").strip()
 			if old_val != new_val and old_val:
 				frappe.throw(
-					_("<b>Field Locked ({0})!</b><br>Only Mobile Number, Email ID, and Contact Person can be modified on saved records.").format(label),
+					_("<b>Field Locked ({0})!</b><br>Serial, License, Version, and Expiry Date cannot be modified on saved records.").format(label),
 					title=_("Alteration Restricted")
 				)
 
