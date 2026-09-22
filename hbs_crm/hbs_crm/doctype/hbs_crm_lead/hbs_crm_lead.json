@@ -47,6 +47,8 @@
   "custom_activities",
   "activity",
   "quote_tab",
+  "quotation_format_section",
+  "quotation_format",
   "items_section",
   "items",
   "additional_discount",
@@ -295,9 +297,21 @@
    "label": "Quote"
   },
   {
+   "fieldname": "quotation_format_section",
+   "fieldtype": "Section Break",
+   "label": "Quotation Format"
+  },
+  {
+   "default": "HBS Quotation",
+   "fieldname": "quotation_format",
+   "fieldtype": "Select",
+   "label": "Quotation Format",
+   "options": "HBS Quotation\nNew Age Quotation"
+  },
+  {
    "fieldname": "items_section",
    "fieldtype": "Section Break",
-   "label": "items"
+   "label": "Items"
   },
   {
    "fieldname": "items",
@@ -433,7 +447,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-14 12:34:40.266657",
+ "modified": "2026-09-22 11:06:08.305691",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm Lead",

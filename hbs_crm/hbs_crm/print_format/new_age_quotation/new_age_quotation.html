@@ -4,7 +4,7 @@
 <head>
 
     <meta charset="utf-8">
-    <title>HBS Quotation</title>
+    <title>New Age Quotation</title>
 
     <style>
         @page {
@@ -133,32 +133,22 @@
 
         .bank-col {
             display: table-cell;
-            width: 45%;
+            width: 55%;
             font-size: 11px;
             vertical-align: top;
-        }
-
-        .qr-col {
-            display: table-cell;
-            width: 15%;
-            text-align: center;
-            vertical-align: top;
-        }
-
-        .qr-col img {
-            width: 80px;
+            line-height: 1.4;
         }
 
         .sign-col {
             display: table-cell;
-            width: 40%;
+            width: 45%;
             text-align: right;
             vertical-align: top;
         }
 
         .company-name {
             font-weight: bold;
-            margin-bottom: 25px;
+            margin-bottom: 35px;
             white-space: nowrap;
         }
 
@@ -180,23 +170,9 @@
 
 <body>
 
-
-    <!-- PAGE 1 -->
-    <img src="/assets/hbs_crm/images/first_page.jpg" class="full-img">
-
-    <div class="page-break"></div>
-
-
-    <!-- PAGE 2 -->
-    <img src="/assets/hbs_crm/images/second_page.jpg" class="full-img">
-
-    <div class="page-break"></div>
-
-
-    <!-- PAGE 3 -->
     <div class="page-wrapper">
 
-        <img src="/assets/hbs_crm/images/Invoice Header Final.jpg" class="full-img">
+        <img src="/assets/hbs_crm/images/newage_header.jpg" class="full-img">
 
         <div class="jurisdiction">
             All Disputes Subject to Delhi Jurisdiction
@@ -237,7 +213,7 @@
                                 <td style="width: 42px;">No.</td>
                                 <td style="width: 12px; text-align: center;">:</td>
                                 <td style="padding-left: 6px;">
-                                    {% if doc.pi_number %}{% set pi_str = doc.pi_number | string %}{% if 'HBS/' in pi_str %}{{ pi_str }}{% elif 'NIPL/' in pi_str %}{{ pi_str.replace('NIPL/', 'HBS/') }}{% else %}HBS/TS/{{ pi_str }}/{{ fy_str }}{% endif %}{% elif 'HBS/' in (doc.name | string) %}{{ doc.name }}{% else %}HBS/TS/{{ doc.name }}/{{ fy_str }}{% endif %}
+                                    {% if doc.pi_number %}{% set pi_str = doc.pi_number | string %}{% if 'NIPL/' in pi_str %}{{ pi_str }}{% elif 'HBS/' in pi_str %}{{ pi_str.replace('HBS/', 'NIPL/') }}{% else %}NIPL/TS/{{ pi_str }}/{{ fy_str }}{% endif %}{% elif 'NIPL/' in (doc.name | string) %}{{ doc.name }}{% else %}NIPL/TS/{{ doc.name }}/{{ fy_str }}{% endif %}
                                 </td>
                             </tr>
                             <tr>
@@ -446,7 +422,7 @@
             <tr>
                 <td>3</td>
                 <td><b>Support</b></td>
-                <td>{{ doc.support or '3 Months Telephonic Support from invoice date.' }}</td>
+                <td>{{ doc.support or '3 Months Telephonic Support from the date of Invoice.' }}</td>
             </tr>
             <tr>
                 <td>4</td>
@@ -468,23 +444,19 @@
 
                 <div><b>Company's Bank Details</b></div>
 
-                <div>A/c Holder : <b>HBS SOLUTIONS PVT LTD</b></div>
+                <div>A/c Holder's Name : <b>NEWAGE INFOCOM PVT. LTD.</b></div>
                 <div>Bank Name : HDFC BANK</div>
-                <div>A/c No. : 07117630000061</div>
-                <div>Branch / IFSC : PUSHPANJALI ENCL & HDFC0000711</div>
+                <div>A/c No. : 50200036337931</div>
+                <div>Branch & IFS Code : Pushpanjali Enclave & HDFC0000711</div>
+                <div>SWIFT Code : </div>
 
-            </div>
-
-
-            <div class="qr-col">
-                <img src="/assets/hbs_crm/images/cloud_hbs_qr.jpeg">
             </div>
 
 
             <div class="sign-col">
 
                 <div class="company-name">
-                    For HBS SOLUTIONS PVT. LTD.
+                    For NEWAGE INFOCOM PVT. LTD.
                 </div>
 
                 <div>
@@ -497,7 +469,7 @@
 
 
         <div class="page-footer">
-            <img src="/assets/hbs_crm/images/Invoice Footer Final.jpg" class="full-img">
+            <img src="/assets/hbs_crm/images/newage_footer.jpg" class="full-img">
         </div>
 
     </div>

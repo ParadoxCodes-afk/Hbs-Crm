@@ -14,6 +14,8 @@
   "default_sender_name",
   "hbs_lead_pi_number",
   "last_generated_pi_number",
+  "new_age_lead_pi_number",
+  "last_generated_new_age_pi_number",
   "column_break_gen",
   "default_lead_owner",
   "renewal_pi_number_order",
@@ -78,6 +80,20 @@
    "fieldname": "last_generated_pi_number",
    "fieldtype": "Data",
    "label": "Last Generated PI Number",
+   "read_only": 1
+  },
+  {
+   "default": "NIPL/TS/0/26-27",
+   "description": "Write full number or base sequence for New Age (e.g. NIPL/TS/214/26-27 or 214)",
+   "fieldname": "new_age_lead_pi_number",
+   "fieldtype": "Data",
+   "label": "New Age Lead PI Number"
+  },
+  {
+   "description": "Last New Age PI Number generated across quotations",
+   "fieldname": "last_generated_new_age_pi_number",
+   "fieldtype": "Data",
+   "label": "Last Generated New Age PI Number",
    "read_only": 1
   },
   {

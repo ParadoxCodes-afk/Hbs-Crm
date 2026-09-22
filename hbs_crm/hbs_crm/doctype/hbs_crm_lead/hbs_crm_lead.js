@@ -26,6 +26,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		handle_lead_type_terms(frm);
 		handle_referred_by_dependency(frm);
 		handle_executive_1_permission(frm);
+		apply_quotation_format_color(frm);
 		frm.set_df_property("pi_number", "read_only", 1);
 
 		frm.clear_custom_buttons();
@@ -97,6 +98,15 @@ frappe.ui.form.on("Hbs Crm Lead", {
 	},
 	lead_source(frm) {
 		handle_referred_by_dependency(frm);
+	},
+	quotation_format(frm) {
+		apply_quotation_format_color(frm);
+		if (frm.doc.pi_number) {
+			let is_new_age = (frm.doc.quotation_format === "New Age Quotation");
+			if ((is_new_age && !frm.doc.pi_number.startsWith("NIPL/")) || (!is_new_age && !frm.doc.pi_number.startsWith("HBS/"))) {
+				frm.set_value("pi_number", "");
+			}
+		}
 	},
 
 	lead_type(frm) {
@@ -235,6 +245,28 @@ function toggle_won_status_read_only(frm) {
 		frm.set_df_property("items", "read_only", 0);
 		frm.set_df_property("status", "read_only", 0);
 		frm.enable_save();
+	}
+}
+
+function apply_quotation_format_color(frm) {
+	let field = frm.get_field("quotation_format");
+	if (!field || !field.$input) return;
+
+	let is_new_age = (frm.doc.quotation_format === "New Age Quotation");
+	if (is_new_age) {
+		field.$input.css({
+			"background-color": "#f0fdf4",
+			"color": "#15803d",
+			"border": "1.5px solid #86efac",
+			"font-weight": "600"
+		});
+	} else {
+		field.$input.css({
+			"background-color": "#eff6ff",
+			"color": "#1d4ed8",
+			"border": "1.5px solid #93c5fd",
+			"font-weight": "600"
+		});
 	}
 }
 
@@ -1160,7 +1192,10 @@ function open_quotation_preview_dialog(frm, doctype) {
 
 	frappe.call({
 		method: method_name,
-		args: { name: frm.doc.name },
+		args: {
+			name: frm.doc.name,
+			print_format: frm.doc.quotation_format || "HBS Quotation"
+		},
 		freeze: true,
 		freeze_message: __("Generating Quotation Preview..."),
 		callback: function (r) {

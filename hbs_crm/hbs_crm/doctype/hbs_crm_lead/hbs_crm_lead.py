@@ -80,22 +80,22 @@ def get_logged_in_user_context(user=None):
 	}
 
 
-def extract_pi_number_and_prefix(val):
+def extract_pi_number_and_prefix(val, default_prefix="HBS/TS"):
 	"""Extract prefix, serial counter, and suffix from strings like 'HBS/TS/14/26-27' or '14'."""
 	if not val:
-		return "HBS/TS", 0, None
+		return default_prefix, 0, None
 	val_str = str(val).strip()
 	import re
 	m = re.match(r"^(.*?/)?(\d+)(/.*)?$", val_str)
 	if m:
-		prefix = (m.group(1) or "HBS/TS/").rstrip("/")
+		prefix = (m.group(1) or f"{default_prefix}/").rstrip("/")
 		number = int(m.group(2))
 		suffix = (m.group(3) or "").lstrip("/") or None
 		return prefix, number, suffix
 	digits = re.findall(r"\d+", val_str)
 	if digits:
-		return "HBS/TS", int(digits[0]), None
-	return "HBS/TS", 0, None
+		return default_prefix, int(digits[0]), None
+	return default_prefix, 0, None
 
 
 def get_current_fy_str(date_val=None):
@@ -105,23 +105,26 @@ def get_current_fy_str(date_val=None):
 	return f"{str(fy_start)[-2:]}-{str(fy_start + 1)[-2:]}"
 
 
-def get_last_lead_pi_info():
-	"""Query the highest PI number generated on any Lead in the database."""
+def get_last_lead_pi_info(is_new_age=False):
+	"""Query the highest PI number generated on any Lead in the database for HBS or New Age."""
+	cond = "(`quotation_format` = 'New Age Quotation' OR `pi_number` LIKE 'NIPL/%')" if is_new_age \
+		else "((`quotation_format` != 'New Age Quotation' OR `quotation_format` IS NULL) AND (`pi_number` NOT LIKE 'NIPL/%'))"
 	rows = frappe.db.sql(
-		"""
+		f"""
 		SELECT pi_number FROM `tabHbs Crm Lead`
-		WHERE pi_number IS NOT NULL AND pi_number != ''
+		WHERE pi_number IS NOT NULL AND pi_number != '' AND {cond}
 		ORDER BY creation DESC LIMIT 100
 		""",
 		as_dict=True
 	)
 	max_num = 0
 	last_full_str = None
+	default_pfx = "NIPL/TS" if is_new_age else "HBS/TS"
 	for r in rows:
 		val = (r.pi_number or "").strip()
 		if not val:
 			continue
-		_, num, _ = extract_pi_number_and_prefix(val)
+		_, num, _ = extract_pi_number_and_prefix(val, default_prefix=default_pfx)
 		if num > max_num:
 			max_num = num
 			last_full_str = val
@@ -135,35 +138,45 @@ def assign_lead_pi_and_date(doc):
 		if not doc.is_new():
 			doc.db_set("quotation_date", today)
 		doc.quotation_date = today
+	is_new_age = (getattr(doc, "quotation_format", None) == "New Age Quotation")
+	has_wrong_prefix = bool(doc.pi_number and (
+		(is_new_age and not str(doc.pi_number).startswith("NIPL/")) or
+		(not is_new_age and not str(doc.pi_number).startswith("HBS/"))
+	))
 
-	if not getattr(doc, "pi_number", None):
-		admin_val = frappe.db.get_single_value("Hbs CRM Settings", "hbs_lead_pi_number")
-		last_gen_val = frappe.db.get_single_value("Hbs CRM Settings", "last_generated_pi_number")
+	if not getattr(doc, "pi_number", None) or has_wrong_prefix:
+		setting_field = "new_age_lead_pi_number" if is_new_age else "hbs_lead_pi_number"
+		last_gen_field = "last_generated_new_age_pi_number" if is_new_age else "last_generated_pi_number"
+		default_prefix = "NIPL/TS" if is_new_age else "HBS/TS"
 
-		prefix, admin_num, suffix = extract_pi_number_and_prefix(admin_val)
-		_, last_gen_num, _ = extract_pi_number_and_prefix(last_gen_val)
-		last_db_num, _ = get_last_lead_pi_info()
+		admin_val = frappe.db.get_single_value("Hbs CRM Settings", setting_field)
+		last_gen_val = frappe.db.get_single_value("Hbs CRM Settings", last_gen_field)
+
+		prefix, admin_num, suffix = extract_pi_number_and_prefix(admin_val, default_prefix=default_prefix)
+		_, last_gen_num, _ = extract_pi_number_and_prefix(last_gen_val, default_prefix=default_prefix)
+		last_db_num, _ = get_last_lead_pi_info(is_new_age=is_new_age)
 
 		next_num = max(admin_num, last_gen_num, last_db_num) + 1
 		fy_str = suffix or get_current_fy_str(today)
-		prefix_clean = prefix or "HBS/TS"
+		prefix_clean = prefix or default_prefix
 		full_pi_number = f"{prefix_clean}/{next_num}/{fy_str}"
 
 		if not doc.is_new():
 			doc.db_set("pi_number", full_pi_number)
 		doc.pi_number = full_pi_number
 
-		# Only update last_generated_pi_number; preserve admin's base order in hbs_lead_pi_number
-		frappe.db.set_single_value("Hbs CRM Settings", "last_generated_pi_number", full_pi_number)
+		# Only update last_generated field; preserve admin's base order
+		frappe.db.set_single_value("Hbs CRM Settings", last_gen_field, full_pi_number)
 
 
 def get_quotation_pdf_attachment(doc):
-	"""Render the HBS Quotation print format to PDF and return an attachments list (or [] on failure)."""
+	"""Render the selected Quotation print format to PDF and return an attachments list (or [] on failure)."""
 	try:
+		pformat = getattr(doc, "quotation_format", None) or "HBS Quotation"
 		pdf_content = frappe.get_print(
 			doctype=doc.doctype,
 			name=doc.name,
-			print_format="HBS Quotation",
+			print_format=pformat,
 			as_pdf=True,
 		)
 		if pdf_content:
@@ -799,18 +812,19 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 
 
 @frappe.whitelist()
-def get_lead_quotation_html(name):
-	"""Render the HBS Quotation print format to HTML for preview inside modal."""
+def get_lead_quotation_html(name, print_format=None):
+	"""Render the selected Quotation print format to HTML for preview inside modal."""
 	doc = frappe.get_doc("Hbs Crm Lead", name)
 	user = frappe.session.user if frappe.session else "System"
 	if not is_owner_or_admin(user) and not has_permission(doc, "read", user):
 		frappe.throw(_("Permission Denied"), frappe.PermissionError)
 
 	assign_lead_pi_and_date(doc)
+	pformat = print_format or getattr(doc, "quotation_format", None) or "HBS Quotation"
 	raw_html = frappe.get_print(
 		doctype="Hbs Crm Lead",
 		name=name,
-		print_format="HBS Quotation",
+		print_format=pformat,
 		as_pdf=False
 	)
 	import re
