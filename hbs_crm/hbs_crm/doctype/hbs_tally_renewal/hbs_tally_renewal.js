@@ -349,42 +349,30 @@ function setup_field_permissions(frm) {
 				}
 			});
 
-			// Lock Quote tab editing for non-admin/owner users (description remains editable)
+			// Quote tab editing: Allow users to alter items and item_name
+			frm.set_df_property("items", "read_only", 0);
+			if (frm.fields_dict.items && frm.fields_dict.items.grid) {
+				let grid = frm.fields_dict.items.grid;
+				grid.cannot_add_rows = false;
+				["item_name", "qty", "rate", "discount_amount", "tax", "amount", "hsn", "description"].forEach(col => {
+					grid.update_docfield_property(col, "read_only", 0);
+				});
+				if (grid.wrapper) {
+					grid.wrapper.find(".grid-remove-rows, .grid-add-row, .grid-delete-row, .grid-duplicate-row").show();
+				}
+				grid.refresh();
+			}
+
 			if (!is_admin) {
-				frm.set_df_property("items", "read_only", 0);
 				frm.set_df_property("additional_discount", "read_only", 1);
 				["payment_terms", "delivery", "support", "taxes", "validity"].forEach(fn => {
 					frm.set_df_property(fn, "read_only", 1);
 				});
-				if (frm.fields_dict.items && frm.fields_dict.items.grid) {
-					let grid = frm.fields_dict.items.grid;
-					grid.cannot_add_rows = true;
-					["item_name", "qty", "rate", "discount_amount", "tax", "amount", "hsn"].forEach(col => {
-						grid.update_docfield_property(col, "read_only", 1);
-					});
-					grid.update_docfield_property("description", "read_only", 0);
-					if (grid.wrapper) {
-						grid.wrapper.find(".grid-remove-rows, .grid-add-row, .grid-delete-row, .grid-duplicate-row").hide();
-					}
-					grid.refresh();
-				}
 			} else {
-				frm.set_df_property("items", "read_only", 0);
 				frm.set_df_property("additional_discount", "read_only", 0);
 				["payment_terms", "delivery", "support", "taxes", "validity"].forEach(fn => {
 					frm.set_df_property(fn, "read_only", 0);
 				});
-				if (frm.fields_dict.items && frm.fields_dict.items.grid) {
-					let grid = frm.fields_dict.items.grid;
-					grid.cannot_add_rows = false;
-					["item_name", "qty", "rate", "discount_amount", "tax", "amount", "hsn", "description"].forEach(col => {
-						grid.update_docfield_property(col, "read_only", 0);
-					});
-					if (grid.wrapper) {
-						grid.wrapper.find(".grid-remove-rows, .grid-add-row, .grid-delete-row, .grid-duplicate-row").show();
-					}
-					grid.refresh();
-				}
 			}
 		}
 	});

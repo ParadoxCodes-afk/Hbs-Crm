@@ -372,41 +372,11 @@ class HbsTallyRenewal(Document):
 					title=_("Alteration Restricted")
 				)
 
-		# Enforce quote items and rate lock for normal users
+		# Enforce additional discount lock for normal users
 		old_discount = frappe.db.get_value("Hbs Tally Renewal", self.name, "additional_discount") or 0
 		if frappe.utils.flt(self.additional_discount) != frappe.utils.flt(old_discount):
 			frappe.throw(
 				_("<b>Quote Locked!</b><br>Only Admin/Owner can change additional discount."),
-				title=_("Alteration Restricted")
-			)
-
-		old_items = frappe.get_all(
-			"hbs crm items",
-			filters={"parent": self.name, "parenttype": "Hbs Tally Renewal"},
-			fields=["item_name", "qty", "rate", "discount_amount"],
-			order_by="idx asc"
-		)
-		new_items = [
-			{
-				"item_name": str(r.item_name or "").strip(),
-				"qty": frappe.utils.flt(r.qty),
-				"rate": frappe.utils.flt(r.rate),
-				"discount_amount": frappe.utils.flt(r.discount_amount),
-			}
-			for r in getattr(self, "items", [])
-		]
-		old_items_clean = [
-			{
-				"item_name": str(r.item_name or "").strip(),
-				"qty": frappe.utils.flt(r.qty),
-				"rate": frappe.utils.flt(r.rate),
-				"discount_amount": frappe.utils.flt(r.discount_amount),
-			}
-			for r in old_items
-		]
-		if old_items_clean and new_items != old_items_clean:
-			frappe.throw(
-				_("<b>Quote Locked!</b><br>Only Admin/Owner can modify quotation items or rates."),
 				title=_("Alteration Restricted")
 			)
 
