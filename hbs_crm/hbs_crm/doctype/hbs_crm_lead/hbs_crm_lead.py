@@ -1150,21 +1150,55 @@ def backfill_last_remarks():
 		pass
 
 
+def is_admin_owner_or_manager(user=None):
+	"""Check if user is Admin, Owner, or Manager in hierarchy or CRM settings."""
+	user = user or (frappe.session.user if frappe.session else "Administrator")
+	if not user or user in ("Administrator", "System"):
+		return True
+	user_roles = frappe.get_roles(user) if hasattr(frappe, "get_roles") else []
+	admin_roles = ["System Manager", "Administrator", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"]
+	if any(r in user_roles for r in admin_roles):
+		return True
+	role_type = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
+	if role_type in ("Owner", "Manager"):
+		return True
+	default_owner = frappe.db.get_single_value("Hbs CRM Settings", "default_lead_owner")
+	if default_owner and default_owner == user:
+		return True
+	return False
+
+
 @frappe.whitelist()
 def get_overdue_followup_summary():
-	"""Return count and cutoff date of active leads with no follow-up for >= 10 days."""
+	"""Return count and cutoff date of active leads with no follow-up for >= 10 days scoped by user role."""
+	user = frappe.session.user
 	cutoff_date = frappe.utils.add_days(frappe.utils.nowdate(), -10)
-	count = frappe.db.sql("""
-		SELECT COUNT(*) FROM `tabHbs Crm Lead`
-		WHERE status NOT IN ('won', 'lost')
-		  AND (
-			(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
-			OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
-		  )
-	""", (cutoff_date, cutoff_date))[0][0]
+	is_admin_mgr = is_admin_owner_or_manager(user)
+
+	if is_admin_mgr:
+		count = frappe.db.sql("""
+			SELECT COUNT(*) FROM `tabHbs Crm Lead`
+			WHERE status NOT IN ('won', 'lost')
+			  AND (
+				(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
+				OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
+			  )
+		""", (cutoff_date, cutoff_date))[0][0]
+	else:
+		count = frappe.db.sql("""
+			SELECT COUNT(*) FROM `tabHbs Crm Lead`
+			WHERE status NOT IN ('won', 'lost')
+			  AND (executive_1 = %s OR executive_2 = %s OR executive_3 = %s OR owner = %s)
+			  AND (
+				(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
+				OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
+			  )
+		""", (user, user, user, user, cutoff_date, cutoff_date))[0][0]
+
 	return {
 		"count": count or 0,
-		"cutoff_date": cutoff_date
+		"cutoff_date": cutoff_date,
+		"is_admin_or_manager": is_admin_mgr
 	}
 
 
