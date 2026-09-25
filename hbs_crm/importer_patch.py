@@ -164,7 +164,10 @@ def apply_data_import_patch():
 			if not doc_id:
 				serial = doc.get("tally_serial") or doc.get("tss_tally_serial")
 				if serial:
-					doc_id = frappe.db.get_value(self.doctype, {"tally_serial": str(serial).strip()}, "name")
+					clean_serial = str(serial).strip()
+					if clean_serial.endswith(".0"):
+						clean_serial = clean_serial[:-2].strip()
+					doc_id = frappe.db.get_value(self.doctype, {"tally_serial": clean_serial}, "name")
 
 			if not doc_id or not frappe.db.exists(self.doctype, doc_id):
 				return self.insert_record(doc)

@@ -49,6 +49,8 @@ def is_genuine_tally_serial(serial):
 	if not serial:
 		return False
 	raw_serial = str(serial).strip()
+	if raw_serial.endswith(".0"):
+		raw_serial = raw_serial[:-2].strip()
 	digits = "".join(filter(str.isdigit, raw_serial))
 	if len(digits) != 9 or len(raw_serial) != 9 or not raw_serial.isdigit():
 		return False
@@ -175,7 +177,8 @@ class HbsTallyRenewal(Document):
 		self.auto_fill_quote_items()
 
 		# Auto-assign quotation date and PI number if items exist and not in import
-		if getattr(self, "items", None) and len(self.items) > 0 and not getattr(self.flags, "in_import", False):
+		is_import = getattr(self.flags, "in_import", False) or getattr(frappe.flags, "in_import", False)
+		if getattr(self, "items", None) and len(self.items) > 0 and not is_import:
 			if not getattr(self, "quotation_date", None):
 				self.quotation_date = frappe.utils.nowdate()
 			if not getattr(self, "pi_number", None):
@@ -297,7 +300,8 @@ class HbsTallyRenewal(Document):
 		self.total_tax = total_tax
 		self.total_after_tax = total_before_tax - additional_discount
 		self.final_total = int(frappe.utils.flt(total_before_tax - additional_discount + total_tax) + 0.5)
-		if self.final_total > 0 and not getattr(self.flags, "in_import", False):
+		is_import = getattr(self.flags, "in_import", False) or getattr(frappe.flags, "in_import", False)
+		if self.final_total > 0 and not is_import:
 			self.cc_amount = self.final_total
 
 	def onload(self):
@@ -333,6 +337,7 @@ class HbsTallyRenewal(Document):
 			or getattr(self.flags, "in_api_sync", False)
 			or getattr(self.flags, "in_follow_up", False)
 			or getattr(self.flags, "in_import", False)
+			or getattr(frappe.flags, "in_import", False)
 			or getattr(self.flags, "in_migrate", False)
 			or getattr(self.flags, "in_takeover", False)
 			or getattr(frappe.flags, "in_takeover", False)
@@ -397,6 +402,8 @@ class HbsTallyRenewal(Document):
 		serial_to_check = self.tally_serial or self.tss_tally_serial
 		if serial_to_check:
 			raw_serial = str(serial_to_check).strip()
+			if raw_serial.endswith(".0"):
+				raw_serial = raw_serial[:-2].strip()
 			if not is_genuine_tally_serial(raw_serial):
 				frappe.throw(_("Invalid Serial Number"), title=_("Invalid Serial Number"))
 
