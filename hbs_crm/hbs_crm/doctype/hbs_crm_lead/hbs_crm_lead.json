@@ -29,6 +29,7 @@
   "lead_type",
   "license_type",
   "last_remark",
+  "last_remarks_date",
   "address_section",
   "address",
   "column_break_mslc",
@@ -152,6 +153,12 @@
    "fieldtype": "Small Text",
    "hidden": 1,
    "label": "Last Remark",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_remarks_date",
+   "fieldtype": "Date",
+   "label": "Last Remarks Date",
    "read_only": 1
   },
   {

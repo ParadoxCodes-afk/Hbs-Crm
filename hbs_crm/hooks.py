@@ -157,23 +157,11 @@ after_migrate = "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.backfill_last
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"hbs_crm.tasks.all"
-# 	],
-# 	"daily": [
-# 		"hbs_crm.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"hbs_crm.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"hbs_crm.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"hbs_crm.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"daily": [
+		"hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.send_daily_pending_followup_digest"
+	]
+}
 
 # Testing
 # -------

@@ -38,6 +38,19 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		}
 
 		if (!frm.is_new()) {
+			if (frm.doc.status !== "won" && frm.doc.status !== "lost") {
+				let last_date = frm.doc.last_remarks_date || (frm.doc.creation ? frm.doc.creation.split(" ")[0] : null);
+				if (last_date) {
+					let days = frappe.datetime.get_diff(frappe.datetime.get_today(), last_date);
+					if (days >= 10) {
+						frm.dashboard.set_headline_alert(
+							__("⚠️ Overdue Follow-up: This lead has not received any follow-up remarks in the last {0} days!", [days]),
+							"orange"
+						);
+					}
+				}
+			}
+
 			frm.add_custom_button(__("📄 View Quotation"), function () {
 				open_quotation_preview_dialog(frm, "Hbs Crm Lead");
 			});

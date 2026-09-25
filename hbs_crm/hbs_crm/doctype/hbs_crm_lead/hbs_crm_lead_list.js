@@ -2,24 +2,13 @@
 // For license information, please see license.txt
 
 frappe.listview_settings['Hbs Crm Lead'] = {
-	add_fields: ["contact_name", "company_name", "last_remark", "lead_type", "executive_1", "executive_2", "executive_3", "tally_serial", "status", "follow_up_date", "follow_up_time"],
+	add_fields: ["contact_name", "company_name", "last_remark", "last_remarks_date", "creation", "lead_type", "executive_1", "executive_2", "executive_3", "tally_serial", "status", "follow_up_date", "follow_up_time"],
 	hide_name_column: true,
 	order_by: "follow_up_date asc, follow_up_time asc",
 	formatters: {
-		company_name(val, df, doc) {
+		company_name(val) {
 			let text = val ? frappe.utils.escape_html(val) : "";
-			if (!doc.last_remark) {
-				return `<span title="${text}"><b>${text}</b></span>`;
-			}
-			let remark = frappe.utils.escape_html(doc.last_remark);
-			return `
-				<span style="display: inline-flex; align-items: center; gap: 6px; max-width: 100%;">
-					<span class="text-truncate" style="display: inline-block; max-width: 230px; vertical-align: middle;" title="${text}"><b>${text}</b></span>
-					<span style="cursor: help; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 19px; height: 19px; border-radius: 50%; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; margin-left: 2px;" title="Latest Remark:&#10;${remark}">
-						<svg style="width: 11px; height: 11px; fill: currentColor;" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
-					</span>
-				</span>
-			`;
+			return `<span title="${text}"><b>${text}</b></span>`;
 		},
 		executive_1(val) {
 			if (!val) return "";
@@ -89,6 +78,35 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 				delete frappe.route_options.follow_up_date;
 			}
 		}, 100);
+
+		// Overdue follow-up alert banner (>= 10 days inactive)
+		frappe.call({
+			method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.get_overdue_followup_summary",
+			callback: function (r) {
+				if (r && r.message && r.message.count > 0) {
+					listview.page.main.find(".lead-overdue-banner").remove();
+					let banner_html = `
+						<div class="lead-overdue-banner" style="display: flex; align-items: center; justify-content: space-between; margin: 8px 15px 4px 15px; padding: 9px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 13px; color: #92400e;">
+							<div style="display: flex; align-items: center; gap: 8px;">
+								<span style="font-size: 15px;">⚠️</span>
+								<span><b>Attention:</b> <b>${r.message.count}</b> active lead(s) have not received any follow-up in the last 10+ days.</span>
+							</div>
+							<button class="btn btn-xs btn-warning btn-filter-overdue" style="font-weight: 600; cursor: pointer; border-radius: 4px;">
+								🔍 View Inactive Leads
+							</button>
+						</div>
+					`;
+					listview.page.main.prepend(banner_html);
+					listview.page.main.find(".btn-filter-overdue").on("click", function () {
+						listview.filter_area.clear();
+						listview.filter_area.add([
+							["Hbs Crm Lead", "status", "not in", ["won", "lost"]],
+							["Hbs Crm Lead", "last_remarks_date", "<=", r.message.cutoff_date]
+						]);
+					});
+				}
+			}
+		});
 
 		// View Quotation for selected lead
 		listview.page.add_inner_button(__("📄 View Quotation"), () => {

@@ -226,6 +226,9 @@ class HbsCrmLead(Document):
 		if not self.quotation_date:
 			self.quotation_date = frappe.utils.nowdate()
 
+		if not self.last_remarks_date:
+			self.last_remarks_date = frappe.utils.nowdate()
+
 		if getattr(self, "items", None) and len(self.items) > 0 and not getattr(self, "pi_number", None):
 			assign_lead_pi_and_date(self)
 
@@ -362,31 +365,49 @@ class HbsCrmLead(Document):
 
 	def sync_primary_contact_to_all_contacts(self):
 		"""Ensure primary contact details populate automatically in the All Contacts table and stay in sync."""
-		if not self.contact_name and not self.contact_phone and not self.contact_email:
+		name = (self.contact_name or "").strip()
+		phone = (self.contact_phone or "").strip()
+		email = (self.contact_email or "").strip()
+
+		if not name and not phone and not email:
 			return
 
 		if not getattr(self, "all_contacts", None):
 			self.all_contacts = []
 
-		matched_row = None
-		for row in self.all_contacts:
-			if (
-				(self.contact_phone and row.contact_phone == self.contact_phone) or
-				(self.contact_email and row.contact_email == self.contact_email) or
-				(self.contact_name and row.contact_name == self.contact_name)
-			):
-				matched_row = row
-				break
+		phone_exists = False
+		if phone:
+			for row in self.all_contacts:
+				if (row.contact_phone or "").strip() == phone:
+					phone_exists = True
+					if name and not (row.contact_name or "").strip():
+						row.contact_name = name
+					if email and not (row.contact_email or "").strip():
+						row.contact_email = email
+					if self.contact_designation:
+						row.contact_designation = self.contact_designation
+					break
 
-		if matched_row:
-			matched_row.contact_designation = self.contact_designation
-		else:
+		if phone and not phone_exists:
 			self.append("all_contacts", {
-				"contact_name": self.contact_name,
-				"contact_phone": self.contact_phone,
-				"contact_email": self.contact_email,
+				"contact_name": name,
+				"contact_phone": phone,
+				"contact_email": email,
 				"contact_designation": self.contact_designation,
 			})
+		elif not phone:
+			has_match = any(
+				(email and (r.contact_email or "").strip() == email) or
+				(name and (r.contact_name or "").strip() == name)
+				for r in self.all_contacts
+			)
+			if not has_match:
+				self.append("all_contacts", {
+					"contact_name": name,
+					"contact_phone": "",
+					"contact_email": email,
+					"contact_designation": self.contact_designation,
+				})
 
 	def validate_follow_up_date(self):
 		"""Ensure follow-up date is valid based on whether the lead is new or existing."""
@@ -509,6 +530,7 @@ class HbsCrmLead(Document):
 				"remark": new_remark
 			})
 			self.last_remark = new_remark
+			self.last_remarks_date = frappe.utils.nowdate()
 			self.remarks = ""
 		elif getattr(self, "custom_activities", None) and not self.last_remark:
 			self.last_remark = self.custom_activities[-1].remark
@@ -1098,7 +1120,7 @@ def get_customer_reference_list(doctype, txt, searchfield, start, page_len, filt
 
 
 def backfill_last_remarks():
-	"""Backfill last_remark for all existing leads that don't have it set."""
+	"""Backfill last_remark and last_remarks_date for all existing leads that don't have it set."""
 	try:
 		frappe.db.sql("""
 			UPDATE `tabHbs Crm Lead` l
@@ -1110,6 +1132,182 @@ def backfill_last_remarks():
 			)
 			WHERE (l.last_remark IS NULL OR l.last_remark = '')
 		""")
+		frappe.db.sql("""
+			UPDATE `tabHbs Crm Lead` l
+			SET l.last_remarks_date = COALESCE(
+				(
+					SELECT DATE(date_time) FROM `tabHbs Lead Activity`
+					WHERE parent = l.name AND parenttype = 'Hbs Crm Lead' AND parentfield = 'custom_activities'
+					ORDER BY date_time DESC, creation DESC
+					LIMIT 1
+				),
+				DATE(l.creation)
+			)
+			WHERE l.last_remarks_date IS NULL
+		""")
 		frappe.db.commit()
 	except Exception:
 		pass
+
+
+@frappe.whitelist()
+def get_overdue_followup_summary():
+	"""Return count and cutoff date of active leads with no follow-up for >= 10 days."""
+	cutoff_date = frappe.utils.add_days(frappe.utils.nowdate(), -10)
+	count = frappe.db.sql("""
+		SELECT COUNT(*) FROM `tabHbs Crm Lead`
+		WHERE status NOT IN ('won', 'lost')
+		  AND (
+			(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
+			OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
+		  )
+	""", (cutoff_date, cutoff_date))[0][0]
+	return {
+		"count": count or 0,
+		"cutoff_date": cutoff_date
+	}
+
+
+def send_daily_pending_followup_digest():
+	"""Send daily email digest to managers for all leads with no follow-up for >= 10 days."""
+	cutoff_date = frappe.utils.add_days(frappe.utils.nowdate(), -10)
+	leads = frappe.db.sql("""
+		SELECT 
+			name, company_name, contact_name, contact_phone, lead_type, status,
+			executive_1, COALESCE(last_remarks_date, DATE(creation)) as last_date,
+			last_remark
+		FROM `tabHbs Crm Lead`
+		WHERE status NOT IN ('won', 'lost')
+		  AND (
+			(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
+			OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
+		  )
+		ORDER BY executive_1 ASC, last_date ASC
+	""", (cutoff_date, cutoff_date), as_dict=True)
+
+	if not leads:
+		return
+
+	from collections import defaultdict
+	exec_leads = defaultdict(list)
+	for l in leads:
+		exec_user = l.executive_1 or "Unassigned"
+		exec_leads[exec_user].append(l)
+
+	managers = frappe.db.get_all(
+		"Hbs User Hierarchy",
+		filters={"role_type": ["in", ["Manager", "Owner"]]},
+		pluck="user"
+	)
+	for exec_user in exec_leads.keys():
+		reports_to = frappe.db.get_value("Hbs User Hierarchy", {"user": exec_user}, "reports_to")
+		if reports_to and reports_to not in managers:
+			managers.append(reports_to)
+
+	default_owner = frappe.db.get_single_value("Hbs CRM Settings", "default_lead_owner")
+	if default_owner and default_owner not in managers:
+		managers.append(default_owner)
+
+	if not managers:
+		managers = frappe.get_all("Has Role", filters={"role": "System Manager", "parenttype": "User"}, pluck="parent")
+
+	managers = [m for m in set(managers) if m and m != "Administrator" and "@" in m]
+	if not managers:
+		return
+
+	site_url = frappe.utils.get_url()
+	today_str = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-MMM-yyyy")
+
+	html = f"""
+	<div style="font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; max-width: 750px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+		<div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px;">
+			<h3 style="margin: 0 0 6px 0; color: #991b1b; font-size: 16px;">⚠️ CRM Alert: {len(leads)} Leads Inactive for 10+ Days</h3>
+			<p style="margin: 0; color: #7f1d1d; font-size: 13px;">
+				The following leads have not received any follow-up remarks in the last 10 or more days (as of {today_str}). Please review and discuss with the assigned executives.
+			</p>
+		</div>
+	"""
+
+	for exec_user, lead_list in exec_leads.items():
+		exec_name = frappe.db.get_value("User", exec_user, "full_name") or exec_user
+		html += f"""
+		<div style="margin-bottom: 24px;">
+			<div style="background: #f1f5f9; padding: 8px 12px; border-radius: 6px; font-weight: bold; color: #334155; font-size: 14px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+				<span>👤 Executive: {exec_name} ({exec_user})</span>
+				<span style="color: #dc2626;">{len(lead_list)} pending lead(s)</span>
+			</div>
+			<table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+				<thead>
+					<tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1; text-align: left;">
+						<th style="padding: 6px 8px;">Lead / Company</th>
+						<th style="padding: 6px 8px;">Contact / Phone</th>
+						<th style="padding: 6px 8px;">Type / Status</th>
+						<th style="padding: 6px 8px; text-align: center;">Days Inactive</th>
+						<th style="padding: 6px 8px;">Last Remark</th>
+					</tr>
+				</thead>
+				<tbody>
+		"""
+		for item in lead_list:
+			days_diff = frappe.utils.date_diff(frappe.utils.nowdate(), item.last_date)
+			lead_url = f"{site_url}/app/hbs-crm-lead/{item.name}"
+			company = item.company_name or item.name
+			remark_snippet = (item.last_remark or "No remarks yet")[:80]
+			if len(item.last_remark or "") > 80:
+				remark_snippet += "..."
+
+			html += f"""
+					<tr style="border-bottom: 1px solid #e2e8f0;">
+						<td style="padding: 6px 8px; font-weight: bold;">
+							<a href="{lead_url}" style="color: #2563eb; text-decoration: none;">{company}</a>
+							<div style="font-size: 11px; color: #64748b;">#{item.name}</div>
+						</td>
+						<td style="padding: 6px 8px;">
+							<div>{item.contact_name or '-'}</div>
+							<div style="font-size: 11px; color: #64748b;">{item.contact_phone or ''}</div>
+						</td>
+						<td style="padding: 6px 8px;">
+							<div>{item.lead_type or '-'}</div>
+							<div style="font-size: 11px; color: #64748b;">{item.status or ''}</div>
+						</td>
+						<td style="padding: 6px 8px; text-align: center;">
+							<span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 10px; font-weight: bold; font-size: 11px;">
+								{days_diff}d
+							</span>
+						</td>
+						<td style="padding: 6px 8px; color: #475569; font-size: 11px;">
+							{frappe.utils.escape_html(remark_snippet)}
+						</td>
+					</tr>
+			"""
+		html += """
+				</tbody>
+			</table>
+		</div>
+		"""
+
+	html += """
+	</div>
+	"""
+
+	subject = f"🚨 CRM Alert: {len(leads)} Leads Overdue for Follow-up (10+ Days Inactive)"
+	try:
+		frappe.sendmail(
+			recipients=managers,
+			subject=subject,
+			message=html
+		)
+	except Exception:
+		pass
+
+	for mgr in managers:
+		try:
+			notif = frappe.new_doc("Notification Log")
+			notif.for_user = mgr
+			notif.type = "Alert"
+			notif.document_type = "Hbs Crm Lead"
+			notif.subject = f"⚠️ {len(leads)} Leads have no follow-up for 10+ days across your team."
+			notif.email_content = html
+			notif.insert(ignore_permissions=True)
+		except Exception:
+			pass

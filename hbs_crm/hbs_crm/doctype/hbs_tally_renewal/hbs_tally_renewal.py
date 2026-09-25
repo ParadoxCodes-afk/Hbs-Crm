@@ -472,46 +472,49 @@ class HbsTallyRenewal(Document):
 			frappe.throw(msg, title=_("Duplicate Tally Serial Blocked"))
 
 	def sync_primary_contact_to_all_contacts(self):
-		"""Ensure contact person, mobile, and email populate into All Contacts history."""
+		"""Ensure mobile number, contact person, and email are preserved in All Contacts history."""
 		name = (self.cc_contact or "").strip()
-		mobile = (self.cc_mobile or self.cc_phone or "").strip()
+		mobile = (self.cc_mobile or "").strip()
+		phone = (self.cc_phone or "").strip()
 		email = (self.cc_email or "").strip()
 
-		if not name and not mobile and not email:
+		target_phone = mobile or phone
+
+		if not name and not target_phone and not email:
 			return
 
 		if not getattr(self, "all_contacts", None):
 			self.all_contacts = []
 
-		matched_row = None
-		for row in self.all_contacts:
-			r_name = (row.contact_name or "").strip()
-			r_phone = (row.contact_phone or "").strip()
-			r_email = (row.contact_email or "").strip()
+		phone_exists = False
+		if target_phone:
+			for row in self.all_contacts:
+				if (row.contact_phone or "").strip() == target_phone:
+					phone_exists = True
+					if name and not (row.contact_name or "").strip():
+						row.contact_name = name
+					if email and not (row.contact_email or "").strip():
+						row.contact_email = email
+					break
 
-			if mobile and r_phone == mobile:
-				matched_row = row
-				break
-			if email and r_email == email:
-				matched_row = row
-				break
-			if not mobile and not email and name and r_name == name:
-				matched_row = row
-				break
-
-		if matched_row:
-			if name and not matched_row.contact_name:
-				matched_row.contact_name = name
-			if mobile and not matched_row.contact_phone:
-				matched_row.contact_phone = mobile
-			if email and not matched_row.contact_email:
-				matched_row.contact_email = email
-		else:
+		if target_phone and not phone_exists:
 			self.append("all_contacts", {
 				"contact_name": name,
-				"contact_phone": mobile,
+				"contact_phone": target_phone,
 				"contact_email": email,
 			})
+		elif not target_phone:
+			has_match = any(
+				(email and (r.contact_email or "").strip() == email) or
+				(name and (r.contact_name or "").strip() == name)
+				for r in self.all_contacts
+			)
+			if not has_match:
+				self.append("all_contacts", {
+					"contact_name": name,
+					"contact_phone": "",
+					"contact_email": email,
+				})
 
 	def record_remark_activity(self):
 		"""Record new remark in Hbs Lead Activity child table."""
