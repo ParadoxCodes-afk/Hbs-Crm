@@ -9,9 +9,8 @@ def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	columns = get_columns()
 	data = get_data(filters)
-	chart = get_chart(data)
 	report_summary = get_report_summary(data)
-	return columns, data, None, chart, report_summary
+	return columns, data, None, None, report_summary
 
 
 def get_columns():
@@ -36,36 +35,29 @@ def get_columns():
 			"width": 110,
 		},
 		{
+			"fieldname": "pending_leads",
+			"label": _("Total Pending Lead"),
+			"fieldtype": "Int",
+			"width": 130,
+		},
+		{
+			"fieldname": "won_leads",
+			"label": _("Total Won Lead"),
+			"fieldtype": "Int",
+			"width": 120,
+		},
+		{
+			"fieldname": "lost_leads",
+			"label": _("Total Lost Lead"),
+			"fieldtype": "Int",
+			"width": 120,
+		},
+		{
 			"fieldname": "total_value",
 			"label": _("Total Lead Value (₹)"),
 			"fieldtype": "Currency",
 			"options": "currency",
 			"width": 160,
-		},
-		{
-			"fieldname": "won_leads",
-			"label": _("Won Leads"),
-			"fieldtype": "Int",
-			"width": 110,
-		},
-		{
-			"fieldname": "won_value",
-			"label": _("Won Value (₹)"),
-			"fieldtype": "Currency",
-			"options": "currency",
-			"width": 140,
-		},
-		{
-			"fieldname": "open_leads",
-			"label": _("Open Leads"),
-			"fieldtype": "Int",
-			"width": 110,
-		},
-		{
-			"fieldname": "lost_leads",
-			"label": _("Lost Leads"),
-			"fieldtype": "Int",
-			"width": 100,
 		},
 		{
 			"fieldname": "action",
@@ -107,11 +99,10 @@ def get_data(filters):
 			COALESCE(NULLIF(TRIM(l.executive_1), ''), 'Unassigned') AS executive,
 			COALESCE(NULLIF(TRIM(u.full_name), ''), l.executive_1, 'Unassigned') AS executive_name,
 			COUNT(l.name) AS total_leads,
-			SUM(COALESCE(l.final_total, 0)) AS total_value,
+			SUM(CASE WHEN l.status NOT IN ('won', 'lost') THEN 1 ELSE 0 END) AS pending_leads,
 			SUM(CASE WHEN l.status = 'won' THEN 1 ELSE 0 END) AS won_leads,
-			SUM(CASE WHEN l.status = 'won' THEN COALESCE(l.final_total, 0) ELSE 0 END) AS won_value,
-			SUM(CASE WHEN l.status NOT IN ('won', 'lost') THEN 1 ELSE 0 END) AS open_leads,
-			SUM(CASE WHEN l.status = 'lost' THEN 1 ELSE 0 END) AS lost_leads
+			SUM(CASE WHEN l.status = 'lost' THEN 1 ELSE 0 END) AS lost_leads,
+			SUM(COALESCE(l.final_total, 0)) AS total_value
 		FROM `tabHbs Crm Lead` l
 		LEFT JOIN `tabUser` u ON u.name = l.executive_1
 		{where_clause}
@@ -120,30 +111,13 @@ def get_data(filters):
 	"""
 	data = frappe.db.sql(query, params, as_dict=True)
 	for row in data:
+		row["total_leads"] = int(row.get("total_leads") or 0)
+		row["pending_leads"] = int(row.get("pending_leads") or 0)
+		row["won_leads"] = int(row.get("won_leads") or 0)
+		row["lost_leads"] = int(row.get("lost_leads") or 0)
 		exec_escaped = frappe.utils.escape_html(str(row.executive))
 		row["action"] = f'<button class="btn btn-xs btn-primary btn-drilldown-lead" data-exec="{exec_escaped}" style="font-weight: 600;">🔍 View Leads</button>'
 	return data
-
-
-def get_chart(data):
-	if not data:
-		return None
-
-	labels = [d.executive_name for d in data[:10]]
-	total_leads = [d.total_leads for d in data[:10]]
-	won_leads = [d.won_leads for d in data[:10]]
-
-	return {
-		"data": {
-			"labels": labels,
-			"datasets": [
-				{"name": _("Total Leads"), "values": total_leads},
-				{"name": _("Won Leads"), "values": won_leads},
-			],
-		},
-		"type": "bar",
-		"colors": ["#3b82f6", "#10b981"],
-	}
 
 
 def get_report_summary(data):
@@ -151,9 +125,10 @@ def get_report_summary(data):
 		return None
 
 	total_leads = sum(d.total_leads for d in data)
-	total_value = sum(d.total_value for d in data)
+	pending_leads = sum(d.pending_leads for d in data)
 	won_leads = sum(d.won_leads for d in data)
-	won_value = sum(d.won_value for d in data)
+	lost_leads = sum(d.lost_leads for d in data)
+	total_value = sum(d.total_value for d in data)
 
 	return [
 		{
@@ -162,10 +137,10 @@ def get_report_summary(data):
 			"datatype": "Int",
 		},
 		{
-			"value": total_value,
-			"label": _("Total Pipeline Value"),
-			"datatype": "Currency",
-			"indicator": "blue",
+			"value": pending_leads,
+			"label": _("Total Pending Leads"),
+			"datatype": "Int",
+			"indicator": "orange",
 		},
 		{
 			"value": won_leads,
@@ -174,10 +149,16 @@ def get_report_summary(data):
 			"indicator": "green",
 		},
 		{
-			"value": won_value,
-			"label": _("Total Won Value"),
+			"value": lost_leads,
+			"label": _("Total Lost Leads"),
+			"datatype": "Int",
+			"indicator": "red",
+		},
+		{
+			"value": total_value,
+			"label": _("Total Lead Value"),
 			"datatype": "Currency",
-			"indicator": "green",
+			"indicator": "blue",
 		},
 	]
 
