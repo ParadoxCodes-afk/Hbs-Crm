@@ -2342,3 +2342,270 @@ def import_renewals_from_excel(file_url):
 	}
 
 
+# --- UPDATE SECONDARY DATA (Excel: TSS Tally Serial, License, TSS Expiry Date, Portal Partner Name, crm stage) ---
+@frappe.whitelist()
+def update_secondary_data_from_excel(file_url):
+	"""
+	Update secondary data for Hbs Tally Renewal records from Excel.
+	Columns expected: TSS Tally Serial, License, TSS Expiry Date, Portal Partner Name, crm stage.
+	Matches existing records by TSS Tally Serial / tally_serial / name and updates fields directly.
+	"""
+	user = frappe.session.user if frappe.session else "System"
+	if not is_owner_or_admin(user):
+		frappe.throw(_("Only Owner and Administrator can update data."), title=_("Permission Denied"))
+
+	if not file_url:
+		frappe.throw(_("Excel file is required."))
+
+	file_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+	if not file_name:
+		frappe.throw(_("Uploaded file not found in system."))
+
+	file_doc = frappe.get_doc("File", file_name)
+	content = file_doc.get_content()
+	if not content:
+		frappe.throw(_("Uploaded file is empty or could not be read."))
+
+	if isinstance(content, str):
+		content = content.encode("utf-8")
+
+	import io
+	import datetime
+	import re
+
+	raw_headers = []
+	raw_data_rows = []
+
+	if content.startswith(b"PK"):
+		import openpyxl
+		wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+		ws = wb.active
+		raw_rows = list(ws.iter_rows(values_only=True))
+		if raw_rows:
+			raw_headers = [str(c or "").strip() for c in raw_rows[0]]
+			raw_data_rows = raw_rows[1:]
+	else:
+		import xlrd
+		wb = xlrd.open_workbook(file_contents=content)
+		ws = wb.sheets()[0]
+		raw_headers = [str(ws.cell_value(0, c)).strip() for c in range(ws.ncols)]
+		for r in range(1, ws.nrows):
+			raw_data_rows.append([ws.cell_value(r, c) for c in range(ws.ncols)])
+
+	if not raw_headers or not raw_data_rows:
+		return {"status": "error", "message": _("No data found in uploaded Excel.")}
+
+	def norm_header(h):
+		return re.sub(r"[^a-z0-9]", "", str(h or "").lower())
+
+	col_serial = None
+	col_license = None
+	col_expiry = None
+	col_partner = None
+	col_stage = None
+
+	for idx, h in enumerate(raw_headers):
+		nh = norm_header(h)
+		if nh in ("tsstallyserial", "tallyserial", "serialno", "serial", "serialnumber", "tssserial") and col_serial is None:
+			col_serial = idx
+		elif nh in ("license", "licensetype", "licence") and col_license is None:
+			col_license = idx
+		elif nh in ("tssexpirydate", "expirydate", "tssexpiry", "portalexpirydate", "accexpirydate") and col_expiry is None:
+			col_expiry = idx
+		elif nh in ("portalpartnername", "partnername", "portalpartner", "partner") and col_partner is None:
+			col_partner = idx
+		elif nh in ("crmstage", "stage", "crm_stage") and col_stage is None:
+			col_stage = idx
+
+	if col_serial is None:
+		frappe.throw(_("Excel must contain a 'TSS Tally Serial' column to identify renewal records."))
+
+	# Pre-fetch existing renewals in memory for O(1) matching
+	existing_records = frappe.db.sql(
+		"""
+		SELECT name, tally_serial, tss_tally_serial, cc_acc_name, portal_acc_name
+		FROM `tabHbs Tally Renewal`
+		""",
+		as_dict=True
+	)
+	serial_map = {}
+	for r in existing_records:
+		if r.tally_serial:
+			serial_map[str(r.tally_serial).strip()] = r
+		if r.tss_tally_serial:
+			serial_map[str(r.tss_tally_serial).strip()] = r
+		if r.name:
+			serial_map[str(r.name).strip()] = r
+
+	def safe_date(val):
+		if not val:
+			return None
+		if isinstance(val, (datetime.date, datetime.datetime)):
+			return val.strftime("%Y-%m-%d")
+		if isinstance(val, (int, float)):
+			try:
+				d = datetime.date(1899, 12, 30) + datetime.timedelta(days=int(val))
+				return d.strftime("%Y-%m-%d")
+			except Exception:
+				pass
+		s = str(val).strip()
+		if not s or s.lower() in ("none", "nan", "null", "-", "nat"):
+			return None
+		for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d.%m.%Y", "%d-%b-%Y", "%d-%b-%y", "%d/%m/%y", "%d-%m-%y"):
+			try:
+				return datetime.datetime.strptime(s, fmt).date().strftime("%Y-%m-%d")
+			except ValueError:
+				continue
+		try:
+			return str(frappe.utils.data.getdate(s))
+		except Exception:
+			return None
+
+	def clean_license(val):
+		if not val:
+			return None
+		s = str(val).strip()
+		upper = s.upper()
+		if "AUDITOR" in upper:
+			return "TALLY PRIME AUDITOR"
+		elif "GOLD" in upper:
+			return "TALLY PRIME GOLD"
+		elif "SILVER" in upper:
+			return "TALLY PRIME SILVER"
+		elif "SERVER" in upper:
+			return "TALLY PRIME SERVER"
+		elif "RENTAL" in upper:
+			return "RENTAL"
+		elif "NEW CASE" in upper or "NEW" in upper:
+			return "NEW CASE"
+		return s
+
+	total_rows = len(raw_data_rows)
+	updated_count = 0
+	failed_rows = []
+
+	for row_idx, r in enumerate(raw_data_rows, start=2):
+		if not any(r):
+			continue
+
+		if total_rows > 0 and (row_idx % max(1, total_rows // 20) == 0 or row_idx == total_rows + 1):
+			pct = min(100.0, float(row_idx - 1) / total_rows * 100)
+			frappe.publish_progress(
+				pct,
+				title=_("Updating Secondary Data"),
+				description=_("Processed {0} of {1} rows... (Updated: {2}, Skipped: {3})").format(
+					row_idx - 1, total_rows, updated_count, len(failed_rows)
+				)
+			)
+
+		val_serial = r[col_serial] if col_serial < len(r) else None
+		if val_serial is None or str(val_serial).strip() == "":
+			failed_rows.append({
+				"row": row_idx,
+				"serial": "-",
+				"party": "-",
+				"reason": _("Missing TSS Tally Serial in row")
+			})
+			continue
+
+		raw_serial = re.sub(r"\.0$", "", str(val_serial).strip())
+		clean_serial = "".join(filter(str.isdigit, raw_serial))
+		lookup_key = clean_serial if len(clean_serial) == 9 else raw_serial
+
+		if not is_genuine_tally_serial(lookup_key):
+			failed_rows.append({
+				"row": row_idx,
+				"serial": lookup_key,
+				"party": "-",
+				"reason": _("Invalid Tally Serial (Must be 9 digits starting with 7, digital root 9)")
+			})
+			continue
+
+		target_rec = serial_map.get(lookup_key) or serial_map.get(raw_serial)
+		if not target_rec:
+			partner_display = str(r[col_partner]).strip() if (col_partner is not None and col_partner < len(r) and r[col_partner]) else "-"
+			failed_rows.append({
+				"row": row_idx,
+				"serial": lookup_key,
+				"party": partner_display,
+				"reason": _("Serial Number not found in Hbs Tally Renewal")
+			})
+			continue
+
+		doc_name = target_rec.name
+		party_display = target_rec.cc_acc_name or target_rec.portal_acc_name or "-"
+
+		updates = {}
+
+		# 1. License
+		if col_license is not None and col_license < len(r) and r[col_license]:
+			lic = clean_license(r[col_license])
+			if lic:
+				updates["license"] = lic
+
+		# 2. TSS Expiry Date
+		if col_expiry is not None and col_expiry < len(r) and r[col_expiry]:
+			parsed_exp = safe_date(r[col_expiry])
+			if parsed_exp:
+				updates["acc_expiry_date"] = parsed_exp
+				updates["portal_expiry_date"] = parsed_exp
+			else:
+				failed_rows.append({
+					"row": row_idx,
+					"serial": lookup_key,
+					"party": party_display,
+					"reason": _("Invalid TSS Expiry Date: {0}").format(r[col_expiry])
+				})
+				continue
+
+		# 3. Portal Partner Name
+		if col_partner is not None and col_partner < len(r) and r[col_partner]:
+			p_name = str(r[col_partner]).strip()
+			if p_name:
+				updates["portal_partner_name"] = p_name
+				updates["partner_name"] = p_name
+
+		# 4. crm stage
+		if col_stage is not None and col_stage < len(r) and r[col_stage]:
+			c_stage = str(r[col_stage]).strip()
+			if c_stage:
+				updates["crm_stage"] = c_stage
+
+		if not updates:
+			failed_rows.append({
+				"row": row_idx,
+				"serial": lookup_key,
+				"party": party_display,
+				"reason": _("No values found to update in this row")
+			})
+			continue
+
+		try:
+			frappe.db.set_value("Hbs Tally Renewal", doc_name, updates, update_modified=True)
+			updated_count += 1
+
+			if updated_count % 100 == 0:
+				frappe.db.commit()
+
+		except Exception as e:
+			err_msg = frappe.utils.strip_html(str(e)).strip()
+			failed_rows.append({
+				"row": row_idx,
+				"serial": lookup_key,
+				"party": party_display,
+				"reason": err_msg or _("Database update error")
+			})
+
+	frappe.publish_progress(100, title=_("Updating Secondary Data"), description=_("Update completed!"))
+	frappe.db.commit()
+
+	return {
+		"status": "success",
+		"report_title": _("📊 Secondary Data Update Report"),
+		"created_count": 0,
+		"updated_count": updated_count,
+		"skipped_count": len(failed_rows),
+		"failed_rows": failed_rows
+	}
+
+

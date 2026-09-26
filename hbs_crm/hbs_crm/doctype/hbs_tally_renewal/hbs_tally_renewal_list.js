@@ -145,6 +145,11 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				open_custom_import_data_dialog(listview);
 			}, __("Operations"));
 
+			// --- UPDATE SECONDARY DATA (Excel: TSS Tally Serial, License, TSS Expiry Date, Portal Partner Name, crm stage) ---
+			listview.page.add_inner_button(__("🔄 Update Secondary Data"), () => {
+				open_update_secondary_data_dialog(listview);
+			}, __("Operations"));
+
 			// Import Past Remarks Excel (Admin & Owner only under Operations)
 			listview.page.add_inner_button(__("📂 Import Past Remarks"), () => {
 				open_import_remarks_dialog(listview);
@@ -381,6 +386,46 @@ function open_custom_import_data_dialog(listview) {
 	d.show();
 }
 
+// --- UPDATE SECONDARY DATA DIALOG ---
+function open_update_secondary_data_dialog(listview) {
+	let d = new frappe.ui.Dialog({
+		title: __("🔄 Update Secondary Data (Excel)"),
+		fields: [
+			{
+				label: __("Excel File (.xlsx or .xls)"),
+				fieldname: "file_url",
+				fieldtype: "Attach",
+				reqd: 1,
+				description: __("Columns expected: <b>TSS Tally Serial</b>, <b>License</b>, <b>TSS Expiry Date</b>, <b>Portal Partner Name</b>, <b>crm stage</b>")
+			}
+		],
+		primary_action_label: __("Update Data"),
+		primary_action(values) {
+			if (!values.file_url) {
+				frappe.msgprint(__("Please upload an Excel file first."));
+				return;
+			}
+
+			d.hide();
+
+			frappe.call({
+				method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.update_secondary_data_from_excel",
+				args: {
+					file_url: values.file_url
+				},
+				freeze: true,
+				freeze_message: __("Updating Secondary Data from Excel..."),
+				callback: function (r) {
+					if (r.message) {
+						show_import_result_report(r.message, listview);
+					}
+				}
+			});
+		}
+	});
+	d.show();
+}
+
 function show_import_result_report(data, listview) {
 	let created = data.created_count || 0;
 	let updated = data.updated_count || 0;
@@ -459,7 +504,7 @@ function show_import_result_report(data, listview) {
 	`;
 
 	let report_dialog = new frappe.ui.Dialog({
-		title: __("📊 Renewal Data Import Report"),
+		title: data.report_title || __("📊 Renewal Data Import Report"),
 		size: "large",
 		fields: [
 			{
