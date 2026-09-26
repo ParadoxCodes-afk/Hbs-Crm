@@ -28,8 +28,14 @@ frappe.query_reports["Lead Executive Summary"] = {
 			options: "hbs product type"
 		},
 		{
-			fieldname: "executive",
-			label: __("Executive"),
+			fieldname: "executive_1",
+			label: __("Executive 1"),
+			fieldtype: "Link",
+			options: "User"
+		},
+		{
+			fieldname: "executive_2",
+			label: __("Executive 2"),
 			fieldtype: "Link",
 			options: "User"
 		}
@@ -100,7 +106,8 @@ function open_executive_leads_dialog(report, executive) {
 			from_date: filters.from_date || "",
 			to_date: filters.to_date || "",
 			status: filters.status || "",
-			lead_type: filters.lead_type || ""
+			lead_type: filters.lead_type || "",
+			executive_2: filters.executive_2 || ""
 		},
 		freeze: true,
 		freeze_message: __("Loading leads for {0}...", [exec_label]),

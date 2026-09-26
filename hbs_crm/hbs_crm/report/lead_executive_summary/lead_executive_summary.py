@@ -90,9 +90,14 @@ def get_data(filters):
 		conditions.append("l.lead_type = %(lead_type)s")
 		params["lead_type"] = filters.get("lead_type")
 
-	if filters.get("executive"):
-		conditions.append("l.executive_1 = %(executive)s")
-		params["executive"] = filters.get("executive")
+	exec_1 = filters.get("executive_1") or filters.get("executive")
+	if exec_1:
+		conditions.append("l.executive_1 = %(executive_1)s")
+		params["executive_1"] = exec_1
+
+	if filters.get("executive_2"):
+		conditions.append("l.executive_2 = %(executive_2)s")
+		params["executive_2"] = filters.get("executive_2")
 
 	where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -173,7 +178,7 @@ def get_report_summary(data):
 
 
 @frappe.whitelist()
-def get_executive_lead_details(executive, from_date=None, to_date=None, status=None, lead_type=None):
+def get_executive_lead_details(executive, from_date=None, to_date=None, status=None, lead_type=None, executive_2=None):
 	"""Return all leads belonging to the specified executive matching the report filters."""
 	conditions = []
 	params = {}
@@ -183,6 +188,10 @@ def get_executive_lead_details(executive, from_date=None, to_date=None, status=N
 	else:
 		conditions.append("l.executive_1 = %(executive)s")
 		params["executive"] = executive
+
+	if executive_2:
+		conditions.append("l.executive_2 = %(executive_2)s")
+		params["executive_2"] = executive_2
 
 	if from_date:
 		conditions.append("DATE(l.creation) >= %(from_date)s")
