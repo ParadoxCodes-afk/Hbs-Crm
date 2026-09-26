@@ -608,14 +608,14 @@ function open_owner_bulk_edit_dialog(listview) {
 			{
 				label: __("CRM Stage"),
 				fieldname: "crm_stage",
-				fieldtype: "Data",
+				fieldtype: "Select",
+				options: "\nCUSTOMER NOT RESPONDING\nFORWARD TO\nCUSTOMER REQ PENDING\nDEMO/MEETING DONE\nDEMO/ MEETING FIXED\nIN FOLLOW-UP\nLEAD\nNEGOTIATION\nPAYMENT RECEIVED\nPENDING FOR INSTALLATION\nPENDING PAYMENT\nQUOTATION PENDING\nQUOTATION SENT\nWAITING FOR CONFIRMATION",
 				default: single_doc ? single_doc.crm_stage : undefined
 			},
 			{
 				label: __("Reference Status"),
 				fieldname: "crm_ref",
-				fieldtype: "Select",
-				options: "\nActive\nMoved Out",
+				fieldtype: "Data",
 				default: single_doc ? single_doc.crm_ref : undefined
 			},
 			{

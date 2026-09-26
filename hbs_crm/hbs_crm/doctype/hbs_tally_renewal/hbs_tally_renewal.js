@@ -470,7 +470,8 @@ function open_follow_up_dialog(frm) {
 			{
 				label: __("CRM Stage"),
 				fieldname: "crm_stage",
-				fieldtype: "Data",
+				fieldtype: "Select",
+				options: stage_options,
 				default: frm.doc.crm_stage || "LEAD",
 				reqd: 1
 			},
