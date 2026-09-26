@@ -63,7 +63,9 @@ def get_columns():
 			"fieldname": "action",
 			"label": _("Action"),
 			"fieldtype": "Data",
-			"width": 130,
+			"width": 120,
+			"sortable": False,
+			"filterable": False,
 		},
 	]
 
@@ -116,7 +118,14 @@ def get_data(filters):
 		row["won_leads"] = int(row.get("won_leads") or 0)
 		row["lost_leads"] = int(row.get("lost_leads") or 0)
 		exec_escaped = frappe.utils.escape_html(str(row.executive))
-		row["action"] = f'<button class="btn btn-xs btn-primary btn-drilldown-lead" data-exec="{exec_escaped}" style="font-weight: 600;">🔍 View Leads</button>'
+		row["action"] = (
+			f'<button class="btn btn-default btn-xs btn-drilldown-lead" data-exec="{exec_escaped}" '
+			'style="border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 10px; '
+			'font-size: 11px; font-weight: 500; box-shadow: none; display: inline-flex; align-items: center; gap: 4px;">'
+			'<svg class="icon icon-xs" style="width: 11px; height: 11px;"><use href="#icon-list"></use></svg>'
+			'View Leads'
+			'</button>'
+		)
 	return data
 
 

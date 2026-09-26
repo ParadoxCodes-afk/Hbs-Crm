@@ -36,6 +36,11 @@ frappe.query_reports["Lead Executive Summary"] = {
 	],
 
 	formatter: function(value, row, column, data, default_formatter) {
+		if (column.fieldname === "action") {
+			if (!data || !data.executive) return "";
+			let exec = frappe.utils.escape_html(String(data.executive));
+			return `<button class="btn btn-default btn-xs btn-drilldown-lead" data-exec="${exec}" style="border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 10px; font-size: 11px; font-weight: 500; box-shadow: none; display: inline-flex; align-items: center; gap: 4px;"><svg class="icon icon-xs" style="width: 11px; height: 11px;"><use href="#icon-list"></use></svg>${__("View Leads")}</button>`;
+		}
 		value = default_formatter(value, row, column, data);
 		if (column.fieldname === "won_leads" && data && data.won_leads > 0) {
 			value = `<span style="color: #059669; font-weight: bold;">${value}</span>`;
