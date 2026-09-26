@@ -19,7 +19,7 @@ frappe.query_reports["Lead Executive Summary"] = {
 			fieldname: "status",
 			label: __("Lead Status"),
 			fieldtype: "Select",
-			options: "\ncold\nwarm\nhot\nwon\nlost"
+			options: "\nnew\npending\nwon\nlost"
 		},
 		{
 			fieldname: "lead_type",
@@ -52,6 +52,21 @@ frappe.query_reports["Lead Executive Summary"] = {
 			e.stopPropagation();
 			let exec = $(this).attr("data-exec");
 			open_executive_leads_dialog(report, exec);
+		});
+
+		// Dynamically sync status filter options from Hbs Crm Lead DocType
+		frappe.model.with_doctype("Hbs Crm Lead", function() {
+			let meta = frappe.get_meta("Hbs Crm Lead");
+			let status_df = meta && meta.fields && meta.fields.find(f => f.fieldname === "status");
+			if (status_df && status_df.options) {
+				let opts = status_df.options.split("\n").map(s => s.trim()).filter(Boolean);
+				opts.unshift("");
+				let status_filter = report.get_filter("status");
+				if (status_filter) {
+					status_filter.df.options = opts.join("\n");
+					status_filter.refresh();
+				}
+			}
 		});
 
 		// Also handle double-click or row click on data rows
@@ -99,9 +114,8 @@ function render_leads_drilldown_dialog(executive, exec_label, leads, filters) {
 		st = (st || "").toLowerCase();
 		let color_map = {
 			"won": "badge-success",
-			"hot": "badge-danger",
-			"warm": "badge-warning",
-			"cold": "badge-info",
+			"pending": "badge-warning",
+			"new": "badge-info",
 			"lost": "badge-secondary"
 		};
 		let cls = color_map[st] || "badge-light";
