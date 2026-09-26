@@ -154,6 +154,15 @@
     </table>
 
     <!-- PARTICULARS / ITEMS TABLE -->
+    {% set ns = namespace(has_item_discount=false) %}
+    {% for item in doc.items %}
+        {% if item.discount_amount and (item.discount_amount | float) > 0 %}
+            {% set ns.has_item_discount = true %}
+        {% endif %}
+    {% endfor %}
+    {% set has_item_discount = ns.has_item_discount %}
+    {% set col_span_cnt = 6 if has_item_discount else 5 %}
+
     <table style="border: 1px solid #000;">
         <thead>
             <tr style="background-color: #f2f2f2;">
@@ -162,6 +171,9 @@
                 <th style="width: 75px; border: 1px solid #000; padding: 4px; text-align: center; font-size: 11px;">HSN/SAC</th>
                 <th style="width: 65px; border: 1px solid #000; padding: 4px; text-align: center; font-size: 11px;">Quantity</th>
                 <th style="width: 85px; border: 1px solid #000; padding: 4px 8px; text-align: right; font-size: 11px;">Rate</th>
+                {% if has_item_discount %}
+                <th style="width: 70px; border: 1px solid #000; padding: 4px 8px; text-align: right; font-size: 11px;">Discount</th>
+                {% endif %}
                 <th style="width: 90px; border: 1px solid #000; padding: 4px 8px; text-align: right; font-size: 11px;">Amount</th>
             </tr>
         </thead>
@@ -170,7 +182,10 @@
                 {% for item in doc.items %}
                 {% set hsn = frappe.db.get_value('Hbs Product', item.item_name, 'hsn') or item.hsn or '998313' %}
                 {% set prod_name = frappe.db.get_value('Hbs Product', item.item_name, 'item_name') %}
-                {% set item_amount = (item.amount if (item.amount and item.amount > 0) else (item.qty * item.rate)) %}
+                {% set item_qty = (item.qty or 1) | int %}
+                {% set item_rate = (item.rate | float) if item.rate else 0.0 %}
+                {% set item_disc = (item.discount_amount | float) if item.discount_amount else 0.0 %}
+                {% set item_row_total = (item_qty * item_rate) - item_disc %}
                 <tr>
                     <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">{{ loop.index }}</td>
                     <td style="border: 1px solid #000; padding: 6px 8px; vertical-align: top;">
@@ -186,9 +201,12 @@
                         {% endif %}
                     </td>
                     <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">{{ hsn }}</td>
-                    <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">{{ item.qty | int }} Pcs</td>
-                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top;">{{ "{:,.2f}".format(((item_amount / item.qty) if item.qty else item.rate) | float) }}/Pcs</td>
-                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top; font-weight: bold;">{{ "{:,.2f}".format(item_amount | float) }}</td>
+                    <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">{{ item_qty }} Pcs</td>
+                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top;">{{ "{:,.2f}".format(item_rate) }}/Pcs</td>
+                    {% if has_item_discount %}
+                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top; color: #b91c1c;">{{ "{:,.2f}".format(item_disc) }}</td>
+                    {% endif %}
+                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top; font-weight: bold;">{{ "{:,.2f}".format(item_row_total) }}</td>
                 </tr>
                 {% endfor %}
             {% else %}
@@ -209,19 +227,67 @@
                     <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">998313</td>
                     <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">1 Pcs</td>
                     <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top;">{{ "{:,.2f}".format(default_amount | float) }}/Pcs</td>
+                    {% if has_item_discount %}
+                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top;">—</td>
+                    {% endif %}
                     <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top; font-weight: bold;">{{ "{:,.2f}".format(default_amount | float) }}</td>
                 </tr>
             {% endif %}
         </tbody>
         <tfoot>
-            {% set total_val = (doc.final_total or doc.cc_amount or 5310) | float %}
-            {% set words = frappe.utils.money_in_words(total_val).replace('INR ', 'Indian Rupees ').replace(' and Zero Paise', '') %}
+            {% set subtotal = (doc.total_before_tax or 0) | float %}
+            {% set add_disc = (doc.additional_discount or 0) | float %}
+            {% set tax_val = (doc.total_tax or 0) | float %}
+            {% set raw_total = (subtotal - add_disc + tax_val) if subtotal > 0 else (doc.final_total or doc.cc_amount or 5310) | float %}
+            {% set final_val = (doc.final_total or doc.cc_amount or (raw_total + 0.5) | int or 5310) | float %}
+            {% set round_off = (final_val - raw_total) if subtotal > 0 else 0.0 %}
+            {% set words = frappe.utils.money_in_words(final_val).replace('INR ', 'Indian Rupees ').replace(' and Zero Paise', '') %}
+
+            {% if (doc.items and doc.items | length > 0) or add_disc > 0 or (round_off | abs > 0.009) %}
             <tr>
-                <td colspan="5" style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; font-size: 11px; vertical-align: middle;">
+                <td colspan="{{ col_span_cnt }}" style="border: 1px solid #000; padding: 4px 8px; text-align: right; font-weight: bold; font-size: 11px;">
+                    Sub Total
+                </td>
+                <td style="border: 1px solid #000; padding: 4px 8px; text-align: right; font-weight: bold; font-size: 11px;">
+                    {{ "{:,.2f}".format(subtotal if subtotal > 0 else (final_val / 1.18)) }}
+                </td>
+            </tr>
+            {% if add_disc > 0 %}
+            <tr>
+                <td colspan="{{ col_span_cnt }}" style="border: 1px solid #000; padding: 4px 8px; text-align: right; font-weight: bold; font-size: 11px; color: #b91c1c;">
+                    Additional Discount
+                </td>
+                <td style="border: 1px solid #000; padding: 4px 8px; text-align: right; font-weight: bold; font-size: 11px; color: #b91c1c;">
+                    -{{ "{:,.2f}".format(add_disc) }}
+                </td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td colspan="{{ col_span_cnt }}" style="border: 1px solid #000; padding: 4px 8px; text-align: right; font-weight: bold; font-size: 11px;">
+                    Tax (GST)
+                </td>
+                <td style="border: 1px solid #000; padding: 4px 8px; text-align: right; font-weight: bold; font-size: 11px;">
+                    {{ "{:,.2f}".format(tax_val if tax_val > 0 else (final_val - (final_val / 1.18))) }}
+                </td>
+            </tr>
+            {% if round_off | abs > 0.009 %}
+            <tr>
+                <td colspan="{{ col_span_cnt }}" style="border: 1px solid #000; padding: 4px 8px; text-align: right; font-weight: bold; font-size: 11px;">
+                    Round Off
+                </td>
+                <td style="border: 1px solid #000; padding: 4px 8px; text-align: right; font-weight: bold; font-size: 11px;">
+                    {{ "{:,.2f}".format(round_off) }}
+                </td>
+            </tr>
+            {% endif %}
+            {% endif %}
+
+            <tr>
+                <td colspan="{{ col_span_cnt }}" style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; font-size: 11px; vertical-align: middle;">
                     {{ words }}
                 </td>
                 <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; font-weight: bold; font-size: 12px; vertical-align: middle;">
-                    {{ "{:,.2f}".format(total_val) }}
+                    {{ "{:,.2f}".format(final_val) }}
                 </td>
             </tr>
         </tfoot>

@@ -377,13 +377,7 @@ class HbsTallyRenewal(Document):
 					title=_("Alteration Restricted")
 				)
 
-		# Enforce additional discount lock for normal users
-		old_discount = frappe.db.get_value("Hbs Tally Renewal", self.name, "additional_discount") or 0
-		if frappe.utils.flt(self.additional_discount) != frappe.utils.flt(old_discount):
-			frappe.throw(
-				_("<b>Quote Locked!</b><br>Only Admin/Owner can change additional discount."),
-				title=_("Alteration Restricted")
-			)
+		# Additional discount is editable by users
 
 		# Enforce old remarks lock for normal users
 		old_remarks_val = frappe.db.get_value("Hbs Tally Renewal", self.name, "old_remarks") or ""

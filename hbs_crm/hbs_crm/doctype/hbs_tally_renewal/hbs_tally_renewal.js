@@ -363,13 +363,12 @@ function setup_field_permissions(frm) {
 				grid.refresh();
 			}
 
+			frm.set_df_property("additional_discount", "read_only", 0);
 			if (!is_admin) {
-				frm.set_df_property("additional_discount", "read_only", 1);
 				["payment_terms", "delivery", "support", "taxes", "validity"].forEach(fn => {
 					frm.set_df_property(fn, "read_only", 1);
 				});
 			} else {
-				frm.set_df_property("additional_discount", "read_only", 0);
 				["payment_terms", "delivery", "support", "taxes", "validity"].forEach(fn => {
 					frm.set_df_property(fn, "read_only", 0);
 				});
