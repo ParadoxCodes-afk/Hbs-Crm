@@ -1,0 +1,225 @@
+// Copyright (c) 2026, Hbs and contributors
+// For license information, please see license.txt
+
+frappe.query_reports["Lead Executive Summary"] = {
+	filters: [
+		{
+			fieldname: "from_date",
+			label: __("From Date"),
+			fieldtype: "Date",
+			default: frappe.datetime.add_months(frappe.datetime.get_today(), -1)
+		},
+		{
+			fieldname: "to_date",
+			label: __("To Date"),
+			fieldtype: "Date",
+			default: frappe.datetime.get_today()
+		},
+		{
+			fieldname: "status",
+			label: __("Lead Status"),
+			fieldtype: "Select",
+			options: "\ncold\nwarm\nhot\nwon\nlost"
+		},
+		{
+			fieldname: "lead_type",
+			label: __("Lead Type"),
+			fieldtype: "Link",
+			options: "hbs product type"
+		},
+		{
+			fieldname: "executive",
+			label: __("Executive"),
+			fieldtype: "Link",
+			options: "User"
+		}
+	],
+
+	formatter: function(value, row, column, data, default_formatter) {
+		value = default_formatter(value, row, column, data);
+		if (column.fieldname === "won_leads" && data && data.won_leads > 0) {
+			value = `<span style="color: #059669; font-weight: bold;">${value}</span>`;
+		}
+		if (column.fieldname === "total_leads" && data) {
+			value = `<b>${value}</b>`;
+		}
+		return value;
+	},
+
+	onload: function(report) {
+		// Bind delegated click listener for View Leads drill-down
+		report.page.wrapper.on("click", ".btn-drilldown-lead", function(e) {
+			e.stopPropagation();
+			let exec = $(this).attr("data-exec");
+			open_executive_leads_dialog(report, exec);
+		});
+
+		// Also handle double-click or row click on data rows
+		if (report.datatable) {
+			report.page.wrapper.on("dblclick", ".dt-row", function() {
+				let row_idx = $(this).attr("data-row-index");
+				if (row_idx !== undefined && report.data && report.data[row_idx]) {
+					let exec = report.data[row_idx].executive;
+					if (exec) {
+						open_executive_leads_dialog(report, exec);
+					}
+				}
+			});
+		}
+	}
+};
+
+function open_executive_leads_dialog(report, executive) {
+	let filters = report.get_values() || {};
+	let exec_label = executive === "Unassigned" ? __("Unassigned Leads") : executive;
+
+	frappe.call({
+		method: "hbs_crm.hbs_crm.report.lead_executive_summary.lead_executive_summary.get_executive_lead_details",
+		args: {
+			executive: executive,
+			from_date: filters.from_date || "",
+			to_date: filters.to_date || "",
+			status: filters.status || "",
+			lead_type: filters.lead_type || ""
+		},
+		freeze: true,
+		freeze_message: __("Loading leads for {0}...", [exec_label]),
+		callback: function(r) {
+			let leads = r.message || [];
+			render_leads_drilldown_dialog(executive, exec_label, leads, filters);
+		}
+	});
+}
+
+function render_leads_drilldown_dialog(executive, exec_label, leads, filters) {
+	let total_val = leads.reduce((sum, l) => sum + (parseFloat(l.final_total) || 0), 0);
+	let formatted_total = format_currency(total_val, "INR");
+
+	let get_status_badge = function(st) {
+		st = (st || "").toLowerCase();
+		let color_map = {
+			"won": "badge-success",
+			"hot": "badge-danger",
+			"warm": "badge-warning",
+			"cold": "badge-info",
+			"lost": "badge-secondary"
+		};
+		let cls = color_map[st] || "badge-light";
+		return `<span class="badge ${cls}" style="text-transform: capitalize; font-size: 11px;">${st || 'Open'}</span>`;
+	};
+
+	let build_table_rows = function(lead_list) {
+		if (!lead_list || lead_list.length === 0) {
+			return `<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">${__("No leads found for this executive.")}</td></tr>`;
+		}
+		return lead_list.map((l, idx) => `
+			<tr>
+				<td style="text-align: center; color: #6b7280; font-size: 11px;">${idx + 1}</td>
+				<td>
+					<a href="/app/hbs-crm-lead/${l.name}" target="_blank" style="font-weight: bold; font-family: monospace;">
+						${l.name}
+					</a>
+				</td>
+				<td><b>${frappe.utils.escape_html(l.company_name || '-')}</b></td>
+				<td>${frappe.utils.escape_html(l.contact_name || '-')}</td>
+				<td style="text-align: right; font-weight: 600;">${format_currency(l.final_total, "INR")}</td>
+				<td style="text-align: center; white-space: nowrap;">${l.creation_date || '-'}</td>
+				<td style="text-align: center; white-space: nowrap;">${l.last_remarks_date || '<span class="text-muted">-</span>'}</td>
+				<td style="text-align: center;">${get_status_badge(l.status)}</td>
+			</tr>
+		`).join("");
+	};
+
+	let dialog = new frappe.ui.Dialog({
+		title: __("📋 Leads: {0}", [exec_label]),
+		size: "extra-large",
+		fields: [
+			{
+				fieldname: "header_html",
+				fieldtype: "HTML",
+				options: `
+					<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 15px; flex-wrap: wrap; gap: 10px;">
+						<div>
+							<span style="font-size: 15px; font-weight: bold; color: #1e293b;">${frappe.utils.escape_html(exec_label)}</span>
+							<span class="text-muted" style="margin-left: 10px; font-size: 13px;">Total Leads: <b>${leads.length}</b> | Total Value: <b style="color: #059669;">${formatted_total}</b></span>
+						</div>
+						<div style="display: flex; gap: 8px;">
+							<input type="text" class="form-control form-control-sm lead-filter-input" placeholder="${__('Filter leads by name, company...')}" style="width: 240px; font-size: 12px;">
+							<button class="btn btn-xs btn-default btn-open-lead-list" style="font-weight: 600;">
+								<i class="fa fa-external-link"></i> ${__('Open in List View')}
+							</button>
+						</div>
+					</div>
+				`
+			},
+			{
+				fieldname: "leads_table_html",
+				fieldtype: "HTML",
+				options: `
+					<div style="max-height: 480px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+						<table class="table table-bordered table-hover table-sm" style="margin: 0; font-size: 12px; width: 100%;">
+							<thead style="position: sticky; top: 0; background: #f1f5f9; z-index: 2;">
+								<tr style="color: #334155;">
+									<th style="width: 40px; text-align: center;">#</th>
+									<th style="width: 120px;">${__('Lead ID')}</th>
+									<th style="width: 220px;">${__('Company Name')}</th>
+									<th style="width: 180px;">${__('Contact Person')}</th>
+									<th style="width: 120px; text-align: right;">${__('Lead Value (₹)')}</th>
+									<th style="width: 110px; text-align: center;">${__('Created Date')}</th>
+									<th style="width: 120px; text-align: center;">${__('Last Remarks Date')}</th>
+									<th style="width: 90px; text-align: center;">${__('Status')}</th>
+								</tr>
+							</thead>
+							<tbody class="leads-table-body">
+								${build_table_rows(leads)}
+							</tbody>
+						</table>
+					</div>
+				`
+			}
+		],
+		primary_action_label: __("Close"),
+		primary_action: function() {
+			dialog.hide();
+		}
+	});
+
+	dialog.$wrapper.find(".modal-dialog").css({
+		"max-width": "1150px",
+		"width": "95%"
+	});
+
+	// Live filter in dialog
+	dialog.$wrapper.find(".lead-filter-input").on("input", function() {
+		let q = $(this).val().toLowerCase().trim();
+		if (!q) {
+			dialog.$wrapper.find(".leads-table-body").html(build_table_rows(leads));
+			return;
+		}
+		let filtered = leads.filter(l =>
+			(l.name && l.name.toLowerCase().includes(q)) ||
+			(l.company_name && l.company_name.toLowerCase().includes(q)) ||
+			(l.contact_name && l.contact_name.toLowerCase().includes(q)) ||
+			(l.status && l.status.toLowerCase().includes(q))
+		);
+		dialog.$wrapper.find(".leads-table-body").html(build_table_rows(filtered));
+	});
+
+	// Button to open list view with filters applied
+	dialog.$wrapper.find(".btn-open-lead-list").on("click", function() {
+		let route_opts = {};
+		if (executive && executive !== "Unassigned") {
+			route_opts["executive_1"] = executive;
+		}
+		if (filters.status) {
+			route_opts["status"] = filters.status;
+		}
+		if (filters.lead_type) {
+			route_opts["lead_type"] = filters.lead_type;
+		}
+		dialog.hide();
+		frappe.set_route("List", "Hbs Crm Lead", route_opts);
+	});
+
+	dialog.show();
+}

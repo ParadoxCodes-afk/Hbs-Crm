@@ -140,6 +140,11 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 			}
 			preview_lead_quotation_from_list(checked[0]);
 		});
+
+		// Executive Summary Report
+		listview.page.add_inner_button(__("📊 Executive Summary Report"), () => {
+			frappe.set_route("query-report", "Lead Executive Summary");
+		});
 	}
 };
 
