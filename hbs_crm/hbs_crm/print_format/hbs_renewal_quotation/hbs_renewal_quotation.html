@@ -195,7 +195,7 @@
                         {% if item.description %}
                         <div style="font-size: 10px; margin-top: 2px; text-align: left;">{{ (item.description or '').strip().replace('\n', '<br>') }}</div>
                         {% endif %}
-                        <div>Inclusive of all Taxes (GST {{ (item.tax | int) if item.tax else 18 }}%)</div>
+                        <!-- <div>Inclusive of all Taxes (GST {{ (item.tax | int) if item.tax else 18 }}%)</div> -->
                         {% if doc.acc_expiry_date %}
                         <div>Expiry Date : {{ frappe.utils.formatdate(doc.acc_expiry_date, "dd-MMM-yy") }}</div>
                         {% endif %}
