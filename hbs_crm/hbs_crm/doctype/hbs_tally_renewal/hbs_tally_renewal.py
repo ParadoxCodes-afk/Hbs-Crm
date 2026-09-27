@@ -134,7 +134,38 @@ def assign_renewal_pi_and_date(doc):
 
 
 class HbsTallyRenewal(Document):
+	def normalize_select_fields(self):
+		"""Gracefully handle legacy or unlisted select values from historical imports."""
+		for df in self.meta.get_select_fields():
+			val = self.get(df.fieldname)
+			if not val or df.fieldname == "naming_series":
+				continue
+			options = [opt.strip() for opt in (df.options or "").split("\n") if opt.strip()]
+			if options and val not in options:
+				val_upper = str(val).strip().upper()
+				matched = None
+				for opt in options:
+					if opt.upper() == val_upper:
+						matched = opt
+						break
+				if matched:
+					setattr(self, df.fieldname, matched)
+				elif df.fieldname == "crm_stage":
+					if "FOLLOW" in val_upper:
+						setattr(self, df.fieldname, "IN FOLLOW-UP")
+					elif "RESPOND" in val_upper:
+						setattr(self, df.fieldname, "CUSTOMER NOT RESPONDING")
+					elif "DEMO" in val_upper or "MEETING" in val_upper:
+						setattr(self, df.fieldname, "DEMO/MEETING DONE")
+					elif "LEAD" in val_upper:
+						setattr(self, df.fieldname, "LEAD")
+					elif "QUOTE" in val_upper or "QUOTATION" in val_upper:
+						setattr(self, df.fieldname, "QUOTATION SENT")
+					else:
+						setattr(self, df.fieldname, "")
+
 	def validate(self):
+		self.normalize_select_fields()
 		if self.tally_serial:
 			self.tally_serial = str(self.tally_serial).strip()
 		if self.tss_tally_serial:
@@ -2617,6 +2648,17 @@ def update_secondary_data_from_excel(file_url):
 		if col_stage is not None and col_stage < len(r) and r[col_stage]:
 			c_stage = str(r[col_stage]).strip()
 			if c_stage:
+				c_upper = c_stage.upper()
+				if "FOLLOW" in c_upper:
+					c_stage = "IN FOLLOW-UP"
+				elif "RESPOND" in c_upper:
+					c_stage = "CUSTOMER NOT RESPONDING"
+				elif "DEMO" in c_upper or "MEETING" in c_upper:
+					c_stage = "DEMO/MEETING DONE"
+				elif "LEAD" in c_upper:
+					c_stage = "LEAD"
+				elif "QUOTE" in c_upper or "QUOTATION" in c_upper:
+					c_stage = "QUOTATION SENT"
 				updates["crm_stage"] = c_stage
 
 		if not updates:
