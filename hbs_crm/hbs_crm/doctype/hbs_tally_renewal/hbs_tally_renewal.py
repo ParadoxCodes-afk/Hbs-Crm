@@ -1244,6 +1244,137 @@ def check_selected_portal(names):
 
 
 @frappe.whitelist()
+def get_all_portal_sync_candidates():
+	"""Return all Hbs Tally Renewal records eligible for Tally Portal API sync."""
+	user = frappe.session.user if frappe.session else "System"
+	if not is_owner_or_admin(user):
+		frappe.throw(_("Only Owner and Administrator can sync Tally Portal API."), title=_("Permission Denied"))
+
+	valid_statuses = ("ACTIVE", "MOVED OUT", "MAPPED")
+	return frappe.get_all(
+		"Hbs Tally Renewal",
+		filters={
+			"tally_serial": ["is", "set"],
+			"crm_ref": ["in", valid_statuses]
+		},
+		pluck="name",
+		order_by="creation desc"
+	)
+
+
+@frappe.whitelist()
+def sync_portal_batch(names):
+	"""Sync a batch of Hbs Tally Renewal records with Tally Portal API and return detailed per-record results."""
+	user = frappe.session.user if frappe.session else "System"
+	if not is_owner_or_admin(user):
+		frappe.throw(_("Only Owner and Administrator can sync Tally Portal API."), title=_("Permission Denied"))
+
+	if isinstance(names, str):
+		try:
+			names = json.loads(names)
+		except Exception:
+			names = [names]
+
+	if not names:
+		return {
+			"status": "success",
+			"success_count": 0,
+			"failed_count": 0,
+			"total_fields_updated": 0,
+			"results": []
+		}
+
+	results = []
+	success = 0
+	failed = 0
+	total_fields_updated = 0
+	valid_statuses = {"ACTIVE", "MOVED OUT", "MAPPED"}
+
+	for name in names:
+		try:
+			row = frappe.db.get_value(
+				"Hbs Tally Renewal",
+				name,
+				["name", "company_name", "tally_serial", "crm_ref"],
+				as_dict=True
+			)
+			if not row:
+				failed += 1
+				results.append({
+					"name": name,
+					"company_name": "-",
+					"serial": "-",
+					"status": "failed",
+					"message": "Record not found"
+				})
+				continue
+
+			serial = str(row.get("tally_serial") or "").strip()
+			if not serial:
+				failed += 1
+				results.append({
+					"name": name,
+					"company_name": row.get("company_name") or "-",
+					"serial": "-",
+					"status": "failed",
+					"message": "Missing Tally Serial Number"
+				})
+				continue
+
+			if (row.get("crm_ref") or "").strip().upper() not in valid_statuses:
+				failed += 1
+				results.append({
+					"name": name,
+					"company_name": row.get("company_name") or "-",
+					"serial": serial,
+					"status": "skipped",
+					"message": f"Skipped: Reference status ({row.get('crm_ref') or 'Blank'}) not Active/Moved Out"
+				})
+				continue
+
+			res = check_portal(name, only_expiry=False)
+			if res and res.get("status") == "success":
+				success += 1
+				synced_count = res.get("synced_count", 0)
+				total_fields_updated += synced_count
+				results.append({
+					"name": name,
+					"company_name": row.get("company_name") or "-",
+					"serial": serial,
+					"status": "success",
+					"fields_updated": synced_count,
+					"message": f"Synced ({synced_count} fields updated)"
+				})
+			else:
+				failed += 1
+				err_msg = (res.get("message") if res else "") or "Portal sync returned no data"
+				results.append({
+					"name": name,
+					"company_name": row.get("company_name") or "-",
+					"serial": serial,
+					"status": "failed",
+					"message": err_msg
+				})
+		except Exception as e:
+			failed += 1
+			results.append({
+				"name": name,
+				"company_name": "-",
+				"serial": "-",
+				"status": "failed",
+				"message": str(e)
+			})
+
+	return {
+		"status": "success",
+		"success_count": success,
+		"failed_count": failed,
+		"total_fields_updated": total_fields_updated,
+		"results": results
+	}
+
+
+@frappe.whitelist()
 def sync_all_portal_records():
 	"""Sync all Hbs Tally Renewal records that have a tally_serial."""
 	user = frappe.session.user if frappe.session else "System"

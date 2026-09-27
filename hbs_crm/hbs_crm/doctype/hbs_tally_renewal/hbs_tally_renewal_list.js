@@ -113,40 +113,25 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		check_if_owner_or_admin(function (is_owner_admin) {
 			if (!is_owner_admin) return;
 
-			// Sync Portal API (Admin & Owner only under Operations)
+			// Sync Portal API in Batches (Admin & Owner only under Operations)
 			listview.page.add_inner_button(__("🔄 Sync Portal API"), () => {
 				let checked = listview.get_checked_items(true);
 				if (checked && checked.length > 0) {
-					frappe.call({
-						method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_selected_portal",
-						args: { names: JSON.stringify(checked) },
-						freeze: true,
-						freeze_message: __("Syncing {0} selected records with Tally Portal API...", [checked.length]),
-						callback: function (r) {
-							if (r.message) {
-								frappe.show_alert({
-									message: r.message.message || __("Portal sync completed!"),
-									indicator: r.message.status === "info" ? "orange" : "green"
-								}, 7);
-								listview.refresh();
-							}
-						}
-					});
+					start_portal_batch_sync_dialog(listview, checked);
 				} else {
 					frappe.confirm(
-						__("No records selected. Do you want to sync all records with Tally Portal API?"),
+						__("No records selected. Do you want to sync all eligible records with Tally Portal API in batches?"),
 						() => {
 							frappe.call({
-								method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.sync_all_portal_records",
+								method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.get_all_portal_sync_candidates",
 								freeze: true,
-								freeze_message: __("Syncing all records with Tally Portal API..."),
+								freeze_message: __("Fetching candidate records for sync..."),
 								callback: function (r) {
-									if (r.message) {
-										frappe.show_alert({
-											message: r.message.message || __("Portal sync completed!"),
-											indicator: r.message.status === "info" ? "blue" : "green"
-										});
-										listview.refresh();
+									let candidates = r.message || [];
+									if (candidates.length > 0) {
+										start_portal_batch_sync_dialog(listview, candidates);
+									} else {
+										frappe.msgprint(__("No eligible records found with Tally Serial Number and Active/Moved Out status."));
 									}
 								}
 							});
@@ -984,4 +969,241 @@ function preview_renewal_quotation_from_list(name) {
 			d.show();
 		}
 	});
+}
+
+function start_portal_batch_sync_dialog(listview, names) {
+	if (!names || names.length === 0) {
+		frappe.msgprint(__("No records selected for sync."));
+		return;
+	}
+
+	const BATCH_SIZE = 5;
+	let batches = [];
+	for (let i = 0; i < names.length; i += BATCH_SIZE) {
+		batches.push(names.slice(i, i + BATCH_SIZE));
+	}
+
+	let current_batch_idx = 0;
+	let total_batches = batches.length;
+	let total_records = names.length;
+	let total_processed = 0;
+	let total_synced = 0;
+	let total_failed = 0;
+	let total_fields = 0;
+	let is_stopped = false;
+	let is_running = true;
+
+	let d = new frappe.ui.Dialog({
+		title: __("🔄 Tally Portal API Batch Sync"),
+		size: "large",
+		fields: [
+			{
+				fieldname: "sync_ui_html",
+				fieldtype: "HTML",
+				options: `
+					<div style="padding: 4px 0;">
+						<div style="margin-bottom: 14px;">
+							<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+								<span class="sync-status-badge badge badge-primary" style="font-size: 12px; padding: 4px 8px;">
+									${__('In Progress')}
+								</span>
+								<span class="sync-status-counter" style="font-size: 13px; font-weight: 600; color: #334155;">
+									0 / ${total_records} ${__('Records')} (0%)
+								</span>
+							</div>
+							<div class="progress" style="height: 20px; border-radius: 6px; background-color: #e2e8f0; overflow: hidden; margin-bottom: 6px;">
+								<div class="progress-bar progress-bar-striped progress-bar-animated bg-primary sync-progress-bar"
+									role="progressbar" style="width: 0%; font-size: 11px; font-weight: bold; line-height: 20px;">
+									0%
+								</div>
+							</div>
+							<div class="sync-batch-info text-muted" style="font-size: 12px;">
+								${__('Preparing batches ({0} records per batch)...', [BATCH_SIZE])}
+							</div>
+						</div>
+
+						<div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+							<div style="flex: 1; min-width: 100px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; text-align: center;">
+								<div class="sync-metric-total" style="font-size: 20px; font-weight: bold; color: #1e293b;">${total_records}</div>
+								<div style="font-size: 11px; color: #64748b; font-weight: 600;">${__('Total')}</div>
+							</div>
+							<div style="flex: 1; min-width: 100px; background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 8px 12px; text-align: center;">
+								<div class="sync-metric-synced" style="font-size: 20px; font-weight: bold; color: #065f46;">0</div>
+								<div style="font-size: 11px; color: #047857; font-weight: 600;">${__('Synced')}</div>
+							</div>
+							<div style="flex: 1; min-width: 100px; background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px 12px; text-align: center;">
+								<div class="sync-metric-fields" style="font-size: 20px; font-weight: bold; color: #1e40af;">0</div>
+								<div style="font-size: 11px; color: #1d4ed8; font-weight: 600;">${__('Fields Updated')}</div>
+							</div>
+							<div style="flex: 1; min-width: 100px; background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 12px; text-align: center;">
+								<div class="sync-metric-failed" style="font-size: 20px; font-weight: bold; color: #b91c1c;">0</div>
+								<div style="font-size: 11px; color: #dc2626; font-weight: 600;">${__('Skipped / Failed')}</div>
+							</div>
+						</div>
+
+						<div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+							<div style="background-color: #f8fafc; padding: 6px 12px; font-size: 12px; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
+								<span>${__('Live Sync Details')}</span>
+								<span class="sync-live-item-count text-muted" style="font-size: 11px;">0 items processed</span>
+							</div>
+							<div class="sync-results-scroll" style="max-height: 220px; overflow-y: auto;">
+								<table class="table table-bordered table-sm" style="margin: 0; font-size: 11px; width: 100%;">
+									<thead style="position: sticky; top: 0; background-color: #f1f5f9; z-index: 1;">
+										<tr style="color: #334155;">
+											<th style="width: 40px; text-align: center;">#</th>
+											<th style="width: 110px;">${__('Serial')}</th>
+											<th>${__('Company')}</th>
+											<th style="width: 85px; text-align: center;">${__('Status')}</th>
+											<th>${__('Details')}</th>
+										</tr>
+									</thead>
+									<tbody class="sync-results-body">
+										<tr>
+											<td colspan="5" class="text-center text-muted py-3">
+												<i class="fa fa-spinner fa-spin"></i> ${__('Sync starting...')}
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+				`
+			}
+		],
+		primary_action_label: __("Stop Sync"),
+		primary_action: function () {
+			if (is_running) {
+				is_stopped = true;
+				d.get_primary_btn().prop("disabled", true).text(__("Stopping..."));
+			} else {
+				d.hide();
+				listview.refresh();
+			}
+		}
+	});
+
+	d.get_primary_btn().removeClass("btn-primary").addClass("btn-danger");
+	d.show();
+
+	d.$wrapper.on("hidden.bs.modal", function () {
+		is_stopped = true;
+		listview.refresh();
+	});
+
+	let has_rendered_first_row = false;
+
+	function run_batch_step() {
+		if (is_stopped || current_batch_idx >= total_batches) {
+			finish_sync();
+			return;
+		}
+
+		let batch = batches[current_batch_idx];
+		let batch_num = current_batch_idx + 1;
+
+		d.$wrapper.find(".sync-batch-info").text(
+			__("Syncing batch {0} of {1} ({2} records)...", [batch_num, total_batches, batch.length])
+		);
+
+		frappe.call({
+			method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.sync_portal_batch",
+			args: { names: JSON.stringify(batch) },
+			callback: function (r) {
+				let data = r.message || {};
+				let results = data.results || [];
+
+				total_synced += (data.success_count || 0);
+				total_failed += (data.failed_count || 0);
+				total_fields += (data.total_fields_updated || 0);
+				total_processed += batch.length;
+
+				d.$wrapper.find(".sync-metric-synced").text(total_synced);
+				d.$wrapper.find(".sync-metric-fields").text(total_fields);
+				d.$wrapper.find(".sync-metric-failed").text(total_failed);
+
+				let pct = Math.min(100, Math.round((total_processed / total_records) * 100));
+				d.$wrapper.find(".sync-progress-bar")
+					.css("width", pct + "%")
+					.text(pct + "%");
+				d.$wrapper.find(".sync-status-counter").text(
+					`${total_processed} / ${total_records} ${__('Records')} (${pct}%)`
+				);
+				d.$wrapper.find(".sync-live-item-count").text(
+					`${total_processed} items processed`
+				);
+
+				let $tbody = d.$wrapper.find(".sync-results-body");
+				if (!has_rendered_first_row) {
+					$tbody.empty();
+					has_rendered_first_row = true;
+				}
+
+				results.forEach((item, idx) => {
+					let row_num = total_processed - batch.length + idx + 1;
+					let badge_class = item.status === "success" ? "badge-success" : (item.status === "skipped" ? "badge-warning" : "badge-danger");
+					let badge_label = item.status === "success" ? "Synced" : (item.status === "skipped" ? "Skipped" : "Failed");
+
+					$tbody.append(`
+						<tr>
+							<td style="text-align: center; color: #64748b;">${row_num}</td>
+							<td style="font-family: monospace; font-weight: 600;">${frappe.utils.escape_html(item.serial || '-')}</td>
+							<td>${frappe.utils.escape_html(item.company_name || item.name || '-')}</td>
+							<td style="text-align: center;">
+								<span class="badge ${badge_class}" style="font-size: 10px; text-transform: capitalize;">${badge_label}</span>
+							</td>
+							<td style="color: ${item.status === 'success' ? '#065f46' : '#991b1b'};">${frappe.utils.escape_html(item.message || '-')}</td>
+						</tr>
+					`);
+				});
+
+				let scroll_container = d.$wrapper.find(".sync-results-scroll")[0];
+				if (scroll_container) {
+					scroll_container.scrollTop = scroll_container.scrollHeight;
+				}
+
+				current_batch_idx++;
+				run_batch_step();
+			},
+			error: function () {
+				total_failed += batch.length;
+				total_processed += batch.length;
+				d.$wrapper.find(".sync-metric-failed").text(total_failed);
+
+				current_batch_idx++;
+				run_batch_step();
+			}
+		});
+	}
+
+	function finish_sync() {
+		is_running = false;
+		let $pbar = d.$wrapper.find(".sync-progress-bar");
+		$pbar.removeClass("progress-bar-animated progress-bar-striped");
+
+		if (is_stopped) {
+			$pbar.addClass("bg-warning");
+			d.$wrapper.find(".sync-status-badge")
+				.removeClass("badge-primary")
+				.addClass("badge-warning")
+				.text(__("Sync Stopped"));
+			d.$wrapper.find(".sync-batch-info").text(
+				__("Sync was stopped by user. {0} records processed ({1} synced, {2} skipped/failed).", [total_processed, total_synced, total_failed])
+			);
+		} else {
+			$pbar.addClass("bg-success").css("width", "100%").text("100%");
+			d.$wrapper.find(".sync-status-badge")
+				.removeClass("badge-primary")
+				.addClass("badge-success")
+				.text(__("Completed"));
+			d.$wrapper.find(".sync-batch-info").text(
+				__("All {0} records processed: {1} successfully synced ({2} fields updated), {3} skipped/failed.", [total_records, total_synced, total_fields, total_failed])
+			);
+		}
+
+		let $btn = d.get_primary_btn();
+		$btn.removeClass("btn-danger").addClass("btn-primary").prop("disabled", false).text(__("Close & Refresh"));
+	}
+
+	run_batch_step();
 }
