@@ -1199,7 +1199,7 @@ def check_selected_portal(names):
 		fields=["name", "crm_ref"]
 	)
 
-	valid_statuses = {"ACTIVE", "MOVED OUT", "MAPPED"}
+	valid_statuses = {"ACTIVE", "MOVED OUT"}
 	to_sync = [r.name for r in records if (r.crm_ref or "").strip().upper() in valid_statuses]
 	skipped = len(names) - len(to_sync)
 
@@ -1251,9 +1251,9 @@ def get_all_portal_sync_candidates():
 		frappe.throw(_("Only Owner and Administrator can sync Tally Portal API."), title=_("Permission Denied"))
 
 	valid_statuses = (
-		"ACTIVE", "MOVED OUT", "MAPPED",
-		"Active", "Moved Out", "Mapped",
-		"active", "moved out", "mapped"
+		"ACTIVE", "MOVED OUT",
+		"Active", "Moved Out",
+		"active", "moved out"
 	)
 	return frappe.get_all(
 		"Hbs Tally Renewal",
@@ -1292,7 +1292,7 @@ def sync_portal_batch(names):
 	success = 0
 	failed = 0
 	total_fields_updated = 0
-	valid_statuses = {"ACTIVE", "MOVED OUT", "MAPPED"}
+	valid_statuses = {"ACTIVE", "MOVED OUT"}
 
 	for name in names:
 		try:
