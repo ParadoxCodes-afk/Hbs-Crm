@@ -171,7 +171,7 @@ function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 
 	let build_table_rows = function(lead_list) {
 		if (!lead_list || lead_list.length === 0) {
-			return `<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">${__("No leads found.")}</td></tr>`;
+			return `<tr><td colspan="9" class="text-center text-muted" style="padding: 20px;">${__("No leads found.")}</td></tr>`;
 		}
 		return lead_list.map((l, idx) => `
 			<tr>
@@ -183,6 +183,7 @@ function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 				</td>
 				<td><b>${frappe.utils.escape_html(l.company_name || '-')}</b></td>
 				<td>${frappe.utils.escape_html(l.contact_name || '-')}</td>
+				<td>${frappe.utils.escape_html(l.executive_name || l.executive_1 || '-')}</td>
 				<td style="text-align: right; font-weight: 600;">${format_currency(l.final_total, "INR")}</td>
 				<td style="text-align: center; white-space: nowrap;">${l.creation_date || '-'}</td>
 				<td style="text-align: center; white-space: nowrap;" title="${l.last_remarks_date ? __('Last Remark Date: {0}', [l.last_remarks_date]) : ''}">${format_lead_ageing(l.lead_ageing)}</td>
@@ -223,11 +224,12 @@ function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 								<tr style="color: #334155;">
 									<th style="width: 40px; text-align: center;">#</th>
 									<th style="width: 120px;">${__('Lead ID')}</th>
-									<th style="width: 220px;">${__('Company Name')}</th>
-									<th style="width: 180px;">${__('Contact Person')}</th>
+									<th style="width: 200px;">${__('Company Name')}</th>
+									<th style="width: 160px;">${__('Contact Person')}</th>
+									<th style="width: 150px;">${__('Executive')}</th>
 									<th style="width: 120px; text-align: right;">${__('Lead Value (₹)')}</th>
 									<th style="width: 110px; text-align: center;">${__('Created Date')}</th>
-									<th style="width: 120px; text-align: center;">${__('Lead Ageing')}</th>
+									<th style="width: 110px; text-align: center;">${__('Lead Ageing')}</th>
 									<th style="width: 90px; text-align: center;">${__('Status')}</th>
 								</tr>
 							</thead>
@@ -261,6 +263,8 @@ function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 			(l.name && l.name.toLowerCase().includes(q)) ||
 			(l.company_name && l.company_name.toLowerCase().includes(q)) ||
 			(l.contact_name && l.contact_name.toLowerCase().includes(q)) ||
+			(l.executive_name && l.executive_name.toLowerCase().includes(q)) ||
+			(l.executive_1 && l.executive_1.toLowerCase().includes(q)) ||
 			(l.status && l.status.toLowerCase().includes(q))
 		);
 		dialog.$wrapper.find(".leads-table-body").html(build_table_rows(filtered));

@@ -283,6 +283,8 @@ def get_executive_lead_details(
 			l.name,
 			COALESCE(l.company_name, '') AS company_name,
 			COALESCE(l.contact_name, '') AS contact_name,
+			COALESCE(NULLIF(TRIM(u.full_name), ''), l.executive_1, 'Unassigned') AS executive_name,
+			COALESCE(l.executive_1, '') AS executive_1,
 			COALESCE(l.final_total, 0) AS final_total,
 			DATE_FORMAT(l.creation, '%%Y-%%m-%%d') AS creation_date,
 			COALESCE(DATE_FORMAT(l.last_remarks_date, '%%Y-%%m-%%d'), '') AS last_remarks_date,
@@ -295,6 +297,7 @@ def get_executive_lead_details(
 			COALESCE(l.lead_type, '') AS lead_type,
 			COALESCE(l.last_remark, '') AS last_remark
 		FROM `tabHbs Crm Lead` l
+		LEFT JOIN `tabUser` u ON u.name = l.executive_1
 		{where_clause}
 		ORDER BY l.creation DESC
 		LIMIT 500
