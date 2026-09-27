@@ -901,18 +901,30 @@ def check_portal(name, only_expiry=False):
 	base_url, keys_to_try = get_tally_portal_credentials()
 
 	res = None
-	last_err = "Serial not mapped or invalid."
+	last_err = "Serial not mapped or inactive in portal"
 
 	try:
 		for apikey in keys_to_try:
 			url = build_tally_portal_url(base_url, apikey, serial)
-			resp = requests.get(url, timeout=6).json()
-			if resp and resp.get("expiry_details", {}).get("serial_status") == 1:
-				res = resp
-				break
-			else:
-				if resp:
-					last_err = resp.get("expiry_details", {}).get("message") or resp.get("status_message") or last_err
+			try:
+				r = requests.get(url, timeout=6)
+				resp = r.json() if r.status_code == 200 else None
+			except Exception:
+				resp = None
+
+			if resp and isinstance(resp, dict):
+				exp_det = resp.get("expiry_details", {}) or {}
+				serial_status = frappe.utils.cint(exp_det.get("serial_status"))
+				has_data = bool(exp_det.get("serial_data"))
+				if serial_status == 1 or has_data:
+					res = resp
+					break
+				else:
+					api_msg = exp_det.get("message")
+					if api_msg and str(api_msg).strip().upper() != "SUCCESS":
+						last_err = str(api_msg).strip()
+					else:
+						last_err = "Serial not mapped or inactive in portal"
 
 		doc.response = json.dumps(res or resp, indent=2)
 
@@ -1434,6 +1446,8 @@ def sync_portal_batch(names):
 			else:
 				failed += 1
 				err_msg = (res.get("message") if res else "") or "Portal sync returned no data"
+				if str(err_msg).strip().upper() == "SUCCESS":
+					err_msg = "Serial not mapped or inactive in portal"
 				results.append({
 					"name": name,
 					"company_name": company,
