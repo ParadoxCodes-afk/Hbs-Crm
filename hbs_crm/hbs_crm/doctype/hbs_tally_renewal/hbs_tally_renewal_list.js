@@ -83,11 +83,17 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		if (!frappe.route_options["follow_up_date"]) {
 			frappe.route_options["follow_up_date"] = ["<=", frappe.datetime.get_today()];
 		}
+		if (!frappe.route_options["acc_expiry_date"]) {
+			let month_start = moment().startOf("month").format("YYYY-MM-DD");
+			let month_end = moment().endOf("month").format("YYYY-MM-DD");
+			frappe.route_options["acc_expiry_date"] = ["Between", [month_start, month_end]];
+		}
 
 		setTimeout(() => {
 			if (frappe.route_options) {
 				delete frappe.route_options.crm_status;
 				delete frappe.route_options.follow_up_date;
+				delete frappe.route_options.acc_expiry_date;
 			}
 		}, 100);
 
