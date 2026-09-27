@@ -4,6 +4,14 @@
 frappe.query_reports["Lead Executive Summary"] = {
 	filters: [
 		{
+			fieldname: "group_by",
+			label: __("Group By"),
+			fieldtype: "Select",
+			options: "Executive\nLead Type",
+			default: "Executive",
+			reqd: 1
+		},
+		{
 			fieldname: "from_date",
 			label: __("From Date"),
 			fieldtype: "Date",
@@ -43,9 +51,7 @@ frappe.query_reports["Lead Executive Summary"] = {
 
 	formatter: function(value, row, column, data, default_formatter) {
 		if (column.fieldname === "action") {
-			if (!data || !data.executive) return "";
-			let exec = frappe.utils.escape_html(String(data.executive));
-			return `<button class="btn btn-default btn-xs btn-drilldown-lead" data-exec="${exec}" style="border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 10px; font-size: 11px; font-weight: 500; box-shadow: none; display: inline-flex; align-items: center; gap: 4px;"><svg class="icon icon-xs" style="width: 11px; height: 11px;"><use href="#icon-list"></use></svg>${__("View Leads")}</button>`;
+			return value || "";
 		}
 		value = default_formatter(value, row, column, data);
 		if (column.fieldname === "won_leads" && data && data.won_leads > 0) {
@@ -57,12 +63,26 @@ frappe.query_reports["Lead Executive Summary"] = {
 		return value;
 	},
 
-	onload: function(report) {
-		// Bind delegated click listener for View Leads drill-down
-		report.page.wrapper.on("click", ".btn-drilldown-lead", function(e) {
+	open_leads: function(btn, e) {
+		if (e) {
 			e.stopPropagation();
-			let exec = $(this).attr("data-exec");
-			open_executive_leads_dialog(report, exec);
+			e.preventDefault();
+		}
+		let $btn = $(btn).closest(".btn-drilldown-lead");
+		let report = frappe.query_report;
+		let group_by = $btn.attr("data-group-by") || (report && report.get_filter_value ? report.get_filter_value("group_by") : "Executive") || "Executive";
+		let val = $btn.attr("data-val") || $btn.attr("data-exec");
+		open_drilldown_dialog(report, group_by, val);
+	},
+
+	onload: function(report) {
+		// Bind delegated click listener on both wrapper and document for bulletproof triggering
+		report.page.wrapper.off("click", ".btn-drilldown-lead").on("click", ".btn-drilldown-lead", function(e) {
+			frappe.query_reports["Lead Executive Summary"].open_leads(this, e);
+		});
+
+		$(document).off("click.lead_drilldown").on("click.lead_drilldown", ".btn-drilldown-lead", function(e) {
+			frappe.query_reports["Lead Executive Summary"].open_leads(this, e);
 		});
 
 		// Dynamically sync status filter options from Hbs Crm Lead DocType
@@ -85,9 +105,10 @@ frappe.query_reports["Lead Executive Summary"] = {
 			report.page.wrapper.on("dblclick", ".dt-row", function() {
 				let row_idx = $(this).attr("data-row-index");
 				if (row_idx !== undefined && report.data && report.data[row_idx]) {
-					let exec = report.data[row_idx].executive;
-					if (exec) {
-						open_executive_leads_dialog(report, exec);
+					let group_by = report.get_filter_value("group_by") || "Executive";
+					let val = group_by === "Lead Type" ? report.data[row_idx].lead_type : report.data[row_idx].executive;
+					if (val) {
+						open_drilldown_dialog(report, group_by, val);
 					}
 				}
 			});
@@ -95,30 +116,34 @@ frappe.query_reports["Lead Executive Summary"] = {
 	}
 };
 
-function open_executive_leads_dialog(report, executive) {
+function open_drilldown_dialog(report, group_by, val) {
 	let filters = report.get_values() || {};
-	let exec_label = executive === "Unassigned" ? __("Unassigned Leads") : executive;
+	let label = val === "Unassigned" ? __("Unassigned Leads") : val;
+
+	let args = {
+		from_date: filters.from_date || "",
+		to_date: filters.to_date || "",
+		status: filters.status || "",
+		lead_type: filters.lead_type || "",
+		executive_1: filters.executive_1 || "",
+		executive_2: filters.executive_2 || "",
+		group_by: group_by,
+		group_val: val
+	};
 
 	frappe.call({
 		method: "hbs_crm.hbs_crm.report.lead_executive_summary.lead_executive_summary.get_executive_lead_details",
-		args: {
-			executive: executive,
-			from_date: filters.from_date || "",
-			to_date: filters.to_date || "",
-			status: filters.status || "",
-			lead_type: filters.lead_type || "",
-			executive_2: filters.executive_2 || ""
-		},
+		args: args,
 		freeze: true,
-		freeze_message: __("Loading leads for {0}...", [exec_label]),
+		freeze_message: __("Loading leads for {0}...", [label]),
 		callback: function(r) {
 			let leads = r.message || [];
-			render_leads_drilldown_dialog(executive, exec_label, leads, filters);
+			render_leads_drilldown_dialog(group_by, val, label, leads, filters);
 		}
 	});
 }
 
-function render_leads_drilldown_dialog(executive, exec_label, leads, filters) {
+function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 	let total_val = leads.reduce((sum, l) => sum + (parseFloat(l.final_total) || 0), 0);
 	let formatted_total = format_currency(total_val, "INR");
 
@@ -136,7 +161,7 @@ function render_leads_drilldown_dialog(executive, exec_label, leads, filters) {
 
 	let build_table_rows = function(lead_list) {
 		if (!lead_list || lead_list.length === 0) {
-			return `<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">${__("No leads found for this executive.")}</td></tr>`;
+			return `<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">${__("No leads found.")}</td></tr>`;
 		}
 		return lead_list.map((l, idx) => `
 			<tr>
@@ -157,7 +182,7 @@ function render_leads_drilldown_dialog(executive, exec_label, leads, filters) {
 	};
 
 	let dialog = new frappe.ui.Dialog({
-		title: __("📋 Leads: {0}", [exec_label]),
+		title: __("📋 Leads: {0}", [label]),
 		size: "extra-large",
 		fields: [
 			{
@@ -166,7 +191,7 @@ function render_leads_drilldown_dialog(executive, exec_label, leads, filters) {
 				options: `
 					<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 15px; flex-wrap: wrap; gap: 10px;">
 						<div>
-							<span style="font-size: 15px; font-weight: bold; color: #1e293b;">${frappe.utils.escape_html(exec_label)}</span>
+							<span style="font-size: 15px; font-weight: bold; color: #1e293b;">${frappe.utils.escape_html(label)}</span>
 							<span class="text-muted" style="margin-left: 10px; font-size: 13px;">Total Leads: <b>${leads.length}</b> | Total Value: <b style="color: #059669;">${formatted_total}</b></span>
 						</div>
 						<div style="display: flex; gap: 8px;">
@@ -234,14 +259,23 @@ function render_leads_drilldown_dialog(executive, exec_label, leads, filters) {
 	// Button to open list view with filters applied
 	dialog.$wrapper.find(".btn-open-lead-list").on("click", function() {
 		let route_opts = {};
-		if (executive && executive !== "Unassigned") {
-			route_opts["executive_1"] = executive;
+		if (group_by === "Lead Type") {
+			if (val && val !== "Unassigned") {
+				route_opts["lead_type"] = val;
+			}
+			if (filters.executive_1) {
+				route_opts["executive_1"] = filters.executive_1;
+			}
+		} else {
+			if (val && val !== "Unassigned") {
+				route_opts["executive_1"] = val;
+			}
+			if (filters.lead_type) {
+				route_opts["lead_type"] = filters.lead_type;
+			}
 		}
 		if (filters.status) {
 			route_opts["status"] = filters.status;
-		}
-		if (filters.lead_type) {
-			route_opts["lead_type"] = filters.lead_type;
 		}
 		dialog.hide();
 		frappe.set_route("List", "Hbs Crm Lead", route_opts);
