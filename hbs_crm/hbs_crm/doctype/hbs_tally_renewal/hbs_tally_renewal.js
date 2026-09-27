@@ -8,6 +8,10 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 		render_activity_timeline(frm);
 		render_old_remarks_timeline(frm);
 		frm.set_df_property("pi_number", "read_only", 1);
+		frm.set_df_property("quotation_date", "hidden", 1);
+		if (frm.doc.quotation_date !== frappe.datetime.get_today()) {
+			frm.set_value("quotation_date", frappe.datetime.get_today());
+		}
 		apply_custom_section_styles(frm);
 		auto_fill_quote_items_client(frm);
 

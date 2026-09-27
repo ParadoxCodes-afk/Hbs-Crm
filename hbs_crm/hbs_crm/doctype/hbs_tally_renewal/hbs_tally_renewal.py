@@ -106,10 +106,9 @@ def get_last_renewal_pi_info():
 def assign_renewal_pi_and_date(doc):
 	"""Assign quotation date and increment renewal PI number checking both DB and Hbs CRM Settings."""
 	today = frappe.utils.nowdate()
-	if not getattr(doc, "quotation_date", None):
-		if not doc.is_new():
-			doc.db_set("quotation_date", today)
-		doc.quotation_date = today
+	doc.quotation_date = today
+	if not doc.is_new():
+		doc.db_set("quotation_date", today)
 
 	if not getattr(doc, "pi_number", None):
 		admin_val = frappe.db.get_single_value("Hbs CRM Settings", "renewal_pi_number_order") or "HBS/PI/91957"
@@ -179,8 +178,7 @@ class HbsTallyRenewal(Document):
 		# Auto-assign quotation date and PI number if items exist and not in import
 		is_import = getattr(self.flags, "in_import", False) or getattr(frappe.flags, "in_import", False)
 		if getattr(self, "items", None) and len(self.items) > 0 and not is_import:
-			if not getattr(self, "quotation_date", None):
-				self.quotation_date = frappe.utils.nowdate()
+			self.quotation_date = frappe.utils.nowdate()
 			if not getattr(self, "pi_number", None):
 				assign_renewal_pi_and_date(self)
 
