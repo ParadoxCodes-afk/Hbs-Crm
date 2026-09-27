@@ -1250,7 +1250,11 @@ def get_all_portal_sync_candidates():
 	if not is_owner_or_admin(user):
 		frappe.throw(_("Only Owner and Administrator can sync Tally Portal API."), title=_("Permission Denied"))
 
-	valid_statuses = ("ACTIVE", "MOVED OUT", "MAPPED")
+	valid_statuses = (
+		"ACTIVE", "MOVED OUT", "MAPPED",
+		"Active", "Moved Out", "Mapped",
+		"active", "moved out", "mapped"
+	)
 	return frappe.get_all(
 		"Hbs Tally Renewal",
 		filters={
@@ -1295,7 +1299,7 @@ def sync_portal_batch(names):
 			row = frappe.db.get_value(
 				"Hbs Tally Renewal",
 				name,
-				["name", "company_name", "tally_serial", "crm_ref"],
+				["name", "cc_acc_name", "portal_acc_name", "tally_serial", "crm_ref"],
 				as_dict=True
 			)
 			if not row:
@@ -1309,12 +1313,13 @@ def sync_portal_batch(names):
 				})
 				continue
 
+			company = (row.get("cc_acc_name") or row.get("portal_acc_name") or str(name)).strip()
 			serial = str(row.get("tally_serial") or "").strip()
 			if not serial:
 				failed += 1
 				results.append({
 					"name": name,
-					"company_name": row.get("company_name") or "-",
+					"company_name": company,
 					"serial": "-",
 					"status": "failed",
 					"message": "Missing Tally Serial Number"
@@ -1325,7 +1330,7 @@ def sync_portal_batch(names):
 				failed += 1
 				results.append({
 					"name": name,
-					"company_name": row.get("company_name") or "-",
+					"company_name": company,
 					"serial": serial,
 					"status": "skipped",
 					"message": f"Skipped: Reference status ({row.get('crm_ref') or 'Blank'}) not Active/Moved Out"
@@ -1339,7 +1344,7 @@ def sync_portal_batch(names):
 				total_fields_updated += synced_count
 				results.append({
 					"name": name,
-					"company_name": row.get("company_name") or "-",
+					"company_name": company,
 					"serial": serial,
 					"status": "success",
 					"fields_updated": synced_count,
@@ -1350,7 +1355,7 @@ def sync_portal_batch(names):
 				err_msg = (res.get("message") if res else "") or "Portal sync returned no data"
 				results.append({
 					"name": name,
-					"company_name": row.get("company_name") or "-",
+					"company_name": company,
 					"serial": serial,
 					"status": "failed",
 					"message": err_msg
