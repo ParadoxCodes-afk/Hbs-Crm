@@ -1263,6 +1263,7 @@ def get_all_portal_sync_candidates():
 			"crm_ref": ["in", valid_statuses]
 		},
 		pluck="name",
+		limit_page_length=0,
 		order_by="creation desc"
 	)
 
