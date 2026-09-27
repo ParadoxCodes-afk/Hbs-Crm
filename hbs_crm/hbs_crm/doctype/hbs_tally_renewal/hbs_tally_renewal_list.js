@@ -146,7 +146,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			}, __("Operations"));
 
 			// --- UPDATE SECONDARY DATA (Excel: TSS Tally Serial, License, TSS Expiry Date, Portal Partner Name, crm stage) ---
-			listview.page.add_inner_button(__("🔄 Update Secondary Data"), () => {
+			listview.page.add_inner_button(__("🔄 Moved Out Updation"), () => {
 				open_update_secondary_data_dialog(listview);
 			}, __("Operations"));
 
