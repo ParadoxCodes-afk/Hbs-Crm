@@ -286,6 +286,11 @@ def get_executive_lead_details(
 			COALESCE(l.final_total, 0) AS final_total,
 			DATE_FORMAT(l.creation, '%%Y-%%m-%%d') AS creation_date,
 			COALESCE(DATE_FORMAT(l.last_remarks_date, '%%Y-%%m-%%d'), '') AS last_remarks_date,
+			CASE
+				WHEN l.last_remarks_date IS NOT NULL AND l.last_remarks_date != ''
+				THEN DATEDIFF(CURDATE(), l.last_remarks_date)
+				ELSE DATEDIFF(CURDATE(), DATE(l.creation))
+			END AS lead_ageing,
 			COALESCE(l.status, '') AS status,
 			COALESCE(l.lead_type, '') AS lead_type,
 			COALESCE(l.last_remark, '') AS last_remark

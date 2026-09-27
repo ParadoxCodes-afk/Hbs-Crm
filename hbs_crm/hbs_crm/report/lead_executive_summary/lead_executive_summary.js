@@ -159,6 +159,16 @@ function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 		return `<span class="badge ${cls}" style="text-transform: capitalize; font-size: 11px;">${st || 'Open'}</span>`;
 	};
 
+	let format_lead_ageing = function(days) {
+		if (days === null || days === undefined) return '<span class="text-muted">-</span>';
+		let d = parseInt(days, 10);
+		if (isNaN(d)) return '<span class="text-muted">-</span>';
+		if (d === 0) return `<span class="badge badge-info" style="font-size: 11px;">${__("Today")}</span>`;
+		let badge_cls = d > 30 ? "badge-danger" : (d > 15 ? "badge-warning" : "badge-light");
+		let unit = d === 1 ? __("day") : __("days");
+		return `<span class="badge ${badge_cls}" style="font-size: 11px; font-weight: 600;">${d} ${unit}</span>`;
+	};
+
 	let build_table_rows = function(lead_list) {
 		if (!lead_list || lead_list.length === 0) {
 			return `<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">${__("No leads found.")}</td></tr>`;
@@ -175,7 +185,7 @@ function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 				<td>${frappe.utils.escape_html(l.contact_name || '-')}</td>
 				<td style="text-align: right; font-weight: 600;">${format_currency(l.final_total, "INR")}</td>
 				<td style="text-align: center; white-space: nowrap;">${l.creation_date || '-'}</td>
-				<td style="text-align: center; white-space: nowrap;">${l.last_remarks_date || '<span class="text-muted">-</span>'}</td>
+				<td style="text-align: center; white-space: nowrap;" title="${l.last_remarks_date ? __('Last Remark Date: {0}', [l.last_remarks_date]) : ''}">${format_lead_ageing(l.lead_ageing)}</td>
 				<td style="text-align: center;">${get_status_badge(l.status)}</td>
 			</tr>
 		`).join("");
@@ -217,7 +227,7 @@ function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 									<th style="width: 180px;">${__('Contact Person')}</th>
 									<th style="width: 120px; text-align: right;">${__('Lead Value (₹)')}</th>
 									<th style="width: 110px; text-align: center;">${__('Created Date')}</th>
-									<th style="width: 120px; text-align: center;">${__('Last Remarks Date')}</th>
+									<th style="width: 120px; text-align: center;">${__('Lead Ageing')}</th>
 									<th style="width: 90px; text-align: center;">${__('Status')}</th>
 								</tr>
 							</thead>
