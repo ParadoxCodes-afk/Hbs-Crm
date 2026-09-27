@@ -15,9 +15,7 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 		apply_custom_section_styles(frm);
 		auto_fill_quote_items_client(frm);
 
-		if (frm._reloading_from_sync) {
-			delete frm._reloading_from_sync;
-		} else if (!frm.is_new() && (frm.doc.tally_serial || frm.doc.tss_tally_serial)) {
+		if (!frm.is_new() && (frm.doc.tally_serial || frm.doc.tss_tally_serial)) {
 			auto_sync_portal_on_open(frm);
 		}
 
@@ -1279,8 +1277,20 @@ function check_and_warn_duplicate_serial(frm) {
 }
 
 function auto_sync_portal_on_open(frm) {
-	if (frm._is_syncing_portal) return;
+	if (frm._is_syncing_portal || frm._portal_synced) return;
+
+	// Cooldown: 1 hour (3600000 ms) so it syncs once, then stops.
+	// When opened after some time (> 1 hour), it will sync again.
+	const COOLDOWN_MS = 60 * 60 * 1000;
+	let last_sync = localStorage.getItem("hbs_portal_sync_" + frm.doc.name);
+	let now = Date.now();
+	if (last_sync && (now - parseInt(last_sync, 10)) < COOLDOWN_MS) {
+		return;
+	}
+
 	frm._is_syncing_portal = true;
+	frm._portal_synced = true;
+	localStorage.setItem("hbs_portal_sync_" + frm.doc.name, now.toString());
 
 	frappe.call({
 		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_portal",
@@ -1291,17 +1301,16 @@ function auto_sync_portal_on_open(frm) {
 		freeze: false,
 		callback: function (r) {
 			frm._is_syncing_portal = false;
-			if (r && r.message) {
-				if (r.message.status === "success") {
-					if (!frm.is_dirty()) {
-						frm._reloading_from_sync = true;
-						frm.reload_doc();
-					}
-					frappe.show_alert({
-						message: __("Portal expiry synced"),
-						indicator: "green"
-					}, 3);
+			if (r && r.message && r.message.status === "success") {
+				if (r.message.portal_expiry_date) {
+					frm.doc.portal_expiry_date = r.message.portal_expiry_date;
+					frm.refresh_field("portal_expiry_date");
+					update_portal_expiry_style(frm);
 				}
+				frappe.show_alert({
+					message: __("Portal expiry synced"),
+					indicator: "green"
+				}, 3);
 			}
 		},
 		error: function () {

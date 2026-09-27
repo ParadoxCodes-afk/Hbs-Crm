@@ -1038,7 +1038,8 @@ def check_portal(name, only_expiry=False):
 				"synced_count": len(synced_fields),
 				"unsynced_count": len(unsynced_fields),
 				"synced_fields": synced_fields,
-				"unsynced_fields": unsynced_fields
+				"unsynced_fields": unsynced_fields,
+				"portal_expiry_date": str(doc.portal_expiry_date or "")
 			}
 		else:
 			if not only_expiry:
