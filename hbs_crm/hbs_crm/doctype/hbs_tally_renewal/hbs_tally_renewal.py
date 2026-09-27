@@ -1095,7 +1095,7 @@ def assign_executive(name=None, names=None, executive_1=None, executive=None):
 
 
 @frappe.whitelist()
-def bulk_update_renewal_fields(names, updates=None, remark=None):
+def bulk_update_renewal_fields(names, updates=None, remark=None, quote_item=None):
 	"""Bulk or quick update fields on Hbs Tally Renewal records (Owner / Admin only)."""
 	user = frappe.session.user if frappe.session else "System"
 	if not is_owner_or_admin(user):
@@ -1131,37 +1131,85 @@ def bulk_update_renewal_fields(names, updates=None, remark=None):
 					update_dict[k] = v
 
 	remark_text = str(remark).strip() if remark else ""
-	if not update_dict and not remark_text:
-		frappe.throw(_("Please provide at least one field value or remark to update."))
+	quote_item = str(quote_item).strip() if quote_item else ""
+	if not update_dict and not remark_text and not quote_item:
+		frappe.throw(_("Please provide at least one field value, quote item, or remark to update."))
+
+	prod = None
+	if quote_item:
+		if frappe.db.exists("Hbs Product", quote_item):
+			prod = frappe.db.get_value(
+				"Hbs Product",
+				quote_item,
+				["name", "item_name", "rate", "tax", "hsn", "description"],
+				as_dict=True,
+			)
+		else:
+			prod = frappe.db.get_value(
+				"Hbs Product",
+				{"item_name": quote_item},
+				["name", "item_name", "rate", "tax", "hsn", "description"],
+				as_dict=True,
+			)
+		if not prod:
+			frappe.throw(_("Selected Quote Product {0} not found.").format(quote_item))
 
 	for name in target_names:
-		if remark_text:
+		if remark_text or quote_item:
 			doc = frappe.get_doc("Hbs Tally Renewal", name)
 			for k, v in update_dict.items():
 				setattr(doc, k, v)
-			if doc.crm_status == "Lost":
-				doc.crm_lost_remarks = remark_text
 
-			if "last_remarks_date" not in update_dict:
-				doc.last_remarks_date = frappe.utils.nowdate()
-				doc.contact_on = doc.last_remarks_date
+			if quote_item and prod:
+				doc.set("items", [])
+				rate = frappe.utils.flt(prod.rate) or 0
+				tax_pct = frappe.utils.flt(prod.tax) or 0
+				tax_amt = (rate * tax_pct) / 100.0
+				amount = rate + tax_amt
+				doc.append("items", {
+					"item_name": prod.name,
+					"description": prod.description or "",
+					"qty": 1,
+					"rate": rate,
+					"tax": tax_pct,
+					"tax_amount": tax_amt,
+					"hsn": prod.hsn or "",
+					"discount_amount": 0,
+					"amount": amount,
+				})
+				doc.calculate_totals()
+
+			if remark_text:
+				if doc.crm_status == "Lost":
+					doc.crm_lost_remarks = remark_text
+
+				if "last_remarks_date" not in update_dict:
+					doc.last_remarks_date = frappe.utils.nowdate()
+					doc.contact_on = doc.last_remarks_date
+				else:
+					doc.contact_on = doc.last_remarks_date
+
+				user_email = frappe.session.user if frappe.session and frappe.session.user else "System"
+				doc.append("custom_activities", {
+					"user": user_email,
+					"date_time": frappe.utils.now_datetime(),
+					"remark": remark_text
+				})
+				if "last_remark" in update_dict:
+					doc.last_remark = update_dict["last_remark"]
+				else:
+					doc.last_remark = remark_text
+				doc.render_activity_html()
+				if hasattr(doc, "render_old_remarks_html"):
+					doc.render_old_remarks_html()
 			else:
-				doc.contact_on = doc.last_remarks_date
+				if "last_remarks_date" in update_dict:
+					doc.contact_on = update_dict["last_remarks_date"]
+				elif "last_remark" in update_dict and "last_remarks_date" not in update_dict:
+					doc.last_remarks_date = frappe.utils.nowdate()
+					doc.contact_on = doc.last_remarks_date
 
 			doc.last_updated = frappe.utils.nowdate()
-			user_email = frappe.session.user if frappe.session and frappe.session.user else "System"
-			doc.append("custom_activities", {
-				"user": user_email,
-				"date_time": frappe.utils.now_datetime(),
-				"remark": remark_text
-			})
-			if "last_remark" in update_dict:
-				doc.last_remark = update_dict["last_remark"]
-			else:
-				doc.last_remark = remark_text
-			doc.render_activity_html()
-			if hasattr(doc, "render_old_remarks_html"):
-				doc.render_old_remarks_html()
 			doc.flags.in_follow_up = True
 			doc.save(ignore_permissions=True)
 		else:

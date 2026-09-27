@@ -672,6 +672,25 @@ function open_owner_bulk_edit_dialog(listview) {
 				default: single_doc ? single_doc.last_remark : undefined
 			},
 			{
+				fieldname: "sec_quote",
+				fieldtype: "Section Break",
+				label: __("Quotation")
+			},
+			{
+				label: __("Change Item in Quote Tab"),
+				fieldname: "quote_item",
+				fieldtype: "Link",
+				options: "Hbs Product",
+				get_query: () => {
+					return {
+						filters: {
+							is_active: 1
+						}
+					};
+				},
+				description: __("Replaces item in Quote tab and recalculates taxes & totals for selected record(s).")
+			},
+			{
 				fieldname: "sec_remarks",
 				fieldtype: "Section Break",
 				label: __("Activity / Remarks")
@@ -692,12 +711,13 @@ function open_owner_bulk_edit_dialog(listview) {
 				}
 			});
 
+			let quote_item = (values.quote_item || "").trim();
 			let remark = (values.remark || "").trim();
-			if (Object.keys(fields_to_update).length === 0 && !remark) {
+			if (Object.keys(fields_to_update).length === 0 && !remark && !quote_item) {
 				frappe.msgprint({
 					title: __("No Changes Specified"),
 					indicator: "orange",
-					message: __("Please specify at least one field value or enter a remark.")
+					message: __("Please specify at least one field value, quote item, or enter a remark.")
 				});
 				return;
 			}
@@ -707,7 +727,8 @@ function open_owner_bulk_edit_dialog(listview) {
 				args: {
 					names: JSON.stringify(checked),
 					updates: JSON.stringify(fields_to_update),
-					remark: remark
+					remark: remark,
+					quote_item: quote_item
 				},
 				freeze: true,
 				freeze_message: __("Updating {0} records...", [checked.length]),
