@@ -977,7 +977,7 @@ function start_portal_batch_sync_dialog(listview, names) {
 		return;
 	}
 
-	const BATCH_SIZE = 5;
+	const BATCH_SIZE = 50;
 	let batches = [];
 	for (let i = 0; i < names.length; i += BATCH_SIZE) {
 		batches.push(names.slice(i, i + BATCH_SIZE));

@@ -875,7 +875,7 @@ def check_portal(name, only_expiry=False):
 	try:
 		for apikey in keys_to_try:
 			url = build_tally_portal_url(base_url, apikey, serial)
-			resp = requests.get(url, timeout=15).json()
+			resp = requests.get(url, timeout=6).json()
 			if resp and resp.get("expiry_details", {}).get("serial_status") == 1:
 				res = resp
 				break
