@@ -15,6 +15,10 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 		apply_custom_section_styles(frm);
 		auto_fill_quote_items_client(frm);
 
+		if (frm.is_new() && !frm.doc.crm_ex_1) {
+			frm.set_value("crm_ex_1", frappe.session.user);
+		}
+
 		if (!frm.is_new() && (frm.doc.tally_serial || frm.doc.tss_tally_serial)) {
 			auto_sync_portal_on_open(frm);
 		}

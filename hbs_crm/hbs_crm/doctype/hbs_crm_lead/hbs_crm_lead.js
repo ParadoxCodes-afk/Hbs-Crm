@@ -30,6 +30,9 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		handle_executive_1_permission(frm);
 		apply_quotation_format_color(frm);
 		frm.set_df_property("pi_number", "read_only", 1);
+		if (!frm.doc.quotation_date) {
+			frm.set_value("quotation_date", frappe.datetime.get_today());
+		}
 
 		frm.clear_custom_buttons();
 
@@ -434,6 +437,12 @@ function render_activity_timeline_js(frm) {
 }
 
 function open_email_dialog(frm) {
+	if (frm.is_dirty()) {
+		frm.save(() => {
+			open_email_dialog(frm);
+		});
+		return;
+	}
 	let client_email = (frm.doc.contact_email || "").trim();
 	if (!client_email && frm.doc.all_contacts && frm.doc.all_contacts.length > 0) {
 		for (let c of frm.doc.all_contacts) {
@@ -1464,6 +1473,12 @@ function handle_referred_by_dependency(frm) {
 function open_quotation_preview_dialog(frm, doctype) {
 	if (frm.is_new()) {
 		frappe.msgprint(__("Please save the record first before viewing quotation."));
+		return;
+	}
+	if (frm.is_dirty()) {
+		frm.save(() => {
+			open_quotation_preview_dialog(frm, doctype);
+		});
 		return;
 	}
 	if (!frm.doc.items || frm.doc.items.length === 0) {

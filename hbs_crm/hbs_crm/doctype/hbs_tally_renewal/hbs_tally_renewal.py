@@ -1626,8 +1626,13 @@ def has_permission(doc, ptype="read", user=None):
 	if getattr(doc_obj, "flags", None) and getattr(doc_obj.flags, "in_takeover", False):
 		return True
 
-	# 1. Check in-memory doc values
-	if doc_obj.get("crm_ex_1") in team_members:
+	# 1. Check in-memory doc values or new doc creation
+	if (
+		ptype == "create"
+		or (hasattr(doc_obj, "is_new") and doc_obj.is_new())
+		or doc_obj.get("crm_ex_1") in team_members
+		or doc_obj.get("owner") in team_members
+	):
 		return True
 
 	# 2. For write/save/delete permissions on an existing doc, check DB state before alteration
