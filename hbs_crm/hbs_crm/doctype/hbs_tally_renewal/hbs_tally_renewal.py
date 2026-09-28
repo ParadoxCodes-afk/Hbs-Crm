@@ -435,17 +435,13 @@ class HbsTallyRenewal(Document):
 			self.tss_tally_serial = serial
 
 	def validate_no_duplicate_serial(self):
-		"""Block saving if an active renewal (<= 15 days without remarks) for the same Tally serial exists."""
+		"""Block saving if any renewal for the same Tally serial exists in the database."""
 		serial = self.tally_serial or self.tss_tally_serial
 		if not serial:
 			return
 
 		dup = check_duplicate_renewal(serial, current_renewal_name=self.name)
 		if dup:
-			# Inactive (> 15 days without remarks): allow saving/takeover
-			if dup.get("is_inactive"):
-				return
-
 			party = dup.get("cc_acc_name") or dup.get("cc_contact") or "this party"
 			exec_name = dup.get("executive_full_name") or dup.get("crm_ex_1") or dup.get("owner") or "another executive"
 			renewal_id = dup.get("name")
@@ -639,7 +635,7 @@ class HbsTallyRenewal(Document):
 
 @frappe.whitelist()
 def check_duplicate_renewal(serial=None, current_renewal_name=None):
-	"""Check if an active renewal already exists for the given Tally serial number."""
+	"""Check if a renewal already exists for the given Tally serial number, regardless of status."""
 	if not serial or not str(serial).strip():
 		return None
 
@@ -654,7 +650,6 @@ def check_duplicate_renewal(serial=None, current_renewal_name=None):
 	}
 
 	where = "(tally_serial IN (%(serial_raw)s, %(serial_clean)s) OR tss_tally_serial IN (%(serial_raw)s, %(serial_clean)s))"
-	where += " AND LOWER(IFNULL(crm_status, '')) != 'sold' AND LOWER(IFNULL(crm_stage, '')) != 'sold'"
 
 	if current_renewal_name and str(current_renewal_name).strip() and not str(current_renewal_name).startswith("new-"):
 		where += " AND name != %(current_name)s"
@@ -685,22 +680,18 @@ def check_duplicate_renewal(serial=None, current_renewal_name=None):
 	)
 	dup["is_lost"] = is_lost
 
-	if is_lost:
-		# If CRM status is lost, other person can overtake that lead without any checking
-		dup["days_inactive"] = 0
-		dup["is_inactive"] = True
+	last_date = dup.get("last_remarks_date") or dup.get("contact_on") or dup.get("creation")
+	if last_date:
+		today = frappe.utils.getdate()
+		last_d = frappe.utils.getdate(last_date)
+		days_diff = frappe.utils.date_diff(today, last_d)
+		dup["days_inactive"] = max(0, days_diff)
+		dup["last_remarks_date_formatted"] = frappe.utils.formatdate(last_d, "dd/MM/yyyy")
 	else:
-		last_date = dup.get("last_remarks_date") or dup.get("contact_on") or dup.get("creation")
-		if last_date:
-			today = frappe.utils.getdate()
-			last_d = frappe.utils.getdate(last_date)
-			days_diff = frappe.utils.date_diff(today, last_d)
-			dup["days_inactive"] = max(0, days_diff)
-			dup["last_remarks_date_formatted"] = frappe.utils.formatdate(last_d, "dd/MM/yyyy")
-			dup["is_inactive"] = days_diff > 15
-		else:
-			dup["days_inactive"] = 0
-			dup["is_inactive"] = False
+		dup["days_inactive"] = 0
+		dup["last_remarks_date_formatted"] = ""
+
+	dup["is_inactive"] = is_lost or (dup.get("days_inactive", 0) > 15)
 
 	return dup
 

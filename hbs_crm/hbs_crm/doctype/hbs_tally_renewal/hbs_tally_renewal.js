@@ -41,6 +41,43 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 				open_email_dialog(frm);
 			}, __("Actions"));
 
+			// Take Over Renewal button (when current user is not Executive 1 and renewal is Lost or inactive > 15 days)
+			if (frm.doc.crm_ex_1 !== frappe.session.user) {
+				let is_lost = (
+					(frm.doc.crm_status || "").trim().toLowerCase() === "lost" ||
+					(frm.doc.crm_stage || "").trim().toLowerCase() === "lost"
+				);
+				let last_date = frm.doc.last_remarks_date || frm.doc.contact_on || frm.doc.creation;
+				let diff = last_date ? frappe.datetime.get_diff(frappe.datetime.get_today(), last_date) : 999;
+
+				if (is_lost || diff > 15) {
+					let label = is_lost ? __("⚡ Take Over & Revive") : __("⚡ Take Over Renewal");
+					let confirm_msg = is_lost
+						? __("Are you sure you want to revive and take over lost Renewal #{0}? You will become Executive 1.", [frm.doc.name])
+						: __("Are you sure you want to take over Renewal #{0} (inactive for {1} days)? You will become Executive 1.", [frm.doc.name, diff]);
+
+					frm.add_custom_button(label, function () {
+						frappe.confirm(confirm_msg, function () {
+							frappe.call({
+								method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.take_over_renewal",
+								args: { renewal_name: frm.doc.name },
+								freeze: true,
+								freeze_message: __("Taking over renewal..."),
+								callback: function (res) {
+									if (res.message) {
+										frappe.show_alert({
+											message: res.message.message,
+											indicator: "green"
+										});
+										frm.reload_doc();
+									}
+								}
+							});
+						});
+					}, __("Actions"));
+				}
+			}
+
 			// Admin and Hierarchy Owner only button
 			check_if_owner_or_admin(function (is_owner_admin) {
 				if (is_owner_admin) {
@@ -1168,7 +1205,7 @@ function check_and_warn_duplicate_serial(frm) {
 		callback: function (r) {
 			if (r.message) {
 				let dup = r.message;
-				let party = dup.company_name || dup.customer_name || "this party";
+				let party = dup.company_name || dup.customer_name || dup.cc_acc_name || "this party";
 				let exec = dup.executive_full_name || dup.crm_ex_1 || dup.owner || "another executive";
 
 				if (dup.is_inactive) {
@@ -1226,6 +1263,8 @@ function check_and_warn_duplicate_serial(frm) {
 							frappe.call({
 								method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.take_over_renewal",
 								args: { renewal_name: dup.name },
+								freeze: true,
+								freeze_message: __("Taking over renewal..."),
 								callback: function (res) {
 									if (res.message) {
 										frappe.show_alert({
@@ -1268,7 +1307,7 @@ function check_and_warn_duplicate_serial(frm) {
 								options: msg
 							}
 						],
-						primary_action_label: __("OK"),
+						primary_action_label: __("Close"),
 						primary_action() {
 							d.hide();
 						}
