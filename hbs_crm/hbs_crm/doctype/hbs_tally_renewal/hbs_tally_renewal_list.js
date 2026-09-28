@@ -151,7 +151,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				open_custom_import_data_dialog(listview);
 			}, __("Operations"));
 
-			// --- UPDATE SECONDARY DATA (Excel: TSS Tally Serial, License, TSS Expiry Date, Portal Partner Name, crm stage) ---
+			// --- MOVED OUT UPDATION (Excel: TSS Tally Serial, License, TSS Expiry Date, Portal Partner Name, Reference Status) ---
 			listview.page.add_inner_button(__("🔄 Moved Out Updation"), () => {
 				open_update_secondary_data_dialog(listview);
 			}, __("Operations"));
@@ -395,14 +395,14 @@ function open_custom_import_data_dialog(listview) {
 // --- UPDATE SECONDARY DATA DIALOG ---
 function open_update_secondary_data_dialog(listview) {
 	let d = new frappe.ui.Dialog({
-		title: __("🔄 Update Secondary Data (Excel)"),
+		title: __("🔄 Moved Out Updation (Excel)"),
 		fields: [
 			{
 				label: __("Excel File (.xlsx or .xls)"),
 				fieldname: "file_url",
 				fieldtype: "Attach",
 				reqd: 1,
-				description: __("Columns expected: <b>TSS Tally Serial</b>, <b>License</b>, <b>TSS Expiry Date</b>, <b>Portal Partner Name</b>, <b>crm stage</b>")
+				description: __("Columns expected: <b>TSS Tally Serial</b>, <b>License</b>, <b>TSS Expiry Date</b>, <b>Portal Partner Name</b>, <b>Reference Status</b>")
 			}
 		],
 		primary_action_label: __("Update Data"),

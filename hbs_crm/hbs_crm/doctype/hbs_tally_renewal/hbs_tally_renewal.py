@@ -2500,6 +2500,7 @@ def update_secondary_data_from_excel(file_url):
 	col_license = None
 	col_expiry = None
 	col_partner = None
+	col_ref = None
 	col_stage = None
 
 	for idx, h in enumerate(raw_headers):
@@ -2512,6 +2513,8 @@ def update_secondary_data_from_excel(file_url):
 			col_expiry = idx
 		elif nh in ("portalpartnername", "partnername", "portalpartner", "partner") and col_partner is None:
 			col_partner = idx
+		elif nh in ("referencestatus", "referencestate", "crmref", "refstatus", "reference", "ref") and col_ref is None:
+			col_ref = idx
 		elif nh in ("crmstage", "stage", "crm_stage") and col_stage is None:
 			col_stage = idx
 
@@ -2576,6 +2579,18 @@ def update_secondary_data_from_excel(file_url):
 			return "RENTAL"
 		elif "NEW CASE" in upper or "NEW" in upper:
 			return "NEW CASE"
+		return s
+
+	def clean_ref_status(val):
+		if not val:
+			return None
+		s = str(val).strip().upper()
+		if "MOVE" in s or "OUT" in s:
+			return "MOVED OUT"
+		elif "ACTIVE" in s:
+			return "ACTIVE"
+		elif "COMP" in s:
+			return "COMPETITION"
 		return s
 
 	total_rows = len(raw_data_rows)
@@ -2663,22 +2678,34 @@ def update_secondary_data_from_excel(file_url):
 				updates["portal_partner_name"] = p_name
 				updates["partner_name"] = p_name
 
-		# 4. crm stage
+		# 4. Reference Status (crm_ref)
+		if col_ref is not None and col_ref < len(r) and r[col_ref]:
+			ref_val = clean_ref_status(r[col_ref])
+			if ref_val:
+				updates["crm_ref"] = ref_val
+
+		# 5. crm stage / reference status fallback
 		if col_stage is not None and col_stage < len(r) and r[col_stage]:
-			c_stage = str(r[col_stage]).strip()
-			if c_stage:
-				c_upper = c_stage.upper()
-				if "FOLLOW" in c_upper:
-					c_stage = "IN FOLLOW-UP"
-				elif "RESPOND" in c_upper:
-					c_stage = "CUSTOMER NOT RESPONDING"
-				elif "DEMO" in c_upper or "MEETING" in c_upper:
-					c_stage = "DEMO/MEETING DONE"
-				elif "LEAD" in c_upper:
-					c_stage = "LEAD"
-				elif "QUOTE" in c_upper or "QUOTATION" in c_upper:
-					c_stage = "QUOTATION SENT"
-				updates["crm_stage"] = c_stage
+			raw_stage = str(r[col_stage]).strip()
+			if raw_stage:
+				if col_ref is None and any(k in raw_stage.upper() for k in ("MOVE", "OUT", "ACTIVE", "COMPETITION")):
+					ref_val = clean_ref_status(raw_stage)
+					if ref_val:
+						updates["crm_ref"] = ref_val
+				else:
+					c_stage = raw_stage
+					c_upper = c_stage.upper()
+					if "FOLLOW" in c_upper:
+						c_stage = "IN FOLLOW-UP"
+					elif "RESPOND" in c_upper:
+						c_stage = "CUSTOMER NOT RESPONDING"
+					elif "DEMO" in c_upper or "MEETING" in c_upper:
+						c_stage = "DEMO/MEETING DONE"
+					elif "LEAD" in c_upper:
+						c_stage = "LEAD"
+					elif "QUOTE" in c_upper or "QUOTATION" in c_upper:
+						c_stage = "QUOTATION SENT"
+					updates["crm_stage"] = c_stage
 
 		if not updates:
 			failed_rows.append({
