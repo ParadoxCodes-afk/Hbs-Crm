@@ -1895,22 +1895,6 @@ def send_manual_renewal_email(name, to_email, subject, message, cc_email=None, f
 		now=True
 	)
 
-	user_email = frappe.session.user if frappe.session and frappe.session.user else "System"
-	clean_rem = f"Sent TSS Quotation to {to_email} | Subject: {subject}"
-	doc.append("custom_activities", {
-		"user": user_email,
-		"date_time": frappe.utils.now_datetime(),
-		"remark": clean_rem
-	})
-	doc.last_remark = clean_rem
-	doc.last_remarks_date = frappe.utils.nowdate()
-	doc.contact_on = doc.last_remarks_date
-	doc.last_updated = frappe.utils.nowdate()
-	doc.render_activity_html()
-	doc.flags.in_follow_up = True
-	doc.save(ignore_permissions=True)
-	frappe.db.commit()
-
 	return True
 
 
@@ -1998,19 +1982,6 @@ def send_bulk_renewal_email(names, subject_template, message_template, cc_email=
 				now=True
 			)
 
-			clean_rem = f"Bulk TSS Quotation sent to {to_email} | Subject: {rendered_subject}"
-			doc.append("custom_activities", {
-				"user": user_email,
-				"date_time": frappe.utils.now_datetime(),
-				"remark": clean_rem
-			})
-			doc.last_remark = clean_rem
-			doc.last_remarks_date = frappe.utils.nowdate()
-			doc.contact_on = doc.last_remarks_date
-			doc.last_updated = frappe.utils.nowdate()
-			doc.render_activity_html()
-			doc.flags.in_follow_up = True
-			doc.save(ignore_permissions=True)
 			success_count += 1
 		except Exception as e:
 			frappe.log_error(f"Bulk quotation email failed for {name}: {str(e)}", "Bulk Renewal Email Error")
