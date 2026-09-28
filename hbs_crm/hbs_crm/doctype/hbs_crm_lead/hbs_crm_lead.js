@@ -3,7 +3,6 @@
 
 frappe.ui.form.on("Hbs Crm Lead", {
 	onload(frm) {
-		set_customer_details_read_only(frm);
 		if (frm.is_new()) {
 			if (!frm.doc.executive_1) {
 				frm.set_value("executive_1", frappe.session.user);
@@ -22,7 +21,6 @@ frappe.ui.form.on("Hbs Crm Lead", {
 	},
 
 	refresh(frm) {
-		set_customer_details_read_only(frm);
 		render_activity_timeline_js(frm);
 		toggle_won_status_read_only(frm);
 		handle_lead_type_terms(frm);
@@ -998,23 +996,6 @@ function check_phone_number_in_use(frm) {
 	}
 }
 
-function set_customer_details_read_only(frm) {
-	const customer_fields = [
-		"customer",
-		"company_name",
-		"company_gst",
-		"contact_name",
-		"contact_designation",
-		"contact_phone",
-		"contact_email",
-		"tally_serial",
-		"address"
-	];
-	customer_fields.forEach(f => {
-		frm.set_df_property(f, "read_only", 1);
-	});
-}
-
 function open_auto_fill_customer_dialog(frm) {
 	let dialog = new frappe.ui.Dialog({
 		title: __("Search & Auto Fill Customer Details"),
@@ -1024,15 +1005,14 @@ function open_auto_fill_customer_dialog(frm) {
 				label: __("Search Customer"),
 				fieldname: "search_term",
 				fieldtype: "Data",
-				placeholder: __("Search by name, company, phone, email, GST, serial..."),
-				description: __("Type to search live (pasting disabled). Or click 'Add Customer' to create new.")
+				description: __("Type Customer Name, Company, Phone, Email, or GST to search live")
 			},
 			{
 				fieldtype: "Button",
-				label: __("➕ Add Customer"),
-				fieldname: "add_customer_btn",
+				label: __("Search"),
+				fieldname: "search_btn",
 				click: function() {
-					open_quick_add_customer_dialog(frm, dialog);
+					perform_customer_search(dialog, frm);
 				}
 			},
 			{
@@ -1043,49 +1023,28 @@ function open_auto_fill_customer_dialog(frm) {
 		]
 	});
 
-	dialog.set_secondary_action(__("➕ Add Customer"), function() {
-		open_quick_add_customer_dialog(frm, dialog);
-	});
-
 	dialog.$wrapper.find(".modal-dialog").css({
 		"max-width": "950px",
 		"width": "90%"
 	});
 
 	let search_timer = null;
-	let $input = dialog.fields_dict.search_term.$input;
 
-	// Disable paste via right-click, keyboard, or drop
-	$input.attr("onpaste", "return false;");
-	$input.attr("autocomplete", "off");
-
-	$input.on("paste", function(e) {
-		e.preventDefault();
-		frappe.show_alert({
-			message: __("Pasting is disabled in search box. Please type manually."),
-			indicator: "orange"
-		});
-		return false;
+	// Live search as user types with 300ms debounce
+	dialog.fields_dict.search_term.$input.on("input", function() {
+		clearTimeout(search_timer);
+		let val = $(this).val();
+		if (!val || val.trim().length === 0) {
+			dialog.set_df_property("results_html", "options", '<div class="text-muted text-center" style="padding: 10px;">Please enter a search term.</div>');
+			return;
+		}
+		search_timer = setTimeout(function() {
+			perform_customer_search(dialog, frm);
+		}, 300);
 	});
 
-	$input.on("keydown", function(e) {
-		let isCtrlOrCmd = e.ctrlKey || e.metaKey;
-		if (isCtrlOrCmd && (e.key === "v" || e.key === "V" || e.keyCode === 86)) {
-			e.preventDefault();
-			frappe.show_alert({
-				message: __("Pasting (Ctrl+V) is disabled. Please type manually."),
-				indicator: "orange"
-			});
-			return false;
-		}
-		if (e.shiftKey && (e.key === "Insert" || e.keyCode === 45)) {
-			e.preventDefault();
-			frappe.show_alert({
-				message: __("Pasting is disabled. Please type manually."),
-				indicator: "orange"
-			});
-			return false;
-		}
+	// Instant search on Enter key
+	dialog.fields_dict.search_term.$input.on("keydown", function(e) {
 		if (e.which === 13) {
 			e.preventDefault();
 			clearTimeout(search_timer);
@@ -1093,34 +1052,22 @@ function open_auto_fill_customer_dialog(frm) {
 		}
 	});
 
-	$input.on("drop", function(e) {
-		e.preventDefault();
-		return false;
-	});
-
-	// Live search as user types with 300ms debounce
-	$input.on("input", function() {
-		clearTimeout(search_timer);
-		search_timer = setTimeout(function() {
-			perform_customer_search(dialog, frm);
-		}, 300);
-	});
-
-	// Delegated click listener - Fill details
+	// Delegated click listener - bound once, immune to typing re-render races
 	dialog.$wrapper.on("click", ".btn-fill-detail", function() {
 		clearTimeout(search_timer);
 		let key = $(this).attr("data-key");
 		let customer_doc = window.customer_search_results && window.customer_search_results[key];
 		if (customer_doc) {
+			// Auto fill values into lead form
 			frm.set_value("customer", customer_doc.name);
 			frm.set_value("company_name", customer_doc.company_name);
-			frm.set_value("company_gst", customer_doc.company_gst || "");
+			frm.set_value("company_gst", customer_doc.company_gst);
 			frm.set_value("contact_name", customer_doc.customer_name);
 			frm.set_value("contact_phone", customer_doc.contact_phone);
-			frm.set_value("contact_email", customer_doc.contact_email || "");
-			frm.set_value("address", customer_doc.address || "");
-			frm.set_value("tally_serial", customer_doc.tally_serial || "");
-			frm.set_value("license_type", customer_doc.license_type || "");
+			frm.set_value("contact_email", customer_doc.contact_email);
+			frm.set_value("address", customer_doc.address);
+			frm.set_value("tally_serial", customer_doc.tally_serial);
+			frm.set_value("license_type", customer_doc.license_type);
 
 			frappe.show_alert({
 				message: __("Customer details auto-filled successfully!"),
@@ -1131,27 +1078,17 @@ function open_auto_fill_customer_dialog(frm) {
 		}
 	});
 
-	// Delegated click listener - Add Customer button inside empty result box
-	dialog.$wrapper.on("click", ".btn-add-cust-from-search", function() {
-		open_quick_add_customer_dialog(frm, dialog);
-	});
-
 	dialog.show();
-
-	// Style add customer button
-	let $addBtn = dialog.get_field("add_customer_btn").$input;
-	if ($addBtn && $addBtn.length) {
-		$addBtn.addClass("btn-primary").css({"margin-top": "5px", "margin-bottom": "10px"});
-	}
-
-	// Immediately load recent customers list
-	perform_customer_search(dialog, frm);
 }
 
 function perform_customer_search(dialog, frm) {
 	let term = (dialog.get_value("search_term") || "").trim();
+	if (!term) {
+		dialog.set_df_property("results_html", "options", '<div class="text-muted text-center" style="padding: 10px;">Please enter a search term.</div>');
+		return;
+	}
 
-	dialog.set_df_property("results_html", "options", '<div class="text-center text-muted" style="padding: 20px;"><i class="fa fa-spinner fa-spin"></i> ' + __("Loading customers...") + '</div>');
+	dialog.set_df_property("results_html", "options", '<div class="text-center" style="padding: 10px;"><i class="fa fa-spinner fa-spin"></i> Searching...</div>');
 
 	frappe.call({
 		method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.search_customers",
@@ -1159,17 +1096,14 @@ function perform_customer_search(dialog, frm) {
 			search_term: term
 		},
 		callback: function(r) {
+			// If input changed while request was in-flight, discard stale result
 			if ((dialog.get_value("search_term") || "").trim() !== term) {
 				return;
 			}
 
 			if (r.message && r.message.length > 0) {
-				let title_html = term
-					? `<div style="font-size: 12px; color: #4b5563; margin-bottom: 8px;">${__("Found {0} matching customer(s):", [r.message.length])}</div>`
-					: `<div style="font-size: 12px; color: #4b5563; margin-bottom: 8px;">${__("Recent Customers ({0}):", [r.message.length])}</div>`;
-
-				let html = title_html + `
-					<div style="max-height: 420px; overflow-y: auto;">
+				let html = `
+					<div style="max-height: 420px; overflow-y: auto; margin-top: 15px;">
 						<table class="table table-bordered table-hover" style="font-size: 13px;">
 							<thead>
 								<tr class="active">
@@ -1177,7 +1111,7 @@ function perform_customer_search(dialog, frm) {
 									<th>${__("Company")}</th>
 									<th>${__("Phone")}</th>
 									<th>${__("Email")}</th>
-									<th style="width: 120px; text-align: center;">${__("Action")}</th>
+									<th>${__("Action")}</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -1192,13 +1126,13 @@ function perform_customer_search(dialog, frm) {
 
 					html += `
 						<tr>
-							<td><b>${frappe.utils.escape_html(cust.customer_name || '')}</b><br><small class="text-muted">ID: ${cust.name}</small></td>
-							<td>${frappe.utils.escape_html(cust.company_name || '')}<br><small class="text-muted">GST: ${frappe.utils.escape_html(cust.company_gst || '-')}</small></td>
-							<td>${frappe.utils.escape_html(cust.contact_phone || '')}</td>
-							<td>${frappe.utils.escape_html(cust.contact_email || '')}</td>
+							<td><b>${cust.customer_name || ''}</b><br><small class="text-muted">${cust.name}</small></td>
+							<td>${cust.company_name || ''}<br><small class="text-muted">GST: ${cust.company_gst || ''}</small></td>
+							<td>${cust.contact_phone || ''}</td>
+							<td>${cust.contact_email || ''}</td>
 							<td class="text-center" style="vertical-align: middle;">
 								<button class="btn btn-xs btn-primary btn-fill-detail" data-key="${cust_key}">
-									${__("Fill Details")}
+									${__("Fill this detail")}
 								</button>
 							</td>
 						</tr>
@@ -1213,138 +1147,10 @@ function perform_customer_search(dialog, frm) {
 
 				dialog.set_df_property("results_html", "options", html);
 			} else {
-				dialog.set_df_property("results_html", "options", `
-					<div class="text-center" style="padding: 25px; border: 1px dashed #d1d5db; border-radius: 6px; margin-top: 10px;">
-						<div class="text-muted" style="margin-bottom: 12px; font-size: 14px;">${__("No matching customers found.")}</div>
-						<button class="btn btn-sm btn-primary btn-add-cust-from-search">
-							<i class="fa fa-plus"></i> ${__("➕ Add New Customer")}
-						</button>
-					</div>
-				`);
+				dialog.set_df_property("results_html", "options", '<div class="text-danger text-center" style="padding: 10px;">No matching customers found.</div>');
 			}
 		}
 	});
-}
-
-function open_quick_add_customer_dialog(frm, parent_dialog) {
-	let term = parent_dialog ? (parent_dialog.get_value("search_term") || "").trim() : "";
-	let initial_company = "";
-	let initial_phone = "";
-	if (term) {
-		if (/^\d{10}$/.test(term)) {
-			initial_phone = term;
-		} else if (!/^\d+$/.test(term)) {
-			initial_company = term;
-		}
-	}
-
-	let add_dialog = new frappe.ui.Dialog({
-		title: __("Add New Customer"),
-		fields: [
-			{
-				label: __("Company Name"),
-				fieldname: "company_name",
-				fieldtype: "Data",
-				reqd: 1,
-				default: initial_company
-			},
-			{
-				label: __("Customer / Contact Name"),
-				fieldname: "customer_name",
-				fieldtype: "Data",
-				reqd: 1
-			},
-			{
-				label: __("Contact Phone"),
-				fieldname: "contact_phone",
-				fieldtype: "Data",
-				reqd: 1,
-				default: initial_phone
-			},
-			{
-				label: __("Contact Email"),
-				fieldname: "contact_email",
-				fieldtype: "Data"
-			},
-			{
-				fieldtype: "Column Break"
-			},
-			{
-				label: __("Company GST"),
-				fieldname: "company_gst",
-				fieldtype: "Data"
-			},
-			{
-				label: __("Tally Serial"),
-				fieldname: "tally_serial",
-				fieldtype: "Data"
-			},
-			{
-				label: __("License Type"),
-				fieldname: "license_type",
-				fieldtype: "Select",
-				options: "\nAuditor\nGold\nSilver"
-			},
-			{
-				label: __("Address"),
-				fieldname: "address",
-				fieldtype: "Small Text"
-			}
-		],
-		primary_action_label: __("Save & Auto Fill"),
-		primary_action: function(values) {
-			if (!values.company_name || !values.customer_name || !values.contact_phone) {
-				frappe.msgprint(__("Company Name, Customer Name, and Contact Phone are required."));
-				return;
-			}
-			add_dialog.get_primary_btn().prop("disabled", true);
-			frappe.call({
-				method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.quick_create_customer",
-				args: {
-					company_name: values.company_name,
-					customer_name: values.customer_name,
-					contact_phone: values.contact_phone,
-					contact_email: values.contact_email || "",
-					company_gst: values.company_gst || "",
-					tally_serial: values.tally_serial || "",
-					license_type: values.license_type || "",
-					address: values.address || ""
-				},
-				freeze: true,
-				freeze_message: __("Creating Customer..."),
-				callback: function(r) {
-					add_dialog.get_primary_btn().prop("disabled", false);
-					if (r.message) {
-						let cust = r.message;
-						frm.set_value("customer", cust.name);
-						frm.set_value("company_name", cust.company_name);
-						frm.set_value("company_gst", cust.company_gst || "");
-						frm.set_value("contact_name", cust.customer_name);
-						frm.set_value("contact_phone", cust.contact_phone);
-						frm.set_value("contact_email", cust.contact_email || "");
-						frm.set_value("address", cust.address || "");
-						frm.set_value("tally_serial", cust.tally_serial || "");
-						frm.set_value("license_type", cust.license_type || "");
-
-						frappe.show_alert({
-							message: __("Customer created and details auto-filled successfully!"),
-							indicator: "green"
-						});
-
-						add_dialog.hide();
-						if (parent_dialog) {
-							parent_dialog.hide();
-						}
-					}
-				},
-				error: function() {
-					add_dialog.get_primary_btn().prop("disabled", false);
-				}
-			});
-		}
-	});
-
-	add_dialog.show();
 }
 
 function handle_executive_1_permission(frm) {
