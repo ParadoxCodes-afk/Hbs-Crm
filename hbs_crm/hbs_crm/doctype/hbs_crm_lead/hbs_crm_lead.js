@@ -3,6 +3,7 @@
 
 frappe.ui.form.on("Hbs Crm Lead", {
 	onload(frm) {
+		set_customer_details_read_only(frm);
 		if (frm.is_new()) {
 			if (!frm.doc.executive_1) {
 				frm.set_value("executive_1", frappe.session.user);
@@ -23,6 +24,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 	refresh(frm) {
 		render_activity_timeline_js(frm);
 		toggle_won_status_read_only(frm);
+		set_customer_details_read_only(frm);
 		handle_lead_type_terms(frm);
 		handle_referred_by_dependency(frm);
 		handle_executive_1_permission(frm);
@@ -32,9 +34,12 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		frm.clear_custom_buttons();
 
 		if (frm.doc.status !== "won" && frm.doc.status !== "lost") {
-			frm.add_custom_button(__("🔍 Auto Fill Details"), function () {
+			let autofill_btn = frm.add_custom_button(__("🔍 Auto Fill Details"), function () {
 				open_auto_fill_customer_dialog(frm);
 			});
+			if (frm.is_new()) {
+				autofill_btn.addClass("btn-primary");
+			}
 		}
 
 		if (!frm.is_new()) {
@@ -108,6 +113,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 
 	status(frm) {
 		toggle_won_status_read_only(frm);
+		set_customer_details_read_only(frm);
 	},
 	lead_source(frm) {
 		handle_referred_by_dependency(frm);
@@ -249,7 +255,7 @@ function toggle_won_status_read_only(frm) {
 			frm.disable_save();
 		}
 	} else {
-		let naturally_read_only = ["customer", "total_before_tax", "total_tax", "total_after_tax", "final_total", "activity"];
+		let naturally_read_only = ["pi_number", "total_before_tax", "total_tax", "total_after_tax", "final_total", "activity"];
 		(frm.fields || []).forEach((field) => {
 			if (!naturally_read_only.includes(field.df.fieldname) && field.df.fieldtype !== "Section Break" && field.df.fieldtype !== "Tab Break" && field.df.fieldtype !== "Column Break" && field.df.fieldtype !== "HTML") {
 				frm.set_df_property(field.df.fieldname, "read_only", 0);
@@ -996,6 +1002,107 @@ function check_phone_number_in_use(frm) {
 	}
 }
 
+function is_admin_or_owner(callback) {
+	if (frappe.session.user === "Administrator" || frappe.user.has_role("System Manager")) {
+		callback(true);
+		return;
+	}
+
+	if (window._hbs_is_admin_or_owner !== undefined) {
+		callback(window._hbs_is_admin_or_owner);
+		return;
+	}
+
+	frappe.call({
+		method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.check_is_admin_or_owner",
+		callback: function(r) {
+			window._hbs_is_admin_or_owner = !!r.message;
+			callback(window._hbs_is_admin_or_owner);
+		},
+		error: function() {
+			window._hbs_is_admin_or_owner = false;
+			callback(false);
+		}
+	});
+}
+
+function set_customer_details_read_only(frm) {
+	if (frm.doc.status === "won" || frm.doc.status === "lost") {
+		return;
+	}
+
+	const editable_fields = [
+		"company_gst",
+		"contact_name",
+		"contact_designation",
+		"contact_phone",
+		"contact_email",
+		"tally_serial",
+		"license_type",
+		"address"
+	];
+
+	const locked_fields = [
+		"customer",
+		"company_name"
+	];
+
+	is_admin_or_owner(function(is_admin) {
+		if (is_admin) {
+			[...locked_fields, ...editable_fields].forEach(f => {
+				frm.set_df_property(f, "read_only", 0);
+				let field = frm.get_field(f);
+				if (field && field.$wrapper) {
+					field.$wrapper.find("input, textarea, select").prop("readonly", false).prop("disabled", false).css({
+						"background-color": "",
+						"cursor": "",
+						"pointer-events": ""
+					});
+					field.$wrapper.find(".link-btn").show();
+				}
+			});
+		} else {
+			// Standard users: only company_name & customer link are read-only
+			locked_fields.forEach(f => {
+				// Keep df.read_only as 0 so Frappe does not hide empty fields on new leads
+				frm.set_df_property(f, "read_only", 0);
+				let field = frm.get_field(f);
+				if (field && field.$wrapper) {
+					field.$wrapper.find("input, textarea").prop("readonly", true).css({
+						"background-color": "var(--control-bg-read-only, #f8fafc)",
+						"cursor": "not-allowed",
+						"pointer-events": f === "customer" ? "none" : "auto"
+					});
+					if (f === "company_name") {
+						if (!frm.doc.company_name) {
+							field.$wrapper.find("input").attr("placeholder", __("Click 'Auto Fill Details' above to enter customer"));
+						}
+						field.$wrapper.find("input").off("click.hbs_autofill_prompt").on("click.hbs_autofill_prompt", function() {
+							if (!frm.doc.company_name) {
+								open_auto_fill_customer_dialog(frm);
+							}
+						});
+					}
+					field.$wrapper.find(".link-btn").hide();
+				}
+			});
+
+			// Rest of the customer fields can be edited by the user
+			editable_fields.forEach(f => {
+				frm.set_df_property(f, "read_only", 0);
+				let field = frm.get_field(f);
+				if (field && field.$wrapper) {
+					field.$wrapper.find("input, textarea, select").prop("readonly", false).prop("disabled", false).css({
+						"background-color": "",
+						"cursor": "",
+						"pointer-events": ""
+					});
+				}
+			});
+		}
+	});
+}
+
 function open_auto_fill_customer_dialog(frm) {
 	let dialog = new frappe.ui.Dialog({
 		title: __("Search & Auto Fill Customer Details"),
@@ -1005,14 +1112,15 @@ function open_auto_fill_customer_dialog(frm) {
 				label: __("Search Customer"),
 				fieldname: "search_term",
 				fieldtype: "Data",
-				description: __("Type Customer Name, Company, Phone, Email, or GST to search live")
+				placeholder: __("Search by name, company, phone, email, GST, serial..."),
+				description: __("Type to search live (pasting disabled). Or click 'Add Customer' to create new.")
 			},
 			{
 				fieldtype: "Button",
-				label: __("Search"),
-				fieldname: "search_btn",
+				label: __("➕ Add Customer"),
+				fieldname: "add_customer_btn",
 				click: function() {
-					perform_customer_search(dialog, frm);
+					open_quick_add_customer_dialog(frm, dialog);
 				}
 			},
 			{
@@ -1020,7 +1128,11 @@ function open_auto_fill_customer_dialog(frm) {
 				fieldname: "results_html",
 				label: __("Results")
 			}
-		]
+		],
+		secondary_action_label: __("➕ Add Customer"),
+		secondary_action: function() {
+			open_quick_add_customer_dialog(frm, dialog);
+		}
 	});
 
 	dialog.$wrapper.find(".modal-dialog").css({
@@ -1028,46 +1140,89 @@ function open_auto_fill_customer_dialog(frm) {
 		"width": "90%"
 	});
 
+	dialog.show();
+
+	// Style add customer button
+	let addCustField = dialog.get_field("add_customer_btn");
+	if (addCustField && addCustField.$input) {
+		addCustField.$input.addClass("btn-primary").css({"margin-top": "5px", "margin-bottom": "10px"});
+	}
+
 	let search_timer = null;
+	let $input = dialog.get_input("search_term");
 
-	// Live search as user types with 300ms debounce
-	dialog.fields_dict.search_term.$input.on("input", function() {
-		clearTimeout(search_timer);
-		let val = $(this).val();
-		if (!val || val.trim().length === 0) {
-			dialog.set_df_property("results_html", "options", '<div class="text-muted text-center" style="padding: 10px;">Please enter a search term.</div>');
-			return;
-		}
-		search_timer = setTimeout(function() {
-			perform_customer_search(dialog, frm);
-		}, 300);
-	});
+	if ($input && $input.length) {
+		// Disable paste via right-click, keyboard, or drop
+		$input.attr("onpaste", "return false;");
+		$input.attr("autocomplete", "off");
 
-	// Instant search on Enter key
-	dialog.fields_dict.search_term.$input.on("keydown", function(e) {
-		if (e.which === 13) {
+		$input.on("paste", function(e) {
 			e.preventDefault();
-			clearTimeout(search_timer);
-			perform_customer_search(dialog, frm);
-		}
-	});
+			frappe.show_alert({
+				message: __("Pasting is disabled in search box. Please type manually."),
+				indicator: "orange"
+			});
+			return false;
+		});
 
-	// Delegated click listener - bound once, immune to typing re-render races
-	dialog.$wrapper.on("click", ".btn-fill-detail", function() {
+		$input.on("keydown", function(e) {
+			let isCtrlOrCmd = e.ctrlKey || e.metaKey;
+			if (isCtrlOrCmd && (e.key === "v" || e.key === "V" || e.keyCode === 86)) {
+				e.preventDefault();
+				frappe.show_alert({
+					message: __("Pasting (Ctrl+V) is disabled. Please type manually."),
+					indicator: "orange"
+				});
+				return false;
+			}
+			if (e.shiftKey && (e.key === "Insert" || e.keyCode === 45)) {
+				e.preventDefault();
+				frappe.show_alert({
+					message: __("Pasting is disabled. Please type manually."),
+					indicator: "orange"
+				});
+				return false;
+			}
+			if (e.which === 13) {
+				e.preventDefault();
+				clearTimeout(search_timer);
+				perform_customer_search(dialog, frm);
+			}
+		});
+
+		$input.on("drop", function(e) {
+			e.preventDefault();
+			return false;
+		});
+
+		// Live search as user types with 300ms debounce
+		$input.on("input", function() {
+			clearTimeout(search_timer);
+			search_timer = setTimeout(function() {
+				perform_customer_search(dialog, frm);
+			}, 300);
+		});
+	}
+
+	// Delegated click listener - Fill details
+	dialog.$wrapper.off("click", ".btn-fill-detail").on("click", ".btn-fill-detail", function() {
 		clearTimeout(search_timer);
 		let key = $(this).attr("data-key");
 		let customer_doc = window.customer_search_results && window.customer_search_results[key];
 		if (customer_doc) {
-			// Auto fill values into lead form
-			frm.set_value("customer", customer_doc.name);
-			frm.set_value("company_name", customer_doc.company_name);
-			frm.set_value("company_gst", customer_doc.company_gst);
-			frm.set_value("contact_name", customer_doc.customer_name);
-			frm.set_value("contact_phone", customer_doc.contact_phone);
-			frm.set_value("contact_email", customer_doc.contact_email);
-			frm.set_value("address", customer_doc.address);
-			frm.set_value("tally_serial", customer_doc.tally_serial);
-			frm.set_value("license_type", customer_doc.license_type);
+			frm.set_value({
+				customer: customer_doc.name ? String(customer_doc.name) : "",
+				company_name: customer_doc.company_name || "",
+				company_gst: customer_doc.company_gst || "",
+				contact_name: customer_doc.customer_name || "",
+				contact_phone: customer_doc.contact_phone || "",
+				contact_email: customer_doc.contact_email || "",
+				address: customer_doc.address || "",
+				tally_serial: customer_doc.tally_serial || "",
+				license_type: customer_doc.license_type || ""
+			}).then(() => {
+				set_customer_details_read_only(frm);
+			});
 
 			frappe.show_alert({
 				message: __("Customer details auto-filled successfully!"),
@@ -1078,17 +1233,19 @@ function open_auto_fill_customer_dialog(frm) {
 		}
 	});
 
-	dialog.show();
+	// Delegated click listener - Add Customer button inside empty result box
+	dialog.$wrapper.off("click", ".btn-add-cust-from-search").on("click", ".btn-add-cust-from-search", function() {
+		open_quick_add_customer_dialog(frm, dialog);
+	});
+
+	// Immediately load recent customers list
+	perform_customer_search(dialog, frm);
 }
 
 function perform_customer_search(dialog, frm) {
 	let term = (dialog.get_value("search_term") || "").trim();
-	if (!term) {
-		dialog.set_df_property("results_html", "options", '<div class="text-muted text-center" style="padding: 10px;">Please enter a search term.</div>');
-		return;
-	}
 
-	dialog.set_df_property("results_html", "options", '<div class="text-center" style="padding: 10px;"><i class="fa fa-spinner fa-spin"></i> Searching...</div>');
+	dialog.set_df_property("results_html", "options", '<div class="text-center text-muted" style="padding: 20px;"><i class="fa fa-spinner fa-spin"></i> ' + __("Loading customers...") + '</div>');
 
 	frappe.call({
 		method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.search_customers",
@@ -1096,14 +1253,17 @@ function perform_customer_search(dialog, frm) {
 			search_term: term
 		},
 		callback: function(r) {
-			// If input changed while request was in-flight, discard stale result
 			if ((dialog.get_value("search_term") || "").trim() !== term) {
 				return;
 			}
 
 			if (r.message && r.message.length > 0) {
-				let html = `
-					<div style="max-height: 420px; overflow-y: auto; margin-top: 15px;">
+				let title_html = term
+					? `<div style="font-size: 12px; color: #4b5563; margin-bottom: 8px;">${__("Found {0} matching customer(s):", [r.message.length])}</div>`
+					: `<div style="font-size: 12px; color: #4b5563; margin-bottom: 8px;">${__("Recent Customers ({0}):", [r.message.length])}</div>`;
+
+				let html = title_html + `
+					<div style="max-height: 420px; overflow-y: auto;">
 						<table class="table table-bordered table-hover" style="font-size: 13px;">
 							<thead>
 								<tr class="active">
@@ -1111,7 +1271,7 @@ function perform_customer_search(dialog, frm) {
 									<th>${__("Company")}</th>
 									<th>${__("Phone")}</th>
 									<th>${__("Email")}</th>
-									<th>${__("Action")}</th>
+									<th style="width: 120px; text-align: center;">${__("Action")}</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -1126,13 +1286,13 @@ function perform_customer_search(dialog, frm) {
 
 					html += `
 						<tr>
-							<td><b>${cust.customer_name || ''}</b><br><small class="text-muted">${cust.name}</small></td>
-							<td>${cust.company_name || ''}<br><small class="text-muted">GST: ${cust.company_gst || ''}</small></td>
-							<td>${cust.contact_phone || ''}</td>
-							<td>${cust.contact_email || ''}</td>
+							<td><b>${frappe.utils.escape_html(cust.customer_name || '')}</b><br><small class="text-muted">ID: ${cust.name}</small></td>
+							<td>${frappe.utils.escape_html(cust.company_name || '')}<br><small class="text-muted">GST: ${frappe.utils.escape_html(cust.company_gst || '-')}</small></td>
+							<td>${frappe.utils.escape_html(cust.contact_phone || '')}</td>
+							<td>${frappe.utils.escape_html(cust.contact_email || '')}</td>
 							<td class="text-center" style="vertical-align: middle;">
 								<button class="btn btn-xs btn-primary btn-fill-detail" data-key="${cust_key}">
-									${__("Fill this detail")}
+									${__("Fill Details")}
 								</button>
 							</td>
 						</tr>
@@ -1147,31 +1307,147 @@ function perform_customer_search(dialog, frm) {
 
 				dialog.set_df_property("results_html", "options", html);
 			} else {
-				dialog.set_df_property("results_html", "options", '<div class="text-danger text-center" style="padding: 10px;">No matching customers found.</div>');
+				dialog.set_df_property("results_html", "options", `
+					<div class="text-center" style="padding: 25px; border: 1px dashed #d1d5db; border-radius: 6px; margin-top: 10px;">
+						<div class="text-muted" style="margin-bottom: 12px; font-size: 14px;">${__("No matching customers found.")}</div>
+						<button class="btn btn-sm btn-primary btn-add-cust-from-search">
+							<i class="fa fa-plus"></i> ${__("➕ Add New Customer")}
+						</button>
+					</div>
+				`);
 			}
 		}
 	});
 }
 
-function handle_executive_1_permission(frm) {
-	if (frappe.session.user === "Administrator" || frappe.user.has_role("System Manager")) {
-		frm.set_df_property("executive_1", "read_only", 0);
-		return;
-	}
-
-	if (window._hbs_user_role_type !== undefined) {
-		frm.set_df_property("executive_1", "read_only", window._hbs_user_role_type === "Owner" ? 0 : 1);
-		return;
-	}
-
-	frappe.db.get_value("Hbs User Hierarchy", {"user": frappe.session.user}, "role_type", function(r) {
-		let role = r && (r.role_type || (r.message && r.message.role_type));
-		window._hbs_user_role_type = role;
-		if (role === "Owner") {
-			frm.set_df_property("executive_1", "read_only", 0);
-		} else {
-			frm.set_df_property("executive_1", "read_only", 1);
+function open_quick_add_customer_dialog(frm, parent_dialog) {
+	let term = parent_dialog ? (parent_dialog.get_value("search_term") || "").trim() : "";
+	let initial_company = "";
+	let initial_phone = "";
+	if (term) {
+		if (/^\d{10}$/.test(term)) {
+			initial_phone = term;
+		} else if (!/^\d+$/.test(term)) {
+			initial_company = term;
 		}
+	}
+
+	let add_dialog = new frappe.ui.Dialog({
+		title: __("Add New Customer"),
+		fields: [
+			{
+				label: __("Company Name"),
+				fieldname: "company_name",
+				fieldtype: "Data",
+				reqd: 1,
+				default: initial_company
+			},
+			{
+				label: __("Customer / Contact Name"),
+				fieldname: "customer_name",
+				fieldtype: "Data",
+				reqd: 1
+			},
+			{
+				label: __("Contact Phone"),
+				fieldname: "contact_phone",
+				fieldtype: "Data",
+				reqd: 1,
+				default: initial_phone
+			},
+			{
+				label: __("Contact Email"),
+				fieldname: "contact_email",
+				fieldtype: "Data"
+			},
+			{
+				fieldtype: "Column Break"
+			},
+			{
+				label: __("Company GST"),
+				fieldname: "company_gst",
+				fieldtype: "Data"
+			},
+			{
+				label: __("Tally Serial"),
+				fieldname: "tally_serial",
+				fieldtype: "Data"
+			},
+			{
+				label: __("License Type"),
+				fieldname: "license_type",
+				fieldtype: "Select",
+				options: "\nAuditor\nGold\nSilver"
+			},
+			{
+				label: __("Address"),
+				fieldname: "address",
+				fieldtype: "Small Text"
+			}
+		],
+		primary_action_label: __("Save & Auto Fill"),
+		primary_action: function(values) {
+			if (!values.company_name || !values.customer_name || !values.contact_phone) {
+				frappe.msgprint(__("Company Name, Customer Name, and Contact Phone are required."));
+				return;
+			}
+			add_dialog.get_primary_btn().prop("disabled", true);
+			frappe.call({
+				method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.quick_create_customer",
+				args: {
+					company_name: values.company_name,
+					customer_name: values.customer_name,
+					contact_phone: values.contact_phone,
+					contact_email: values.contact_email || "",
+					company_gst: values.company_gst || "",
+					tally_serial: values.tally_serial || "",
+					license_type: values.license_type || "",
+					address: values.address || ""
+				},
+				freeze: true,
+				freeze_message: __("Creating Customer..."),
+				callback: function(r) {
+					add_dialog.get_primary_btn().prop("disabled", false);
+					if (r.message) {
+						let cust = r.message;
+						frm.set_value({
+							customer: cust.name ? String(cust.name) : "",
+							company_name: cust.company_name || "",
+							company_gst: cust.company_gst || "",
+							contact_name: cust.customer_name || "",
+							contact_phone: cust.contact_phone || "",
+							contact_email: cust.contact_email || "",
+							address: cust.address || "",
+							tally_serial: cust.tally_serial || "",
+							license_type: cust.license_type || ""
+						}).then(() => {
+							set_customer_details_read_only(frm);
+						});
+
+						frappe.show_alert({
+							message: __("Customer created and details auto-filled successfully!"),
+							indicator: "green"
+						});
+
+						add_dialog.hide();
+						if (parent_dialog) {
+							parent_dialog.hide();
+						}
+					}
+				},
+				error: function() {
+					add_dialog.get_primary_btn().prop("disabled", false);
+				}
+			});
+		}
+	});
+
+	add_dialog.show();
+}
+
+function handle_executive_1_permission(frm) {
+	is_admin_or_owner(function(is_admin) {
+		frm.set_df_property("executive_1", "read_only", is_admin ? 0 : 1);
 	});
 }
 

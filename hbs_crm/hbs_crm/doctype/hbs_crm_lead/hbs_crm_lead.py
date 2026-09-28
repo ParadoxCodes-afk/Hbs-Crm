@@ -62,6 +62,12 @@ def is_owner_or_admin(user):
 	return role_type == "Owner"
 
 
+@frappe.whitelist()
+def check_is_admin_or_owner():
+	"""Check if current session user is Administrator, System Manager, or Owner."""
+	return is_owner_or_admin(frappe.session.user)
+
+
 def get_logged_in_user_context(user=None):
 	"""Build the `logged_in_user` dict used by email templates."""
 	user = user or (frappe.session.user if frappe.session else "Administrator")
@@ -1075,13 +1081,20 @@ def check_phone_in_use(contact_phone, current_lead_name=None):
 
 
 @frappe.whitelist()
-def search_customers(search_term):
-	"""Search Hbs Customer records matching search_term in any of the identifying fields."""
-	if not search_term or not str(search_term).strip():
-		return []
+def search_customers(search_term=""):
+	"""Search Hbs Customer records matching search_term in any of the identifying fields.
+	If search_term is empty, returns the 20 most recent customers."""
+	term_str = str(search_term or "").strip()
+	if not term_str:
+		query = """
+			SELECT name, customer_name, company_name, company_gst, contact_phone, contact_email, address, tally_serial, license_type
+			FROM `tabHbs Customer`
+			ORDER BY creation DESC
+			LIMIT 20
+		"""
+		return frappe.db.sql(query, as_dict=True)
 
-	term = f"%{str(search_term).strip()}%"
-
+	term = f"%{term_str}%"
 	query = """
 		SELECT name, customer_name, company_name, company_gst, contact_phone, contact_email, address, tally_serial, license_type
 		FROM `tabHbs Customer`
@@ -1092,9 +1105,38 @@ def search_customers(search_term):
 		   OR `company_gst` LIKE %s
 		   OR `tally_serial` LIKE %s
 		ORDER BY customer_name ASC
-		LIMIT 15
+		LIMIT 20
 	"""
 	return frappe.db.sql(query, (term, term, term, term, term, term), as_dict=True)
+
+
+@frappe.whitelist()
+def quick_create_customer(company_name, customer_name, contact_phone, contact_email=None, company_gst=None, tally_serial=None, license_type=None, address=None):
+	"""Quick create an Hbs Customer record and return the created document."""
+	if not company_name or not str(company_name).strip():
+		frappe.throw(_("Company Name is required."))
+	if not customer_name or not str(customer_name).strip():
+		frappe.throw(_("Customer Name is required."))
+	if not contact_phone or not str(contact_phone).strip():
+		frappe.throw(_("Contact Phone is required."))
+
+	doc = frappe.new_doc("Hbs Customer")
+	doc.company_name = str(company_name).strip()
+	doc.customer_name = str(customer_name).strip()
+	doc.contact_phone = str(contact_phone).strip()
+	if contact_email and str(contact_email).strip():
+		doc.contact_email = str(contact_email).strip()
+	if company_gst and str(company_gst).strip():
+		doc.company_gst = str(company_gst).strip()
+	if tally_serial and str(tally_serial).strip():
+		doc.tally_serial = str(tally_serial).strip()
+	if license_type and str(license_type).strip():
+		doc.license_type = str(license_type).strip()
+	if address and str(address).strip():
+		doc.address = str(address).strip()
+
+	doc.insert(ignore_permissions=False)
+	return doc.as_dict()
 
 
 @frappe.whitelist()
