@@ -3,9 +3,13 @@
 
 import frappe
 from frappe import _
+from hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead import is_owner_or_admin
 
 
 def execute(filters=None):
+	if not is_owner_or_admin(frappe.session.user):
+		frappe.throw(_("Only Administrator, System Manager, or Owner can access the Lead Executive Summary report."), frappe.PermissionError)
+
 	filters = frappe._dict(filters or {})
 	columns = get_columns(filters)
 	data = get_data(filters)
@@ -231,6 +235,9 @@ def get_executive_lead_details(
 	group_val=None,
 ):
 	"""Return all leads belonging to the specified executive or lead type matching the report filters."""
+	if not is_owner_or_admin(frappe.session.user):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
 	conditions = []
 	params = {}
 

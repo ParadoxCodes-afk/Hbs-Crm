@@ -141,10 +141,23 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 			preview_lead_quotation_from_list(checked[0]);
 		});
 
-		// Executive Summary Report
-		listview.page.add_inner_button(__("📊 Executive Summary Report"), () => {
-			frappe.set_route("query-report", "Lead Executive Summary");
-		});
+		// Executive Summary Report - only for Admin/Owner
+		if (frappe.session.user === "Administrator" || frappe.user.has_role("System Manager")) {
+			listview.page.add_inner_button(__("📊 Executive Summary Report"), () => {
+				frappe.set_route("query-report", "Lead Executive Summary");
+			});
+		} else {
+			frappe.call({
+				method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.check_is_admin_or_owner",
+				callback: function(r) {
+					if (r && r.message) {
+						listview.page.add_inner_button(__("📊 Executive Summary Report"), () => {
+							frappe.set_route("query-report", "Lead Executive Summary");
+						});
+					}
+				}
+			});
+		}
 	}
 };
 
