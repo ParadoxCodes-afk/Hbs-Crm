@@ -287,7 +287,7 @@ class HbsTallyRenewal(Document):
 		})
 
 	def calculate_totals(self):
-		"""Calculate totals and taxes taking additional discount into account first."""
+		"""Calculate totals and taxes without discount (discount disabled)."""
 		if not getattr(self, "items", None):
 			self.total_before_tax = 0
 			self.total_tax = 0
@@ -300,24 +300,17 @@ class HbsTallyRenewal(Document):
 		for row in self.items:
 			qty = frappe.utils.flt(row.qty) or 1
 			rate = frappe.utils.flt(row.rate) or 0
-			discount = frappe.utils.flt(row.discount_amount) or 0
-			row_subtotal = (qty * rate) - discount
+			row_subtotal = qty * rate
 			row_subtotals.append(row_subtotal)
 			total_before_tax += row_subtotal
 
-		additional_discount = frappe.utils.flt(self.additional_discount) or 0
 		total_tax = 0
 		total_after_tax = 0
 
 		for row, row_subtotal in zip(self.items, row_subtotals):
-			row_additional_discount = 0
-			if total_before_tax > 0:
-				row_additional_discount = (row_subtotal / total_before_tax) * additional_discount
-
-			net_subtotal = row_subtotal - row_additional_discount
 			tax_percent = frappe.utils.flt(row.tax) or 0
-			tax_amt = (net_subtotal * tax_percent) / 100.0
-			row_amount = net_subtotal + tax_amt
+			tax_amt = (row_subtotal * tax_percent) / 100.0
+			row_amount = row_subtotal + tax_amt
 
 			row.tax_amount = tax_amt
 			row.amount = row_amount
@@ -327,8 +320,8 @@ class HbsTallyRenewal(Document):
 
 		self.total_before_tax = total_before_tax
 		self.total_tax = total_tax
-		self.total_after_tax = total_before_tax - additional_discount
-		self.final_total = int(frappe.utils.flt(total_before_tax - additional_discount + total_tax) + 0.5)
+		self.total_after_tax = total_before_tax
+		self.final_total = int(frappe.utils.flt(total_before_tax + total_tax) + 0.5)
 		is_import = getattr(self.flags, "in_import", False) or getattr(frappe.flags, "in_import", False)
 		if self.final_total > 0 and not is_import:
 			self.cc_amount = self.final_total
@@ -406,7 +399,13 @@ class HbsTallyRenewal(Document):
 					title=_("Alteration Restricted")
 				)
 
-		# Additional discount is editable by users
+		# Enforce additional discount lock for normal users
+		old_discount = frappe.db.get_value("Hbs Tally Renewal", self.name, "additional_discount") or 0
+		if frappe.utils.flt(self.additional_discount) != frappe.utils.flt(old_discount):
+			frappe.throw(
+				_("<b>Quote Locked!</b><br>Only Admin/Owner can change additional discount."),
+				title=_("Alteration Restricted")
+			)
 
 		# Enforce old remarks lock for normal users
 		old_remarks_val = frappe.db.get_value("Hbs Tally Renewal", self.name, "old_remarks") or ""

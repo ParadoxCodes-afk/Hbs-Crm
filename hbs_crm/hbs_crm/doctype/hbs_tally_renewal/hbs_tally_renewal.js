@@ -397,16 +397,17 @@ function setup_field_permissions(frm) {
 			if (frm.fields_dict.items && frm.fields_dict.items.grid) {
 				let grid = frm.fields_dict.items.grid;
 				grid.cannot_add_rows = false;
-				["item_name", "qty", "rate", "discount_amount", "tax", "amount", "hsn", "description"].forEach(col => {
+				["item_name", "qty", "rate", "tax", "amount", "hsn", "description"].forEach(col => {
 					grid.update_docfield_property(col, "read_only", 0);
 				});
+				grid.update_docfield_property("discount_amount", "read_only", 1);
 				if (grid.wrapper) {
 					grid.wrapper.find(".grid-remove-rows, .grid-add-row, .grid-delete-row, .grid-duplicate-row").show();
 				}
 				grid.refresh();
 			}
 
-			frm.set_df_property("additional_discount", "read_only", 0);
+			frm.set_df_property("additional_discount", "read_only", 1);
 			if (!is_admin) {
 				["payment_terms", "delivery", "support", "taxes", "validity"].forEach(fn => {
 					frm.set_df_property(fn, "read_only", 1);
@@ -1083,10 +1084,9 @@ function calculate_item_amount(frm, cdt, cdn) {
 	let row = locals[cdt][cdn];
 	let qty = flt(row.qty) || 1;
 	let rate = flt(row.rate) || 0;
-	let discount = flt(row.discount_amount) || 0;
 	let tax_percent = flt(row.tax) || 0;
 
-	let subtotal = (qty * rate) - discount;
+	let subtotal = qty * rate;
 	let tax_amount = (subtotal * tax_percent) / 100.0;
 	let total_amount = subtotal + tax_amount;
 
@@ -1101,28 +1101,18 @@ function calculate_totals(frm) {
 	(frm.doc.items || []).forEach((row) => {
 		let qty = flt(row.qty) || 1;
 		let rate = flt(row.rate) || 0;
-		let discount = flt(row.discount_amount) || 0;
-		total_before_tax += (qty * rate) - discount;
+		total_before_tax += (qty * rate);
 	});
 
-	let additional_discount = flt(frm.doc.additional_discount) || 0;
 	let total_tax = 0;
 
 	(frm.doc.items || []).forEach((row) => {
 		let qty = flt(row.qty) || 1;
 		let rate = flt(row.rate) || 0;
-		let discount = flt(row.discount_amount) || 0;
-		let row_subtotal = (qty * rate) - discount;
-
-		let row_additional_discount = 0;
-		if (total_before_tax > 0) {
-			row_additional_discount = (row_subtotal / total_before_tax) * additional_discount;
-		}
-
-		let net_subtotal = row_subtotal - row_additional_discount;
+		let row_subtotal = (qty * rate);
 		let tax_percent = flt(row.tax) || 0;
-		let tax_amt = (net_subtotal * tax_percent) / 100.0;
-		let row_amount = net_subtotal + tax_amt;
+		let tax_amt = (row_subtotal * tax_percent) / 100.0;
+		let row_amount = row_subtotal + tax_amt;
 
 		row.tax_amount = tax_amt;
 		row.amount = row_amount;
@@ -1131,11 +1121,11 @@ function calculate_totals(frm) {
 
 	frm.refresh_field("items");
 
-	let final_total = Math.round((total_before_tax - additional_discount) + total_tax);
+	let final_total = Math.round(total_before_tax + total_tax);
 
 	frm.set_value("total_before_tax", total_before_tax);
 	frm.set_value("total_tax", total_tax);
-	frm.set_value("total_after_tax", total_before_tax - additional_discount);
+	frm.set_value("total_after_tax", total_before_tax);
 	frm.set_value("final_total", final_total);
 }
 
