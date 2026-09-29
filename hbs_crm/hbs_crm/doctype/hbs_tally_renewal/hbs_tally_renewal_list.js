@@ -151,6 +151,11 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				open_custom_import_data_dialog(listview);
 			}, __("Operations"));
 
+			// --- UPDATE MASTER DATA (Customer Serials Report / Portal Updation) ---
+			listview.page.add_inner_button(__("🔄 Update Master Data"), () => {
+				open_update_master_data_dialog(listview);
+			}, __("Operations"));
+
 			// --- MOVED OUT UPDATION (Excel: TSS Tally Serial, License, TSS Expiry Date, Portal Partner Name, Reference Status) ---
 			listview.page.add_inner_button(__("🔄 Moved Out Updation"), () => {
 				open_update_secondary_data_dialog(listview);
@@ -238,49 +243,247 @@ function open_bulk_email_dialog(listview) {
 				],
 				primary_action_label: __("Send Quotation to {0} Clients", [checked.length]),
 				primary_action(values) {
-			frappe.confirm(
-				__("Are you sure you want to send this bulk email to <b>{0}</b> selected records?", [checked.length]),
-				function () {
-					d.hide();
-					frappe.call({
-						method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.send_bulk_renewal_email",
-						args: {
-							names: JSON.stringify(checked),
-							subject_template: values.subject,
-							message_template: values.message,
-							cc_email: values.cc_email,
-							from_email: values.from_email,
-							sender_name: values.sender_name
-						},
-						freeze: true,
-						freeze_message: __("Sending bulk emails to {0} records...", [checked.length]),
-						callback: function (r) {
-							if (r.message) {
-								let res = r.message;
-								let html = `<div><b>${res.success_count}</b> emails sent successfully.</div>`;
-								if (res.skipped_no_email && res.skipped_no_email.length > 0) {
-									html += `<div style="color: #c2410c; margin-top: 6px;"><b>${res.skipped_no_email.length}</b> records skipped (no Email ID found).</div>`;
-								}
-								if (res.failed_records && res.failed_records.length > 0) {
-									html += `<div style="color: #dc2626; margin-top: 6px;"><b>${res.failed_records.length}</b> records failed to send.</div>`;
-								}
-								frappe.msgprint({
-									title: __("Bulk Email Result"),
-									message: html,
-									indicator: res.success_count > 0 ? "green" : "orange"
-								});
-								listview.refresh();
-							}
+					frappe.confirm(
+						__("Are you sure you want to send this bulk email to <b>{0}</b> selected records in batches of 10?", [checked.length]),
+						function () {
+							d.hide();
+							start_bulk_email_batch_runner(listview, checked, values);
 						}
-					});
+					);
 				}
-			);
+			});
+
+			d.show();
+		}
+	});
+}
+
+// --- BATCH RUNNER FOR BULK EMAILS (10 per batch with live progress and full delivery report) ---
+function start_bulk_email_batch_runner(listview, checked, email_params) {
+	const BATCH_SIZE = 10;
+	let batches = [];
+	for (let i = 0; i < checked.length; i += BATCH_SIZE) {
+		batches.push(checked.slice(i, i + BATCH_SIZE));
+	}
+
+	let current_batch_idx = 0;
+	let total_batches = batches.length;
+	let total_records = checked.length;
+
+	let all_sent = [];
+	let all_skipped = [];
+	let all_failed = [];
+	let is_stopped = false;
+
+	let progress_dialog = new frappe.ui.Dialog({
+		title: __("📧 Sending Bulk Quotations ({0} Records)", [total_records]),
+		size: "large",
+		fields: [
+			{
+				fieldtype: "HTML",
+				fieldname: "progress_html"
+			}
+		],
+		primary_action_label: __("Close"),
+		primary_action: function () {
+			progress_dialog.hide();
+			listview.refresh();
 		}
 	});
 
-	d.show();
-		}
+	progress_dialog.$wrapper.find(".modal-dialog").css({
+		"max-width": "920px",
+		"width": "90%"
 	});
+
+	let $primary_btn = progress_dialog.get_primary_btn();
+	$primary_btn.hide();
+
+	progress_dialog.add_custom_action(__("⏹ Stop Sending"), function () {
+		is_stopped = true;
+		frappe.show_alert({
+			message: __("Stopping after current batch completes..."),
+			indicator: "orange"
+		});
+	});
+
+	let $stop_btn = progress_dialog.$wrapper.find(".custom-actions button");
+
+	progress_dialog.show();
+
+	function render_ui(status_msg, is_done) {
+		let processed = all_sent.length + all_skipped.length + all_failed.length;
+		let pct = total_records > 0 ? Math.min(100, Math.round((processed / total_records) * 100)) : 0;
+
+		let html = `
+			<div style="padding: 6px 0;">
+				<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+					<span style="font-weight: 600; font-size: 13px; color: var(--text-color);">
+						${status_msg || ""}
+					</span>
+					<span style="font-weight: 700; font-size: 13px; color: ${is_done ? '#16a34a' : 'var(--primary-color)'};">
+						${pct}% (${processed} / ${total_records})
+					</span>
+				</div>
+
+				<div class="progress" style="height: 14px; border-radius: 7px; background-color: #f1f5f9; overflow: hidden; margin-bottom: 16px;">
+					<div class="progress-bar ${is_done ? 'bg-success' : 'progress-bar-striped progress-bar-animated bg-primary'}"
+						role="progressbar"
+						style="width: ${pct}%; transition: width 0.3s ease;">
+					</div>
+				</div>
+
+				<!-- Metric Summary Cards -->
+				<div style="display: flex; gap: 12px; margin-bottom: 16px;">
+					<div style="flex: 1; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px; text-align: center;">
+						<div style="font-size: 22px; font-weight: 800; color: #059669;">${all_sent.length}</div>
+						<div style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: #047857; margin-top: 2px;">✅ Sent</div>
+					</div>
+					<div style="flex: 1; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px; text-align: center;">
+						<div style="font-size: 22px; font-weight: 800; color: #d97706;">${all_skipped.length}</div>
+						<div style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: #b45309; margin-top: 2px;">⚠️ No Email</div>
+					</div>
+					<div style="flex: 1; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px; text-align: center;">
+						<div style="font-size: 22px; font-weight: 800; color: #dc2626;">${all_failed.length}</div>
+						<div style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: #b91c1c; margin-top: 2px;">❌ Failed</div>
+					</div>
+				</div>
+		`;
+
+		if (is_done) {
+			html += build_batch_report_table(all_sent, all_skipped, all_failed);
+		}
+
+		html += `</div>`;
+		progress_dialog.fields_dict.progress_html.$wrapper.html(html);
+	}
+
+	function build_batch_report_table(sent, skipped, failed) {
+		let all_rows = [];
+
+		sent.forEach(r => {
+			all_rows.push({
+				serial: r.serial || "-",
+				party: r.party || "-",
+				email: r.email || "-",
+				status_badge: `<span class="badge" style="background-color: #d1fae5; color: #065f46; font-size: 11px; padding: 4px 8px; border-radius: 4px;">✅ Sent</span>`,
+				note: `<span style="color: #059669;">Email sent successfully</span>`
+			});
+		});
+
+		skipped.forEach(r => {
+			all_rows.push({
+				serial: r.serial || "-",
+				party: r.party || "-",
+				email: "-",
+				status_badge: `<span class="badge" style="background-color: #fef3c7; color: #92400e; font-size: 11px; padding: 4px 8px; border-radius: 4px;">⚠️ Skipped</span>`,
+				note: `<span style="color: #b45309;">${r.reason || "No Email ID found"}</span>`
+			});
+		});
+
+		failed.forEach(r => {
+			all_rows.push({
+				serial: r.serial || "-",
+				party: r.party || "-",
+				email: r.email || "-",
+				status_badge: `<span class="badge" style="background-color: #fee2e2; color: #991b1b; font-size: 11px; padding: 4px 8px; border-radius: 4px;">❌ Failed</span>`,
+				note: `<span style="color: #dc2626;">${r.error || "Send failed"}</span>`
+			});
+		});
+
+		let rows_html = all_rows.map((row, idx) => `
+			<tr style="border-bottom: 1px solid #f1f5f9; font-size: 12px;">
+				<td style="padding: 8px 10px; color: #64748b;">${idx + 1}</td>
+				<td style="padding: 8px 10px; font-weight: 600; font-family: monospace; color: var(--text-color);">${frappe.utils.escape_html(row.serial)}</td>
+				<td style="padding: 8px 10px; color: var(--text-color);">${frappe.utils.escape_html(row.party)}</td>
+				<td style="padding: 8px 10px; color: #475569;">${frappe.utils.escape_html(row.email)}</td>
+				<td style="padding: 8px 10px;">${row.status_badge}</td>
+				<td style="padding: 8px 10px;">${row.note}</td>
+			</tr>
+		`).join("");
+
+		return `
+			<div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-top: 12px;">
+				<div style="background: #f8fafc; padding: 8px 12px; font-weight: 700; font-size: 12px; color: #334155; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+					<span>📋 Delivery Report (${all_rows.length} Total Records)</span>
+				</div>
+				<div style="max-height: 280px; overflow-y: auto;">
+					<table style="width: 100%; border-collapse: collapse; text-align: left;">
+						<thead style="background: #f1f5f9; position: sticky; top: 0; z-index: 1;">
+							<tr style="font-size: 11px; text-transform: uppercase; color: #475569; letter-spacing: 0.5px;">
+								<th style="padding: 8px 10px;">#</th>
+								<th style="padding: 8px 10px;">Serial No</th>
+								<th style="padding: 8px 10px;">Company / Account</th>
+								<th style="padding: 8px 10px;">Email</th>
+								<th style="padding: 8px 10px;">Status</th>
+								<th style="padding: 8px 10px;">Details</th>
+							</tr>
+						</thead>
+						<tbody>
+							${rows_html}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		`;
+	}
+
+	function run_batch() {
+		if (is_stopped || current_batch_idx >= total_batches) {
+			let done_msg = is_stopped ? __("⏹ Stopped by user.") : __("🎉 Bulk Email Process Complete!");
+			render_ui(done_msg, true);
+			$stop_btn.hide();
+			$primary_btn.show();
+			return;
+		}
+
+		let batch = batches[current_batch_idx];
+		let b_num = current_batch_idx + 1;
+		render_ui(__("Sending batch {0} of {1} ({2} records)...", [b_num, total_batches, batch.length]), false);
+
+		frappe.call({
+			method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.send_bulk_renewal_email",
+			args: {
+				names: JSON.stringify(batch),
+				subject_template: email_params.subject,
+				message_template: email_params.message,
+				cc_email: email_params.cc_email,
+				from_email: email_params.from_email,
+				sender_name: email_params.sender_name
+			},
+			callback: function (r) {
+				if (r.message) {
+					let res = r.message;
+					if (res.sent_records && res.sent_records.length > 0) {
+						all_sent = all_sent.concat(res.sent_records);
+					}
+					if (res.skipped_records && res.skipped_records.length > 0) {
+						all_skipped = all_skipped.concat(res.skipped_records);
+					}
+					if (res.failed_records && res.failed_records.length > 0) {
+						all_failed = all_failed.concat(res.failed_records);
+					}
+				}
+				current_batch_idx++;
+				run_batch();
+			},
+			error: function () {
+				batch.forEach(bname => {
+					all_failed.push({
+						name: bname,
+						serial: bname,
+						party: "-",
+						email: "-",
+						error: __("Batch server request failed")
+					});
+				});
+				current_batch_idx++;
+				run_batch();
+			}
+		});
+	}
+
+	run_batch();
 }
 
 function check_if_owner_or_admin(callback) {
@@ -421,6 +624,48 @@ function open_update_secondary_data_dialog(listview) {
 				},
 				freeze: true,
 				freeze_message: __("Updating Secondary Data from Excel..."),
+				callback: function (r) {
+					if (r.message) {
+						show_import_result_report(r.message, listview);
+					}
+				}
+			});
+		}
+	});
+	d.show();
+}
+
+// --- UPDATE MASTER DATA DIALOG (Customer Serials Report / Portal Updation) ---
+function open_update_master_data_dialog(listview) {
+	let d = new frappe.ui.Dialog({
+		title: __("🔄 Update Master Data (Excel)"),
+		fields: [
+			{
+				label: __("Excel File (.xlsx or .xls)"),
+				fieldname: "file_url",
+				fieldtype: "Attach",
+				reqd: 1,
+				description: __(
+					"Upload Customer Serials Report. Updates <b>Portal Tab</b> (Flavor, Release, Expiry, Admin Email, GSTIN, Storage, TSS Status, etc.) matching by <b>Customer Serial Name / Tally Serial</b>."
+				)
+			}
+		],
+		primary_action_label: __("Update Master Data"),
+		primary_action(values) {
+			if (!values.file_url) {
+				frappe.msgprint(__("Please upload an Excel file first."));
+				return;
+			}
+
+			d.hide();
+
+			frappe.call({
+				method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.update_master_data_from_excel",
+				args: {
+					file_url: values.file_url
+				},
+				freeze: true,
+				freeze_message: __("Updating Master Data from Excel..."),
 				callback: function (r) {
 					if (r.message) {
 						show_import_result_report(r.message, listview);

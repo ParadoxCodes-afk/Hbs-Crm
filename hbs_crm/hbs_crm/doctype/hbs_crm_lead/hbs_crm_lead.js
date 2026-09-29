@@ -1137,11 +1137,7 @@ function open_auto_fill_customer_dialog(frm) {
 				fieldname: "results_html",
 				label: __("Results")
 			}
-		],
-		secondary_action_label: __("➕ Add Customer"),
-		secondary_action: function() {
-			open_quick_add_customer_dialog(frm, dialog);
-		}
+		]
 	});
 
 	dialog.$wrapper.find(".modal-dialog").css({

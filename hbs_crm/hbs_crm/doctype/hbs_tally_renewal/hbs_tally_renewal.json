@@ -125,6 +125,13 @@
   "state",
   "pincode",
   "portal_address",
+  "additional_details_section",
+  "tss_status",
+  "gstin_e_invoice_status",
+  "column_break_jisf",
+  "available_storage_gb",
+  "used_storage_gb",
+  "docs_by_ira_quota",
   "priority_section",
   "column_break_xoff",
   "mca_flag",
@@ -257,11 +264,15 @@
   {
    "fieldname": "cc_mobile",
    "fieldtype": "Data",
+   "in_filter": 1,
+   "in_standard_filter": 1,
    "label": "Mobile Number"
   },
   {
    "fieldname": "cc_phone",
    "fieldtype": "Data",
+   "in_filter": 1,
+   "in_standard_filter": 1,
    "label": "Phone Number"
   },
   {
@@ -909,7 +920,7 @@
   },
   {
    "fieldname": "last_ping_date",
-   "fieldtype": "Date",
+   "fieldtype": "Data",
    "label": "Last Ping Date"
   },
   {
@@ -926,6 +937,36 @@
    "fieldname": "tepl",
    "fieldtype": "Data",
    "label": "TEPL"
+  },
+  {
+   "fieldname": "additional_details_section",
+   "fieldtype": "Section Break",
+   "label": "Additional Details"
+  },
+  {
+   "fieldname": "tss_status",
+   "fieldtype": "Data",
+   "label": "TSS Status"
+  },
+  {
+   "fieldname": "gstin_e_invoice_status",
+   "fieldtype": "Data",
+   "label": "GSTIN E-Invoice Status"
+  },
+  {
+   "fieldname": "available_storage_gb",
+   "fieldtype": "Float",
+   "label": "Available Storage (GB)"
+  },
+  {
+   "fieldname": "used_storage_gb",
+   "fieldtype": "Float",
+   "label": "Used Storage (GB)"
+  },
+  {
+   "fieldname": "docs_by_ira_quota",
+   "fieldtype": "Data",
+   "label": "Docs By Ira Quota Available"
   },
   {
    "fieldname": "director_details_tab",
@@ -1056,12 +1097,16 @@
    "fieldname": "edition",
    "fieldtype": "Small Text",
    "label": "Edition (Silver/Gold)"
+  },
+  {
+   "fieldname": "column_break_jisf",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-21 12:16:07.766509",
+ "modified": "2026-09-29 22:57:58.951192",
  "modified_by": "Administrator",
  "module": "hbs_crm",
  "name": "Hbs Tally Renewal",

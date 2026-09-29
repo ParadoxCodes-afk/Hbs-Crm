@@ -73,3 +73,37 @@ class HbsCRMEmailSettings(Document):
 		except Exception as e:
 			frappe.msgprint(_("SMTP Connection Failed: {0}").format(str(e)), title=_("Connection Error"), indicator="red")
 			return False
+
+
+@frappe.whitelist()
+def update_renewal_email_template_for_executives():
+	"""Update live database record for Hbs CRM Email Settings so template reflects Executive 1 details."""
+	if not frappe.db.exists("DocType", "Hbs CRM Email Settings"):
+		return False
+
+	doc = frappe.get_single("Hbs CRM Email Settings")
+	current_body = doc.renewal_email_body or ""
+
+	new_body = current_body
+
+	import re
+	clean_signature = (
+		"<p>Warm regards,<br>\n"
+		"<b>{{ executive.full_name or 'HBS Sales Team' }}</b>"
+		"{%- if executive.designation %}<br>{{ executive.designation }}{% endif -%}"
+		"{%- if executive.mobile_no %}<br>Mobile: {{ executive.mobile_no }}{% endif -%}"
+		"{%- if executive.email %}<br>Email: {{ executive.email }}{% endif -%}\n"
+		"</p>"
+	)
+
+	if "Warm regards" in new_body:
+		has_closing_div = new_body.strip().endswith("</div>")
+		clean_sig = clean_signature + ("</div>" if has_closing_div else "")
+		new_body = re.sub(r"<p[^>]*>\s*Warm regards[\s\S]*$", clean_sig, new_body)
+	elif not new_body.strip():
+		from hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal import DEFAULT_RENEWAL_EMAIL_BODY
+		new_body = DEFAULT_RENEWAL_EMAIL_BODY
+
+	frappe.db.set_single_value("Hbs CRM Email Settings", "renewal_email_body", new_body)
+	frappe.db.commit()
+	return True

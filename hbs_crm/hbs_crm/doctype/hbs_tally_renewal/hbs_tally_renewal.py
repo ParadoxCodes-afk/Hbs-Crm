@@ -1717,22 +1717,66 @@ DEFAULT_RENEWAL_EMAIL_BODY = """<p>Dear {{ doc.cc_contact or doc.portal_contact 
 </ul>
 <p>Please review and let us know your confirmation to proceed with the renewal.</p>
 <p>Warm regards,<br>
-<b>{{ logged_in_user.full_name or 'HBS Sales Team' }}</b><br>
-{% if logged_in_user.designation %}{{ logged_in_user.designation }}<br>{% endif %}
-{% if logged_in_user.mobile_no %}Mobile: {{ logged_in_user.mobile_no }}<br>{% endif %}
-{% if logged_in_user.email %}Email: {{ logged_in_user.email }}{% endif %}
+<b>{{ executive.full_name or 'HBS Sales Team' }}</b>
+{%- if executive.designation %}<br>{{ executive.designation }}{% endif -%}
+{%- if executive.mobile_no %}<br>Mobile: {{ executive.mobile_no }}{% endif -%}
+{%- if executive.email %}<br>Email: {{ executive.email }}{% endif -%}
 </p>"""
 
 
-def render_renewal_email_for_doc(doc, logged_in_user_dict=None):
+def get_renewal_client_recipients(doc):
+	"""Resolve recipient emails for Hbs Tally Renewal quotation.
+	Checks Admin Email ID (doc.admin_id) and Portal Email (doc.portal_email).
+	- If both exist and differ: returns both.
+	- If both exist and match: returns single deduplicated email.
+	- If either is blank: returns the non-blank one.
+	- If both blank: falls back to doc.cc_email / doc.director_email.
+	"""
+	recipients = []
+	for raw in [getattr(doc, "admin_id", None), getattr(doc, "portal_email", None)]:
+		if raw and str(raw).strip():
+			for e in str(raw).replace(";", ",").split(","):
+				e = e.strip()
+				if e and "@" in e and e.lower() not in [r.lower() for r in recipients]:
+					recipients.append(e)
+
+	if not recipients:
+		for raw in [getattr(doc, "cc_email", None), getattr(doc, "director_email", None)]:
+			if raw and str(raw).strip():
+				for e in str(raw).replace(";", ",").split(","):
+					e = e.strip()
+					if e and "@" in e and e.lower() not in [r.lower() for r in recipients]:
+						recipients.append(e)
+
+	return recipients
+
+
+def get_renewal_executive_context(doc):
+	"""Resolve Executive 1 (crm_ex_1) contact details for renewal email templates.
+	Strictly uses Executive 1 (crm_ex_1). Logged-in user is not used.
+	"""
+	exec_user = (getattr(doc, "crm_ex_1", None) or "").strip()
+	if exec_user and frappe.db.exists("User", exec_user):
+		return get_logged_in_user_context(exec_user)
+	return {
+		"full_name": "HBS Sales Team",
+		"email": "",
+		"mobile_no": "",
+		"phone": "",
+		"phone_number": "",
+		"designation": ""
+	}
+
+
+def render_renewal_email_for_doc(doc, executive_dict=None):
 	"""Render email subject and body using Jinja from settings or defaults."""
-	if logged_in_user_dict is None:
-		logged_in_user_dict = get_logged_in_user_context()
+	if executive_dict is None:
+		executive_dict = get_renewal_executive_context(doc)
 	settings = frappe.get_single("Hbs CRM Email Settings") if frappe.db.exists("DocType", "Hbs CRM Email Settings") else frappe._dict()
 	subject_template = (getattr(settings, "renewal_email_subject", None) or "").strip() or DEFAULT_RENEWAL_EMAIL_SUBJECT
 	body_template = (getattr(settings, "renewal_email_body", None) or "").strip() or DEFAULT_RENEWAL_EMAIL_BODY
 
-	context = {"doc": doc, "logged_in_user": logged_in_user_dict}
+	context = {"doc": doc, "executive": executive_dict, "logged_in_user": executive_dict}
 	subject = frappe.render_template(subject_template, context)
 	message = frappe.render_template(body_template, context)
 	return {"subject": subject, "message": message}
@@ -1763,15 +1807,16 @@ def get_rendered_renewal_email_template(name):
 		frappe.throw(_("Permission Denied"), title=_("Permission Denied"))
 
 	settings = frappe.get_single("Hbs CRM Email Settings") if frappe.db.exists("DocType", "Hbs CRM Email Settings") else frappe._dict()
-	logged_in_user_dict = get_logged_in_user_context()
+	exec_dict = get_renewal_executive_context(doc)
 
-	rendered = render_renewal_email_for_doc(doc, logged_in_user_dict)
-	user_email = logged_in_user_dict.get("email") or (frappe.session.user if frappe.session and "@" in str(frappe.session.user) else "")
+	rendered = render_renewal_email_for_doc(doc, exec_dict)
+	user_email = exec_dict.get("email") or (frappe.session.user if frappe.session and "@" in str(frappe.session.user) else "")
+	recipients = get_renewal_client_recipients(doc)
 
 	return {
 		"subject": rendered["subject"],
 		"message": rendered["message"],
-		"to_email": (doc.cc_email or doc.portal_email or doc.admin_id or doc.director_email or "").strip(),
+		"to_email": ", ".join(recipients),
 		"cc_email": user_email,
 		"from_email": settings.email_id or "tally@hbsmail.in",
 		"sender_name": settings.sender_name or "HBS Sales Team"
@@ -1940,29 +1985,45 @@ def send_bulk_renewal_email(names, subject_template, message_template, cc_email=
 	user_role = frappe.db.get_value("Hbs User Hierarchy", {"user": user_email}, "role_type")
 	can_bulk_all = is_owner_or_admin(user_email) or user_role == "Manager"
 
-	success_count = 0
-	skipped_no_email = []
+	sent_records = []
+	skipped_records = []
 	failed_records = []
 
 	for name in names:
+		serial = "-"
+		party = "-"
 		try:
 			doc = frappe.get_doc("Hbs Tally Renewal", name)
+			serial = str(doc.tss_tally_serial or doc.tally_serial or doc.name or "-").strip()
+			party = str(doc.cc_acc_name or doc.portal_acc_name or "-").strip()
+
 			if not can_bulk_all and not has_permission(doc, "read", user_email):
-				failed_records.append({"name": name, "error": "Permission Denied"})
+				failed_records.append({
+					"name": name,
+					"serial": serial,
+					"party": party,
+					"email": "-",
+					"error": _("Permission Denied")
+				})
 				continue
 
-			to_email = (doc.cc_email or doc.portal_email or doc.admin_id or doc.director_email or "").strip()
-			if not to_email:
-				skipped_no_email.append(doc.name)
+			recipients = get_renewal_client_recipients(doc)
+			if not recipients:
+				skipped_records.append({
+					"name": name,
+					"serial": serial,
+					"party": party,
+					"reason": _("No Email ID found")
+				})
 				continue
 
 			assign_renewal_pi_and_date(doc)
 
-			ctx = {"doc": doc, "logged_in_user": logged_in_user_dict}
+			exec_dict = get_renewal_executive_context(doc)
+			ctx = {"doc": doc, "executive": exec_dict, "logged_in_user": exec_dict}
 			rendered_subject = frappe.render_template(subject_template, ctx)
 			rendered_message = frappe.render_template(message_template, ctx)
 
-			recipients = [e.strip() for e in to_email.split(",") if e.strip()]
 			cc = [e.strip() for e in default_exec_cc.split(",") if e.strip()] if default_exec_cc else None
 
 			pdf_attach = get_renewal_quotation_pdf_attachment(doc) if frappe.utils.cint(attach_print) == 1 else []
@@ -1981,17 +2042,31 @@ def send_bulk_renewal_email(names, subject_template, message_template, cc_email=
 				now=True
 			)
 
-			success_count += 1
+			sent_records.append({
+				"name": name,
+				"serial": serial,
+				"party": party,
+				"email": ", ".join(recipients)
+			})
 		except Exception as e:
-			frappe.log_error(f"Bulk quotation email failed for {name}: {str(e)}", "Bulk Renewal Email Error")
-			failed_records.append({"name": name, "error": str(e)})
+			err_str = str(e)
+			frappe.log_error(f"Bulk quotation email failed for {name}: {err_str}", "Bulk Renewal Email Error")
+			failed_records.append({
+				"name": name,
+				"serial": serial,
+				"party": party,
+				"email": to_email if "to_email" in locals() and to_email else "-",
+				"error": err_str
+			})
 
 	frappe.db.commit()
 
 	return {
 		"status": "success",
-		"success_count": success_count,
-		"skipped_no_email": skipped_no_email,
+		"success_count": len(sent_records),
+		"sent_records": sent_records,
+		"skipped_records": skipped_records,
+		"skipped_no_email": [r["name"] for r in skipped_records],
 		"failed_records": failed_records
 	}
 
@@ -2699,6 +2774,466 @@ def update_secondary_data_from_excel(file_url):
 	return {
 		"status": "success",
 		"report_title": _("📊 Secondary Data Update Report"),
+		"created_count": 0,
+		"updated_count": updated_count,
+		"skipped_count": len(failed_rows),
+		"failed_rows": failed_rows
+	}
+
+
+# --- UPDATE MASTER DATA FROM CUSTOMER SERIALS REPORT (EXCEL) ---
+@frappe.whitelist()
+def update_master_data_from_excel(file_url):
+	"""
+	Update Master Data (Portal tab & metrics) for Hbs Tally Renewal records from Excel.
+	Customer Serials Report columns matched by Customer Serial Name / Tally Serial.
+	"""
+	user = frappe.session.user if frappe.session else "System"
+	if not is_owner_or_admin(user):
+		frappe.throw(_("Only Owner and Administrator can update data."), title=_("Permission Denied"))
+
+	if not file_url:
+		frappe.throw(_("Excel file is required."))
+
+	file_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+	if not file_name:
+		frappe.throw(_("Uploaded file not found in system."))
+
+	file_doc = frappe.get_doc("File", file_name)
+	content = file_doc.get_content()
+	if not content:
+		frappe.throw(_("Uploaded file is empty or could not be read."))
+
+	if isinstance(content, str):
+		content = content.encode("utf-8")
+
+	import io
+	import datetime
+	import re
+
+	raw_headers = []
+	raw_data_rows = []
+
+	if content.startswith(b"PK"):
+		import openpyxl
+		wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+		ws = wb.active
+		raw_rows = list(ws.iter_rows(values_only=True))
+		if raw_rows:
+			raw_headers = [str(c or "").strip() for c in raw_rows[0]]
+			raw_data_rows = raw_rows[1:]
+	else:
+		import xlrd
+		wb = xlrd.open_workbook(file_contents=content)
+		ws = wb.sheets()[0]
+		raw_headers = [str(ws.cell_value(0, c)).strip() for c in range(ws.ncols)]
+		for r in range(1, ws.nrows):
+			raw_data_rows.append([ws.cell_value(r, c) for c in range(ws.ncols)])
+
+	if not raw_headers or not raw_data_rows:
+		return {"status": "error", "message": _("No data found in uploaded Excel.")}
+
+	# Detect and skip annotation row (e.g. Row 2 with 'NO USE', 'NEW FIELD', 'QUESTION MARK')
+	start_row_offset = 2
+	if raw_data_rows:
+		row2_str = " ".join([str(c or "").upper() for c in raw_data_rows[0]])
+		if any(marker in row2_str for marker in ("NO USE", "NEW FIELD", "QUESTION MARK")):
+			raw_data_rows = raw_data_rows[1:]
+			start_row_offset = 3
+
+	def norm(h):
+		return re.sub(r"[^a-z0-9]", "", str(h or "").lower())
+
+	# Map columns by normalized headers
+	col_serial = None
+	col_serial_alt = None
+	col_expiry = None
+	col_flavor = None
+	col_release = None
+	col_account = None
+	col_email = None
+	col_admin_email = None
+	col_address = None
+	col_city = None
+	col_pincode = None
+	col_tss_priority = None
+	col_mau = None
+	col_prod_family = None
+	col_rfm = None
+	col_qau = None
+	col_mca = None
+	col_actvn = None
+	col_last_ping = None
+	col_gstin = None
+	col_e_invoice = None
+	col_avail_storage = None
+	col_used_storage = None
+	col_ira_quota = None
+	col_tss_status = None
+
+	for idx, h in enumerate(raw_headers):
+		n = norm(h)
+		if n in ("customerserialcustomerserialname", "customerserialname", "tsstallyserial", "tallyserial", "serialno", "serialnumber") and col_serial is None:
+			col_serial = idx
+		elif n in ("tallyserialnumber", "customerserial") and col_serial_alt is None:
+			col_serial_alt = idx
+		elif n in ("tssrentalexpirydate", "tssexpirydate", "rentalexpirydate", "portalexpirydate") and col_expiry is None:
+			col_expiry = idx
+		elif n in ("flavor", "flavour", "tallyflavour") and col_flavor is None:
+			col_flavor = idx
+		elif n in ("release", "version", "tallyrelease") and col_release is None:
+			col_release = idx
+		elif n in ("account", "portalaccname", "accountname") and col_account is None:
+			col_account = idx
+		elif n in ("accountemailid", "accountemail", "portalemail") and col_email is None:
+			col_email = idx
+		elif n in ("customeraccountadminemailid", "customeraccountadminemail", "adminemailid", "adminid") and col_admin_email is None:
+			col_admin_email = idx
+		elif n in ("customeraddress", "portaladdress", "address") and col_address is None:
+			col_address = idx
+		elif n in ("city", "customercity", "ledcity") and col_city is None:
+			col_city = idx
+		elif n in ("pincode", "portalpincode", "pin") and col_pincode is None:
+			col_pincode = idx
+		elif n in ("tsspriority", "tssranking") and col_tss_priority is None:
+			col_tss_priority = idx
+		elif n in ("mau", "monthlyactiveusers") and col_mau is None:
+			col_mau = idx
+		elif n in ("productfamily",) and col_prod_family is None:
+			col_prod_family = idx
+		elif n in ("serialrfmsegmentation", "rfmsegmentation", "rfmsegment") and col_rfm is None:
+			col_rfm = idx
+		elif n in ("qau", "quarterlyactiveusers") and col_qau is None:
+			col_qau = idx
+		elif n in ("mcaflag",) and col_mca is None:
+			col_mca = idx
+		elif n in ("firstactvndatetime", "firstactivationdatetime", "firstactivationdate", "activationdate") and col_actvn is None:
+			col_actvn = idx
+		elif n in ("lastpingdate", "lastping") and col_last_ping is None:
+			col_last_ping = idx
+		elif n in ("primarygstinnumber", "primarygstin", "gstin", "gstinnumber") and col_gstin is None:
+			col_gstin = idx
+		elif n in ("gstineinvoiceenablementstatus", "gstineinvoicestatus", "einvoiceenablementstatus", "einvoicestatus") and col_e_invoice is None:
+			col_e_invoice = idx
+		elif n in ("availablestoragegb", "availablestorage") and col_avail_storage is None:
+			col_avail_storage = idx
+		elif n in ("usedstoragegb", "usedstorage") and col_used_storage is None:
+			col_used_storage = idx
+		elif n in ("docsbyiraquotaavailable", "docsbyiraquota") and col_ira_quota is None:
+			col_ira_quota = idx
+		elif n in ("tssstatus",) and col_tss_status is None:
+			col_tss_status = idx
+
+	if col_serial is None:
+		frappe.throw(_("Excel must contain a 'Customer Serial Name' or 'Tally Serial' column to identify renewal records."))
+
+	# Pre-fetch existing renewals in memory: PURELY MATCH ON TALLY SERIAL NUMBER
+	existing_records = frappe.db.sql(
+		"""
+		SELECT name, tally_serial, tss_tally_serial, cc_acc_name, portal_acc_name, acc_expiry_date
+		FROM `tabHbs Tally Renewal`
+		""",
+		as_dict=True
+	)
+	serial_map = {}
+	for r in existing_records:
+		if r.tally_serial:
+			serial_map[str(r.tally_serial).strip()] = r
+		if r.tss_tally_serial:
+			serial_map[str(r.tss_tally_serial).strip()] = r
+
+	def safe_date(val):
+		if not val:
+			return None
+		if isinstance(val, (datetime.date, datetime.datetime)):
+			return val.strftime("%Y-%m-%d")
+		if isinstance(val, (int, float)):
+			try:
+				d = datetime.date(1899, 12, 30) + datetime.timedelta(days=int(val))
+				return d.strftime("%Y-%m-%d")
+			except Exception:
+				pass
+		s = str(val).strip()
+		if not s or s.lower() in ("none", "nan", "null", "-", "nat"):
+			return None
+		if "," in s:
+			s = s.split(",")[0].strip()
+		elif " " in s:
+			s = s.split(" ")[0].strip()
+		for fmt in ("%m/%d/%Y", "%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%m-%d-%Y", "%d.%m.%Y", "%d-%b-%Y", "%d-%b-%y", "%d/%m/%y", "%d-%m-%y"):
+			try:
+				return datetime.datetime.strptime(s, fmt).date().strftime("%Y-%m-%d")
+			except ValueError:
+				continue
+		try:
+			return str(frappe.utils.data.getdate(s))
+		except Exception:
+			return None
+
+	def clean_flavour(val):
+		if not val:
+			return None, None
+		s = str(val).strip()
+		u = s.upper()
+		if "SILVER" in u:
+			return "Tally Prime Silver", "TALLY PRIME SILVER"
+		elif "GOLD" in u:
+			return "Tally Prime Gold", "TALLY PRIME GOLD"
+		elif "AUDITOR" in u:
+			return "Tally Prime Auditor", "TALLY PRIME AUDITOR"
+		elif "SERVER" in u:
+			return "Tally Prime Server", "TALLY PRIME SERVER"
+		elif "RENTAL" in u:
+			return "Tally Prime Rental", "RENTAL"
+		elif s.lower().startswith("tally prime"):
+			return s, s.upper()
+		elif s:
+			return f"Tally Prime {s}", f"TALLY PRIME {s.upper()}"
+		return s, s
+
+	total_rows = len(raw_data_rows)
+	updated_count = 0
+	failed_rows = []
+
+	for r_offset, r in enumerate(raw_data_rows):
+		row_idx = start_row_offset + r_offset
+		if not any(r):
+			continue
+
+		if total_rows > 0 and (r_offset % max(1, total_rows // 20) == 0 or r_offset == total_rows - 1):
+			pct = min(100.0, float(r_offset + 1) / total_rows * 100)
+			frappe.publish_progress(
+				pct,
+				title=_("Updating Master Data"),
+				description=_("Processed {0} of {1} rows... (Updated: {2}, Skipped: {3})").format(
+					r_offset + 1, total_rows, updated_count, len(failed_rows)
+				)
+			)
+
+		val_serial = r[col_serial] if col_serial is not None and col_serial < len(r) else None
+		if (val_serial is None or str(val_serial).strip() == "") and col_serial_alt is not None and col_serial_alt < len(r):
+			val_serial = r[col_serial_alt]
+
+		if val_serial is None or str(val_serial).strip() == "":
+			failed_rows.append({
+				"row": row_idx,
+				"serial": "-",
+				"party": "-",
+				"reason": _("Missing Tally Serial Number in row")
+			})
+			continue
+
+		raw_serial = re.sub(r"\.0$", "", str(val_serial).strip())
+		clean_serial = "".join(filter(str.isdigit, raw_serial))
+		lookup_key = clean_serial if len(clean_serial) == 9 else raw_serial
+
+		if not is_genuine_tally_serial(lookup_key):
+			failed_rows.append({
+				"row": row_idx,
+				"serial": lookup_key,
+				"party": "-",
+				"reason": _("Invalid Tally Serial (Must be 9 digits starting with 7, digital root 9)")
+			})
+			continue
+
+		target_rec = serial_map.get(lookup_key) or serial_map.get(raw_serial)
+		if not target_rec:
+			acc_display = str(r[col_account]).strip() if (col_account is not None and col_account < len(r) and r[col_account]) else "-"
+			failed_rows.append({
+				"row": row_idx,
+				"serial": lookup_key,
+				"party": acc_display,
+				"reason": _("Tally Serial Number not found in Hbs Tally Renewal")
+			})
+			continue
+
+		doc_name = target_rec.name
+		party_display = target_rec.cc_acc_name or target_rec.portal_acc_name or "-"
+
+		updates = {}
+
+		# 1. Flavor & License
+		if col_flavor is not None and col_flavor < len(r) and r[col_flavor]:
+			f_val, lic_val = clean_flavour(r[col_flavor])
+			if f_val:
+				updates["flavour"] = f_val
+			if lic_val:
+				updates["license"] = lic_val
+
+		# 2. TSS Expiry Date
+		if col_expiry is not None and col_expiry < len(r) and r[col_expiry]:
+			p_exp = safe_date(r[col_expiry])
+			if p_exp:
+				updates["portal_expiry_date"] = p_exp
+				if not target_rec.acc_expiry_date:
+					updates["acc_expiry_date"] = p_exp
+
+		# 3. Release & Tally Version
+		if col_release is not None and col_release < len(r) and r[col_release]:
+			rel = str(r[col_release]).strip()
+			if rel:
+				updates["release"] = rel
+				updates["tally_version"] = rel
+
+		# 4. Account Name
+		if col_account is not None and col_account < len(r) and r[col_account]:
+			acc = str(r[col_account]).strip()
+			if acc:
+				updates["portal_acc_name"] = acc
+				if not target_rec.cc_acc_name:
+					updates["cc_acc_name"] = acc
+
+		# 5. Account Email Id -> account_id (in License Details) & portal_email
+		if col_email is not None and col_email < len(r) and r[col_email]:
+			em = str(r[col_email]).strip()
+			if em:
+				updates["account_id"] = em
+				updates["portal_email"] = em
+
+		# 6. Customer Account Admin Email ID
+		if col_admin_email is not None and col_admin_email < len(r) and r[col_admin_email]:
+			adm = str(r[col_admin_email]).strip()
+			if adm:
+				updates["admin_id"] = adm
+
+		# 7. Customer Address
+		if col_address is not None and col_address < len(r) and r[col_address]:
+			addr = str(r[col_address]).strip()
+			if addr and addr not in (", ,", "'-", "-", "null", "none"):
+				updates["portal_address"] = addr
+
+		# 8. City
+		if col_city is not None and col_city < len(r) and r[col_city]:
+			city = str(r[col_city]).strip()
+			if city:
+				updates["led_city"] = city
+
+		# 9. Pincode
+		if col_pincode is not None and col_pincode < len(r) and r[col_pincode]:
+			pin = re.sub(r"\.0$", "", str(r[col_pincode]).strip())
+			if pin:
+				updates["pincode"] = pin
+
+		# 10. TSS Priority / Ranking
+		if col_tss_priority is not None and col_tss_priority < len(r) and r[col_tss_priority]:
+			prio = str(r[col_tss_priority]).strip()
+			if prio:
+				updates["tss_ranking"] = prio
+				updates["crm_priority"] = prio
+
+		# 11. MAU
+		if col_mau is not None and col_mau < len(r) and r[col_mau] is not None:
+			updates["mau"] = str(r[col_mau]).strip()
+
+		# 12. Product Family
+		if col_prod_family is not None and col_prod_family < len(r) and r[col_prod_family]:
+			pf = str(r[col_prod_family]).strip()
+			if pf:
+				updates["product_family"] = pf
+
+		# 13. Serial RFM Segmentation
+		if col_rfm is not None and col_rfm < len(r) and r[col_rfm]:
+			rfm = str(r[col_rfm]).strip()
+			if rfm:
+				updates["rfm_segment"] = rfm
+
+		# 14. QAU
+		if col_qau is not None and col_qau < len(r) and r[col_qau] is not None:
+			updates["qau"] = str(r[col_qau]).strip()
+
+		# 15. MCA Flag
+		if col_mca is not None and col_mca < len(r) and r[col_mca] is not None:
+			updates["mca_flag"] = str(r[col_mca]).strip()
+
+		# 16. First actvn date time -> acc_start_date
+		if col_actvn is not None and col_actvn < len(r) and r[col_actvn]:
+			act_d = safe_date(r[col_actvn])
+			if act_d:
+				updates["acc_start_date"] = act_d
+
+		# 17. Last Ping Date (text range)
+		if col_last_ping is not None and col_last_ping < len(r) and r[col_last_ping]:
+			lp = str(r[col_last_ping]).strip()
+			if lp and lp.lower() not in ("none", "nan", "null"):
+				updates["last_ping_date"] = lp
+
+		# 18. Primary GSTIN Number -> gstin
+		if col_gstin is not None and col_gstin < len(r) and r[col_gstin]:
+			gst = str(r[col_gstin]).strip()
+			if gst and gst.lower() not in ("none", "nan", "null"):
+				updates["gstin"] = gst
+
+		# 19. GSTIN E invoice enablement status -> gstin_e_invoice_status
+		if col_e_invoice is not None and col_e_invoice < len(r) and r[col_e_invoice]:
+			ei = str(r[col_e_invoice]).strip()
+			if ei and ei.lower() not in ("none", "nan", "null"):
+				updates["gstin_e_invoice_status"] = ei
+
+		# 20. Available Storage(GB) -> available_storage_gb
+		if col_avail_storage is not None and col_avail_storage < len(r) and r[col_avail_storage] is not None:
+			try:
+				s_val = str(r[col_avail_storage]).strip()
+				if s_val and s_val.lower() not in ("none", "nan", "null"):
+					updates["available_storage_gb"] = float(s_val)
+			except (ValueError, TypeError):
+				pass
+
+		# 21. Used Storage(GB) -> used_storage_gb
+		if col_used_storage is not None and col_used_storage < len(r) and r[col_used_storage] is not None:
+			try:
+				u_val = str(r[col_used_storage]).strip()
+				if u_val and u_val.lower() not in ("none", "nan", "null"):
+					updates["used_storage_gb"] = float(u_val)
+			except (ValueError, TypeError):
+				pass
+
+		# 22. Docs By Ira Quota Available -> docs_by_ira_quota
+		if col_ira_quota is not None and col_ira_quota < len(r) and r[col_ira_quota] is not None:
+			iq = str(r[col_ira_quota]).strip()
+			if iq and iq.lower() not in ("none", "nan", "null"):
+				updates["docs_by_ira_quota"] = iq
+
+		# 23. TSS Status -> tss_status
+		if col_tss_status is not None and col_tss_status < len(r) and r[col_tss_status]:
+			ts = str(r[col_tss_status]).strip()
+			if ts and ts.lower() not in ("none", "nan", "null"):
+				updates["tss_status"] = ts
+
+		if not updates:
+			failed_rows.append({
+				"row": row_idx,
+				"serial": lookup_key,
+				"party": party_display,
+				"reason": _("No values found to update in this row")
+			})
+			continue
+
+		# Stamp last excel updated and set Reference Status to ACTIVE
+		updates["last_updated"] = frappe.utils.today()
+		updates["crm_ref"] = "ACTIVE"
+
+		try:
+			frappe.db.set_value("Hbs Tally Renewal", doc_name, updates, update_modified=True)
+			updated_count += 1
+
+			if updated_count % 100 == 0:
+				frappe.db.commit()
+
+		except Exception as e:
+			err_msg = frappe.utils.strip_html(str(e)).strip()
+			failed_rows.append({
+				"row": row_idx,
+				"serial": lookup_key,
+				"party": party_display,
+				"reason": err_msg or _("Database update error")
+			})
+
+	frappe.publish_progress(100, title=_("Updating Master Data"), description=_("Update completed!"))
+	frappe.db.commit()
+
+	return {
+		"status": "success",
+		"report_title": _("📊 Master Data (Portal) Update Report"),
 		"created_count": 0,
 		"updated_count": updated_count,
 		"skipped_count": len(failed_rows),
