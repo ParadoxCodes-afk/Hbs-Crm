@@ -2891,7 +2891,7 @@ def update_master_data_from_excel(file_url):
 			col_admin_email = idx
 		elif ("address" in n or n in ("customeraddress", "portaladdress")) and col_address is None:
 			col_address = idx
-		elif n in ("city", "customercity", "ledcity") and col_city is None:
+		elif n in ("city", "customercity", "ledcity", "state", "customerstate", "portalstate") and col_city is None:
 			col_city = idx
 		elif n in ("pincode", "portalpincode", "pin") and col_pincode is None:
 			col_pincode = idx
@@ -2930,7 +2930,7 @@ def update_master_data_from_excel(file_url):
 	# Pre-fetch existing renewals in memory: PURELY MATCH ON TALLY SERIAL NUMBER
 	existing_records = frappe.db.sql(
 		"""
-		SELECT `name`, `tally_serial`, `tss_tally_serial`, `cc_acc_name`, `portal_acc_name`, `acc_expiry_date`, `address`, `portal_address`, `release`, `tally_version`, `product_ver`
+		SELECT `name`, `tally_serial`, `tss_tally_serial`, `cc_acc_name`, `portal_acc_name`, `acc_expiry_date`, `address`, `portal_address`, `release`, `tally_version`, `product_ver`, `state`
 		FROM `tabHbs Tally Renewal`
 		""",
 		as_dict=True
@@ -3083,13 +3083,11 @@ def update_master_data_from_excel(file_url):
 				updates["tally_version"] = rel
 				updates["product_ver"] = rel
 
-		# 4. Account Name
+		# 4. Account Name -> portal_acc_name ONLY
 		if col_account is not None and col_account < len(r) and r[col_account]:
 			acc = str(r[col_account]).strip()
 			if acc and acc.lower() not in ("none", "nan", "null", "-"):
 				updates["portal_acc_name"] = acc
-				if not target_rec or not target_rec.cc_acc_name or str(target_rec.cc_acc_name).strip() in ("", "-"):
-					updates["cc_acc_name"] = acc
 
 		# 5. Account Email Id -> account_id (in License Details) & portal_email
 		if col_email is not None and col_email < len(r) and r[col_email]:
@@ -3114,11 +3112,11 @@ def update_master_data_from_excel(file_url):
 				if not target_rec or not target_rec.address or str(target_rec.address).strip() in ("", "-", ", ,"):
 					updates["address"] = clean_addr
 
-		# 8. City
+		# 8. City / State -> state (Address details section of Portal Tab)
 		if col_city is not None and col_city < len(r) and r[col_city]:
 			city = str(r[col_city]).strip()
-			if city:
-				updates["led_city"] = city
+			if city and city.lower() not in ("none", "nan", "null", "-"):
+				updates["state"] = city
 
 		# 9. Pincode
 		if col_pincode is not None and col_pincode < len(r) and r[col_pincode]:
@@ -3239,6 +3237,8 @@ def update_master_data_from_excel(file_url):
 				new_doc.owner = untagged_user
 				for k, v in updates.items():
 					setattr(new_doc, k, v)
+				if updates.get("portal_acc_name"):
+					new_doc.cc_acc_name = updates["portal_acc_name"]
 				new_doc.insert(ignore_permissions=True)
 				created_count += 1
 
@@ -3254,6 +3254,7 @@ def update_master_data_from_excel(file_url):
 					"release": getattr(new_doc, "release", None),
 					"tally_version": getattr(new_doc, "tally_version", None),
 					"product_ver": getattr(new_doc, "product_ver", None),
+					"state": getattr(new_doc, "state", None),
 				})
 				serial_map[lookup_key] = target_dict
 				if raw_serial:
