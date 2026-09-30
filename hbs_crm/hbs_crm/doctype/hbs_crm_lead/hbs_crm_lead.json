@@ -159,7 +159,9 @@
    "fieldname": "last_remarks_date",
    "fieldtype": "Date",
    "label": "Last Remarks Date",
-   "read_only": 1
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
   },
   {
    "fieldname": "address_section",

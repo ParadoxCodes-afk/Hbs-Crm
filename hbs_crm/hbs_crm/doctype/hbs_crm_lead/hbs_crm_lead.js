@@ -3,6 +3,8 @@
 
 frappe.ui.form.on("Hbs Crm Lead", {
 	onload(frm) {
+		frm.set_df_property("last_remarks_date", "hidden", 1);
+		frm.set_df_property("last_remarks_date", "read_only", 1);
 		set_customer_details_read_only(frm);
 		if (frm.is_new()) {
 			if (!frm.doc.executive_1) {
@@ -22,6 +24,8 @@ frappe.ui.form.on("Hbs Crm Lead", {
 	},
 
 	refresh(frm) {
+		frm.set_df_property("last_remarks_date", "hidden", 1);
+		frm.set_df_property("last_remarks_date", "read_only", 1);
 		render_activity_timeline_js(frm);
 		toggle_won_status_read_only(frm);
 		set_customer_details_read_only(frm);

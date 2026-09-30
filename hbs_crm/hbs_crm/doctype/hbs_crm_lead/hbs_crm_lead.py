@@ -232,8 +232,14 @@ class HbsCrmLead(Document):
 		if not self.quotation_date:
 			self.quotation_date = frappe.utils.nowdate()
 
-		if not self.last_remarks_date:
+		if self.is_new():
 			self.last_remarks_date = frappe.utils.nowdate()
+		elif self.has_value_changed("last_remarks_date") and not getattr(self.flags, "remark_recorded", False):
+			doc_before_save = self.get_doc_before_save()
+			if doc_before_save and doc_before_save.last_remarks_date:
+				self.last_remarks_date = doc_before_save.last_remarks_date
+			elif not self.last_remarks_date:
+				self.last_remarks_date = frappe.utils.nowdate()
 
 		if getattr(self, "items", None) and len(self.items) > 0 and not getattr(self, "pi_number", None):
 			assign_lead_pi_and_date(self)
@@ -528,6 +534,7 @@ class HbsCrmLead(Document):
 	def record_remark_activity(self):
 		"""Record new remark in Hbs Lead Activity child table and clear input field."""
 		if self.remarks and self.remarks.strip():
+			self.flags.remark_recorded = True
 			user_email = frappe.session.user if frappe.session and frappe.session.user else "System"
 			new_remark = self.remarks.strip()
 			self.append("custom_activities", {
