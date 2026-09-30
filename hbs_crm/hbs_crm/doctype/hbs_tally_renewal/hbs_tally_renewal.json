@@ -12,6 +12,8 @@
   "alterid",
   "column_break_sys_top",
   "isdeleted",
+  "description_section",
+  "notes",
   "person_detail_section",
   "tss_tally_serial",
   "license",
@@ -1101,12 +1103,22 @@
   {
    "fieldname": "column_break_jisf",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "description_section",
+   "fieldtype": "Section Break",
+   "label": "Description"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-29 22:57:58.951192",
+ "modified": "2026-09-30 15:28:09.261906",
  "modified_by": "Administrator",
  "module": "hbs_crm",
  "name": "Hbs Tally Renewal",
