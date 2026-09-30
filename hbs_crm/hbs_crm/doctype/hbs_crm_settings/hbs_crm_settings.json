@@ -18,6 +18,7 @@
   "last_generated_new_age_pi_number",
   "column_break_gen",
   "default_lead_owner",
+  "untagged_renewal_user",
   "renewal_pi_number_order",
   "last_generated_renewal_pi_number"
  ],
@@ -119,11 +120,17 @@
    "fieldtype": "Link",
    "label": "Default Lead Owner",
    "options": "User"
+  },
+  {
+   "fieldname": "untagged_renewal_user",
+   "fieldtype": "Link",
+   "label": "Untagged Renewal User",
+   "options": "User"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-09-16 16:08:16.294885",
+ "modified": "2026-09-30 15:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs CRM Settings",

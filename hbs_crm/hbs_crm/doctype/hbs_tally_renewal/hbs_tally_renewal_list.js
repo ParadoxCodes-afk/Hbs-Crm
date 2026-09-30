@@ -8,7 +8,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		"portal_phone", "cc_email", "portal_email", "license", "flavour",
 		"tally_version", "product_ver", "acc_expiry_date", "portal_expiry_date",
 		"crm_status", "crm_stage", "crm_priority", "rfm_segment", "crm_ex_1", "last_remark",
-		"last_remarks_date"
+		"last_remarks_date", "notes"
 	],
 	formatters: {
 		tally_serial(val, df, doc) {
@@ -1165,9 +1165,7 @@ function render_preview_card(popover, doc, target) {
 			<div style="font-weight: 600; color: #64748b; font-size: 11px; margin-bottom: 3px; text-align: left;">
 				Last Remark${dt}:
 			</div>
-			<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 6px 8px; max-height: 65px; overflow-y: auto; font-size: 11.5px; color: #1e293b; line-height: 1.35; white-space: pre-wrap; word-break: break-word; text-align: left !important;">
-				${frappe.utils.escape_html((doc.last_remark || "").trim())}
-			</div>
+			<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 6px 8px; max-height: 65px; overflow-y: auto; font-size: 11.5px; color: #1e293b; line-height: 1.35; white-space: pre-wrap; word-break: break-word; text-align: left !important;">${frappe.utils.escape_html((doc.last_remark || "").trim())}</div>
 		`;
 	}
 
@@ -1212,6 +1210,13 @@ function render_preview_card(popover, doc, target) {
 			<div style="color: #64748b;">Executive:</div>
 			<div style="color: #1e293b; font-weight: 500;">${executive}</div>
 		</div>
+
+		${(doc.notes && doc.notes.trim()) ? `
+			<div style="margin-top: 6px; background: #fffdf5; border: 1px solid #fed7aa; border-left: 3px solid #f59e0b; border-radius: 4px; padding: 5px 8px; font-size: 11.5px; text-align: left;">
+				<div style="font-weight: 700; font-size: 10px; color: #b45309; text-transform: uppercase; margin-bottom: 2px;">💡 Client Note (Pre-Call):</div>
+				<div style="color: #1e293b; line-height: 1.35; white-space: pre-wrap; word-break: break-word;">${frappe.utils.escape_html(doc.notes.trim())}</div>
+			</div>
+		` : ""}
 
 		<div style="margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 6px; text-align: left;">
 			${remark_html}

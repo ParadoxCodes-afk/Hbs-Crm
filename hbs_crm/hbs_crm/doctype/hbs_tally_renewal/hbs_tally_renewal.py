@@ -2881,7 +2881,7 @@ def update_master_data_from_excel(file_url):
 			col_expiry = idx
 		elif n in ("flavor", "flavour", "tallyflavour") and col_flavor is None:
 			col_flavor = idx
-		elif n in ("release", "version", "tallyrelease") and col_release is None:
+		elif (n in ("release", "version", "tallyrelease", "tallyversion", "releaseversion", "releaserversion", "tallyreleaseversion", "tallyreleaserversion", "productversion", "productver", "tallyprimerelease") or ("release" in n and "date" not in n) or ("version" in n and "turnover" not in n)) and col_release is None:
 			col_release = idx
 		elif n in ("account", "portalaccname", "accountname") and col_account is None:
 			col_account = idx
@@ -2889,7 +2889,7 @@ def update_master_data_from_excel(file_url):
 			col_email = idx
 		elif n in ("customeraccountadminemailid", "customeraccountadminemail", "adminemailid", "adminid") and col_admin_email is None:
 			col_admin_email = idx
-		elif n in ("customeraddress", "portaladdress", "address") and col_address is None:
+		elif ("address" in n or n in ("customeraddress", "portaladdress")) and col_address is None:
 			col_address = idx
 		elif n in ("city", "customercity", "ledcity") and col_city is None:
 			col_city = idx
@@ -2930,7 +2930,7 @@ def update_master_data_from_excel(file_url):
 	# Pre-fetch existing renewals in memory: PURELY MATCH ON TALLY SERIAL NUMBER
 	existing_records = frappe.db.sql(
 		"""
-		SELECT name, tally_serial, tss_tally_serial, cc_acc_name, portal_acc_name, acc_expiry_date
+		SELECT `name`, `tally_serial`, `tss_tally_serial`, `cc_acc_name`, `portal_acc_name`, `acc_expiry_date`, `address`, `portal_address`, `release`, `tally_version`, `product_ver`
 		FROM `tabHbs Tally Renewal`
 		""",
 		as_dict=True
@@ -2993,7 +2993,19 @@ def update_master_data_from_excel(file_url):
 
 	total_rows = len(raw_data_rows)
 	updated_count = 0
+	created_count = 0
 	failed_rows = []
+
+	untagged_user = (
+		frappe.db.get_single_value("Hbs CRM Settings", "untagged_renewal_user")
+		or "untagged@hbsmail.in"
+	)
+	if not frappe.db.exists("User", untagged_user):
+		u = frappe.new_doc("User")
+		u.email = untagged_user
+		u.first_name = "Untagged"
+		u.send_welcome_email = 0
+		u.insert(ignore_permissions=True)
 
 	for r_offset, r in enumerate(raw_data_rows):
 		row_idx = start_row_offset + r_offset
@@ -3005,8 +3017,8 @@ def update_master_data_from_excel(file_url):
 			frappe.publish_progress(
 				pct,
 				title=_("Updating Master Data"),
-				description=_("Processed {0} of {1} rows... (Updated: {2}, Skipped: {3})").format(
-					r_offset + 1, total_rows, updated_count, len(failed_rows)
+				description=_("Processed {0} of {1} rows... (Created: {2}, Updated: {3}, Skipped: {4})").format(
+					r_offset + 1, total_rows, created_count, updated_count, len(failed_rows)
 				)
 			)
 
@@ -3037,18 +3049,13 @@ def update_master_data_from_excel(file_url):
 			continue
 
 		target_rec = serial_map.get(lookup_key) or serial_map.get(raw_serial)
-		if not target_rec:
-			acc_display = str(r[col_account]).strip() if (col_account is not None and col_account < len(r) and r[col_account]) else "-"
-			failed_rows.append({
-				"row": row_idx,
-				"serial": lookup_key,
-				"party": acc_display,
-				"reason": _("Tally Serial Number not found in Hbs Tally Renewal")
-			})
-			continue
-
-		doc_name = target_rec.name
-		party_display = target_rec.cc_acc_name or target_rec.portal_acc_name or "-"
+		acc_display = str(r[col_account]).strip() if (col_account is not None and col_account < len(r) and r[col_account]) else "-"
+		if target_rec:
+			doc_name = target_rec.name
+			party_display = target_rec.cc_acc_name or target_rec.portal_acc_name or acc_display
+		else:
+			doc_name = None
+			party_display = acc_display
 
 		updates = {}
 
@@ -3065,22 +3072,23 @@ def update_master_data_from_excel(file_url):
 			p_exp = safe_date(r[col_expiry])
 			if p_exp:
 				updates["portal_expiry_date"] = p_exp
-				if not target_rec.acc_expiry_date:
+				if not target_rec or not target_rec.acc_expiry_date:
 					updates["acc_expiry_date"] = p_exp
 
-		# 3. Release & Tally Version
+		# 3. Release & Tally Version & Product Version
 		if col_release is not None and col_release < len(r) and r[col_release]:
 			rel = str(r[col_release]).strip()
-			if rel:
+			if rel and rel.lower() not in ("none", "nan", "null", "-"):
 				updates["release"] = rel
 				updates["tally_version"] = rel
+				updates["product_ver"] = rel
 
 		# 4. Account Name
 		if col_account is not None and col_account < len(r) and r[col_account]:
 			acc = str(r[col_account]).strip()
-			if acc:
+			if acc and acc.lower() not in ("none", "nan", "null", "-"):
 				updates["portal_acc_name"] = acc
-				if not target_rec.cc_acc_name:
+				if not target_rec or not target_rec.cc_acc_name or str(target_rec.cc_acc_name).strip() in ("", "-"):
 					updates["cc_acc_name"] = acc
 
 		# 5. Account Email Id -> account_id (in License Details) & portal_email
@@ -3098,9 +3106,13 @@ def update_master_data_from_excel(file_url):
 
 		# 7. Customer Address
 		if col_address is not None and col_address < len(r) and r[col_address]:
-			addr = str(r[col_address]).strip()
-			if addr and addr not in (", ,", "'-", "-", "null", "none"):
-				updates["portal_address"] = addr
+			raw_addr = str(r[col_address]).strip()
+			clean_addr = re.sub(r"^['\s,-]+|['\s,-]+$", "", raw_addr).strip()
+			clean_addr = re.sub(r",\s*,+", ",", clean_addr).strip(" ,-")
+			if clean_addr and clean_addr.lower() not in ("null", "none", "nan", "-"):
+				updates["portal_address"] = clean_addr
+				if not target_rec or not target_rec.address or str(target_rec.address).strip() in ("", "-", ", ,"):
+					updates["address"] = clean_addr
 
 		# 8. City
 		if col_city is not None and col_city < len(r) and r[col_city]:
@@ -3213,10 +3225,41 @@ def update_master_data_from_excel(file_url):
 		updates["crm_ref"] = "ACTIVE"
 
 		try:
-			frappe.db.set_value("Hbs Tally Renewal", doc_name, updates, update_modified=True)
-			updated_count += 1
+			if doc_name:
+				frappe.db.set_value("Hbs Tally Renewal", doc_name, updates, update_modified=True)
+				updated_count += 1
+			else:
+				new_doc = frappe.new_doc("Hbs Tally Renewal")
+				new_doc.flags.in_import = True
+				new_doc.tally_serial = lookup_key
+				new_doc.tss_tally_serial = lookup_key
+				new_doc.customer_serial = lookup_key
+				new_doc.crm_ex_1 = untagged_user
+				new_doc.crm_executive = untagged_user
+				new_doc.owner = untagged_user
+				for k, v in updates.items():
+					setattr(new_doc, k, v)
+				new_doc.insert(ignore_permissions=True)
+				created_count += 1
 
-			if updated_count % 100 == 0:
+				target_dict = frappe._dict({
+					"name": new_doc.name,
+					"tally_serial": lookup_key,
+					"tss_tally_serial": lookup_key,
+					"cc_acc_name": getattr(new_doc, "cc_acc_name", None),
+					"portal_acc_name": getattr(new_doc, "portal_acc_name", None),
+					"acc_expiry_date": getattr(new_doc, "acc_expiry_date", None),
+					"address": getattr(new_doc, "address", None),
+					"portal_address": getattr(new_doc, "portal_address", None),
+					"release": getattr(new_doc, "release", None),
+					"tally_version": getattr(new_doc, "tally_version", None),
+					"product_ver": getattr(new_doc, "product_ver", None),
+				})
+				serial_map[lookup_key] = target_dict
+				if raw_serial:
+					serial_map[raw_serial] = target_dict
+
+			if (updated_count + created_count) % 100 == 0:
 				frappe.db.commit()
 
 		except Exception as e:
@@ -3225,7 +3268,7 @@ def update_master_data_from_excel(file_url):
 				"row": row_idx,
 				"serial": lookup_key,
 				"party": party_display,
-				"reason": err_msg or _("Database update error")
+				"reason": err_msg or _("Database save error")
 			})
 
 	frappe.publish_progress(100, title=_("Updating Master Data"), description=_("Update completed!"))
@@ -3234,7 +3277,7 @@ def update_master_data_from_excel(file_url):
 	return {
 		"status": "success",
 		"report_title": _("📊 Master Data (Portal) Update Report"),
-		"created_count": 0,
+		"created_count": created_count,
 		"updated_count": updated_count,
 		"skipped_count": len(failed_rows),
 		"failed_rows": failed_rows

@@ -829,6 +829,66 @@ function apply_custom_section_styles(frm) {
 				padding: 4px 8px !important;
 			}
 
+			/* 5. Pre-Call Notes / Briefing (Amber Sticky Card Theme) */
+			.form-page [data-fieldname="description_section"] {
+				margin-top: 14px !important;
+				margin-bottom: 14px !important;
+			}
+			.form-page [data-fieldname="description_section"] .section-head {
+				color: #92400e !important;
+				font-weight: 700 !important;
+			}
+			.form-page [data-fieldname="notes"] {
+				background: #fffdf5 !important;
+				border: 1.5px solid #fed7aa !important;
+				border-radius: 6px !important;
+				padding: 6px 10px !important;
+				margin-top: 2px !important;
+				margin-bottom: 4px !important;
+				box-shadow: 0 1px 3px rgba(245, 158, 11, 0.06) !important;
+				transition: all 0.2s ease !important;
+			}
+			.form-page [data-fieldname="notes"]:hover {
+				box-shadow: 0 2px 8px rgba(245, 158, 11, 0.12) !important;
+				border-color: #f59e0b !important;
+			}
+			.form-page [data-fieldname="notes"] .control-label {
+				color: #92400e !important;
+				font-weight: 700 !important;
+				font-size: 11px !important;
+				display: flex !important;
+				align-items: center !important;
+				gap: 4px !important;
+				margin-bottom: 3px !important;
+			}
+			.form-page [data-fieldname="notes"] textarea {
+				background-color: #ffffff !important;
+				border: 1px solid #fcd34d !important;
+				border-radius: 4px !important;
+				color: #1e293b !important;
+				font-size: 12px !important;
+				line-height: 1.35 !important;
+				min-height: 38px !important;
+				height: 42px !important;
+				padding: 5px 8px !important;
+			}
+			.form-page [data-fieldname="notes"] textarea:focus {
+				border-color: #f59e0b !important;
+				box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2) !important;
+				outline: none !important;
+				background-color: #ffffff !important;
+			}
+			.form-page [data-fieldname="notes"] .control-value {
+				background-color: #ffffff !important;
+				border: 1px solid #fcd34d !important;
+				border-radius: 6px !important;
+				padding: 8px 10px !important;
+				color: #1e293b !important;
+				font-size: 13px !important;
+				line-height: 1.5 !important;
+				white-space: pre-wrap !important;
+			}
+
 			/* Clean Modal Dialog inputs */
 			.modal-dialog input,
 			.modal-dialog select,
@@ -863,6 +923,26 @@ function apply_custom_section_styles(frm) {
 				}
 			}
 		});
+
+		// Pre-Call Client Notes styling & badge
+		if (frm.fields_dict.notes && frm.fields_dict.notes.$wrapper) {
+			let $w = frm.fields_dict.notes.$wrapper;
+			let $label = $w.find(".control-label");
+			if ($label.length && !$label.find(".hbs-notes-badge").length) {
+				$label.html(`
+					<span class="hbs-notes-badge" style="background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">
+						💡 Pre-Call Briefing
+					</span>
+				`);
+			}
+			let $textarea = $w.find("textarea");
+			if ($textarea.length) {
+				$textarea.attr(
+					"placeholder",
+					__("Write key talking points, client temperament, special discount/terms agreed, or things to keep in mind before speaking to this client...")
+				);
+			}
+		}
 	}, 100);
 
 	// Dynamic toggle for Portal Expiry Date
