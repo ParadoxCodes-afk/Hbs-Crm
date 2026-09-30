@@ -38,6 +38,14 @@ frappe.ui.form.on("Hbs Crm Lead", {
 			frm.set_value("quotation_date", frappe.datetime.get_today());
 		}
 
+		if (!frm.is_new() && !frm.has_perm("write")) {
+			frm.disable_save();
+			frm.dashboard.set_headline_alert(
+				__("👁️ <b>Read-Only Mode:</b> You are viewing this lead in supervisory/reports-to mode."),
+				"blue"
+			);
+		}
+
 		frm.clear_custom_buttons();
 
 		if (frm.doc.status !== "won" && frm.doc.status !== "lost") {

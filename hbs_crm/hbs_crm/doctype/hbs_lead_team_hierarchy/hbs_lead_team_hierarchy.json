@@ -1,0 +1,98 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:team_name",
+ "creation": "2026-09-30 00:55:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "team_name",
+  "enabled",
+  "section_lead_types",
+  "lead_types",
+  "section_executives",
+  "executives",
+  "section_supervisors",
+  "supervisors"
+ ],
+ "fields": [
+  {
+   "fieldname": "team_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Team Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "section_lead_types",
+   "fieldtype": "Section Break",
+   "label": "Assigned Lead Types"
+  },
+  {
+   "fieldname": "lead_types",
+   "fieldtype": "Table",
+   "label": "Lead Types",
+   "options": "Hbs Team Lead Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_executives",
+   "fieldtype": "Section Break",
+   "label": "Team Executives"
+  },
+  {
+   "fieldname": "executives",
+   "fieldtype": "Table",
+   "label": "Executives",
+   "options": "Hbs Team Executive",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_supervisors",
+   "fieldtype": "Section Break",
+   "label": "Reports To (Managers & Supervisors)"
+  },
+  {
+   "fieldname": "supervisors",
+   "fieldtype": "Table",
+   "label": "Reports To / Managers",
+   "options": "Hbs Team Supervisor",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-30 00:55:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hbs Crm",
+ "name": "Hbs Lead Team Hierarchy",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "team_name"
+}

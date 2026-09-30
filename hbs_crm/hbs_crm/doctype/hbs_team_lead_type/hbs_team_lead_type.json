@@ -1,0 +1,35 @@
+{
+ "actions": [],
+ "creation": "2026-09-30 00:55:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "lead_type"
+ ],
+ "fields": [
+  {
+   "columns": 10,
+   "fieldname": "lead_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Lead Type",
+   "options": "hbs product type",
+   "reqd": 1,
+   "search_index": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-30 00:55:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hbs Crm",
+ "name": "Hbs Team Lead Type",
+ "naming_rule": "Autoincrement",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

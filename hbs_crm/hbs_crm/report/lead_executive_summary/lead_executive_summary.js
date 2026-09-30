@@ -7,8 +7,8 @@ frappe.query_reports["Lead Executive Summary"] = {
 			fieldname: "group_by",
 			label: __("Group By"),
 			fieldtype: "Select",
-			options: "Executive\nLead Type",
-			default: "Executive",
+			options: "Executive 1\nExecutive 2\nLead Type\nSummary",
+			default: "Executive 1",
 			reqd: 1
 		},
 		{
@@ -30,22 +30,43 @@ frappe.query_reports["Lead Executive Summary"] = {
 			options: "\nnew\npending\nwon\nlost"
 		},
 		{
+			fieldname: "pending_ageing",
+			label: __("Pending Ageing"),
+			fieldtype: "Select",
+			options: "\n>= 5 Days\n>= 10 Days\n>= 15 Days\n>= 20 Days\n>= 25 Days\n>= 30 Days\n>= 45 Days\n>= 60 Days"
+		},
+		{
 			fieldname: "lead_type",
 			label: __("Lead Type"),
 			fieldtype: "Link",
-			options: "hbs product type"
+			options: "hbs product type",
+			get_query: function() {
+				return {
+					query: "hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy.get_assigned_lead_types_query"
+				};
+			}
 		},
 		{
 			fieldname: "executive_1",
 			label: __("Executive 1"),
 			fieldtype: "Link",
-			options: "User"
+			options: "User",
+			get_query: function() {
+				return {
+					query: "hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy.get_assigned_executives_query"
+				};
+			}
 		},
 		{
 			fieldname: "executive_2",
 			label: __("Executive 2"),
 			fieldtype: "Link",
-			options: "User"
+			options: "User",
+			get_query: function() {
+				return {
+					query: "hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy.get_assigned_executives_query"
+				};
+			}
 		}
 	],
 
@@ -75,7 +96,22 @@ frappe.query_reports["Lead Executive Summary"] = {
 		open_drilldown_dialog(report, group_by, val);
 	},
 
+	get_datatable_options: function(options) {
+		return Object.assign(options, {
+			layout: "fluid"
+		});
+	},
+
+	after_datatable_render: function(datatable) {
+		$(datatable.wrapper).find(".dt-scrollable").css("overflow-x", "auto");
+	},
+
 	onload: function(report) {
+		frappe.breadcrumbs.add("Hbs Crm", "Hbs Crm Lead");
+		if (frappe.app && frappe.app.sidebar) {
+			frappe.app.sidebar.setup("HBS CRM");
+		}
+
 		// Bind delegated click listener on both wrapper and document for bulletproof triggering
 		report.page.wrapper.off("click", ".btn-drilldown-lead").on("click", ".btn-drilldown-lead", function(e) {
 			frappe.query_reports["Lead Executive Summary"].open_leads(this, e);
@@ -124,6 +160,7 @@ function open_drilldown_dialog(report, group_by, val) {
 		from_date: filters.from_date || "",
 		to_date: filters.to_date || "",
 		status: filters.status || "",
+		pending_ageing: filters.pending_ageing || "",
 		lead_type: filters.lead_type || "",
 		executive_1: filters.executive_1 || "",
 		executive_2: filters.executive_2 || "",
@@ -183,7 +220,7 @@ function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 				</td>
 				<td><b>${frappe.utils.escape_html(l.company_name || '-')}</b></td>
 				<td>${frappe.utils.escape_html(l.contact_name || '-')}</td>
-				<td>${frappe.utils.escape_html(l.executive_name || l.executive_1 || '-')}</td>
+				<td>${frappe.utils.escape_html(group_by === "Executive 2" ? (l.executive_2_name || l.executive_2 || '-') : (l.executive_name || l.executive_1 || '-'))}</td>
 				<td style="text-align: right; font-weight: 600;">${format_currency(l.final_total, "INR")}</td>
 				<td style="text-align: center; white-space: nowrap;">${l.creation_date || '-'}</td>
 				<td style="text-align: center; white-space: nowrap;" title="${l.last_remarks_date ? __('Last Remark Date: {0}', [l.last_remarks_date]) : ''}">${format_lead_ageing(l.lead_ageing)}</td>
@@ -280,9 +317,25 @@ function render_leads_drilldown_dialog(group_by, val, label, leads, filters) {
 			if (filters.executive_1) {
 				route_opts["executive_1"] = filters.executive_1;
 			}
+			if (filters.executive_2) {
+				route_opts["executive_2"] = filters.executive_2;
+			}
+		} else if (group_by === "Executive 2") {
+			if (val && val !== "Unassigned") {
+				route_opts["executive_2"] = val;
+			}
+			if (filters.executive_1) {
+				route_opts["executive_1"] = filters.executive_1;
+			}
+			if (filters.lead_type) {
+				route_opts["lead_type"] = filters.lead_type;
+			}
 		} else {
 			if (val && val !== "Unassigned") {
 				route_opts["executive_1"] = val;
+			}
+			if (filters.executive_2) {
+				route_opts["executive_2"] = filters.executive_2;
 			}
 			if (filters.lead_type) {
 				route_opts["lead_type"] = filters.lead_type;

@@ -68,6 +68,22 @@ def check_is_admin_or_owner():
 	return is_owner_or_admin(frappe.session.user)
 
 
+@frappe.whitelist()
+def can_access_lead_summary(user=None):
+	"""Return True if user is Admin, Owner, or an assigned Team Supervisor (TL) in Hbs Lead Team Hierarchy."""
+	user = user or frappe.session.user
+	if is_owner_or_admin(user):
+		return True
+
+	from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
+	from hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead import get_subordinates_from_hierarchy
+
+	team_perms = get_user_lead_team_permissions(user)
+	subordinates = get_subordinates_from_hierarchy(user)
+	return bool(team_perms.get("executives") or subordinates)
+
+
+
 def get_logged_in_user_context(user=None):
 	"""Build the `logged_in_user` dict used by email templates."""
 	user = user or (frappe.session.user if frappe.session else "Administrator")
@@ -917,26 +933,49 @@ def get_subordinates_from_hierarchy(user, visited=None):
 
 
 def get_permission_query_conditions(user=None):
-	"""Permission hook to scope lead visibility based on User Hierarchy only."""
+	"""Permission hook to scope lead visibility based on User Hierarchy and Lead Team Hierarchy."""
 	if not user:
 		user = frappe.session.user
 
-	# Administrator / System Manager / Owner sees ALL leads without date restrictions
+	# Administrator / System Manager / Owner sees ALL leads
 	if is_owner_or_admin(user):
 		return ""
 
-	# Standard user level (Manager, Executive): Team members only (no date restrictions on permissions)
+	conditions = []
+
+	# 1. Legacy hierarchy / self leads
 	subordinates = get_subordinates_from_hierarchy(user)
 	team_members = list(set([user] + subordinates))
-	team_escaped = ", ".join([frappe.db.escape(u) for u in team_members])
+	if team_members:
+		team_escaped = ", ".join([frappe.db.escape(u) for u in team_members])
+		conditions.append(f"(`tabHbs Crm Lead`.`executive_1` IN ({team_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({team_escaped}) OR `tabHbs Crm Lead`.`executive_3` IN ({team_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({team_escaped}))")
 
-	user_cond = f"(`tabHbs Crm Lead`.`executive_1` IN ({team_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({team_escaped}) OR `tabHbs Crm Lead`.`executive_3` IN ({team_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({team_escaped}))"
+	# 2. Team hierarchy permissions (managers and supervisors)
+	try:
+		from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
+		team_perms = get_user_lead_team_permissions(user)
+		if team_perms["executives"]:
+			exec_escaped = ", ".join([frappe.db.escape(u) for u in team_perms["executives"]])
+			if team_perms["lead_types"]:
+				lt_escaped = ", ".join([frappe.db.escape(lt) for lt in team_perms["lead_types"]])
+				conditions.append(f"((`tabHbs Crm Lead`.`executive_1` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({exec_escaped})) AND `tabHbs Crm Lead`.`lead_type` IN ({lt_escaped}))")
+			else:
+				conditions.append(f"(`tabHbs Crm Lead`.`executive_1` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({exec_escaped}))")
+	except Exception:
+		pass
 
-	return user_cond
+	if conditions:
+		return f"({' OR '.join(conditions)})"
+
+	return "1=0"
 
 
 def has_permission(doc, ptype="read", user=None):
-	"""Check document-level read permission based on Hbs User Hierarchy."""
+	"""Check document-level read and write permission based on Hbs User Hierarchy & Lead Team Hierarchy.
+	- Assigned executives (executive_1, executive_2): Full read & write.
+	- Managers (in hierarchy or team): Full read & write.
+	- Other Reports-To / Supervisors: Strictly READ-ONLY (write denied).
+	"""
 	if not user:
 		user = frappe.session.user
 
@@ -949,16 +988,54 @@ def has_permission(doc, ptype="read", user=None):
 	if not doc:
 		return True
 
-	subordinates = get_subordinates_from_hierarchy(user)
-	team_members = set([user] + subordinates)
-
 	doc_obj = doc if hasattr(doc, "get") else frappe.get_doc("Hbs Crm Lead", doc)
-	return (
-		doc_obj.get("executive_1") in team_members or
-		doc_obj.get("executive_2") in team_members or
-		doc_obj.get("executive_3") in team_members or
-		doc_obj.get("owner") in team_members
-	)
+	doc_execs = [doc_obj.get("executive_1"), doc_obj.get("executive_2"), doc_obj.get("executive_3"), doc_obj.get("owner")]
+	doc_lead_type = doc_obj.get("lead_type")
+
+	# Assigned executives have full access to their own leads
+	if user in doc_execs:
+		return True
+
+	# Check subordinate relation from User Hierarchy
+	subordinates = get_subordinates_from_hierarchy(user)
+	is_subordinate_lead = any(e in subordinates for e in doc_execs if e)
+
+	# Check Team Hierarchy permissions
+	is_team_lead = False
+	is_team_manager = False
+	try:
+		from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
+		team_perms = get_user_lead_team_permissions(user)
+		lead_type_match = not team_perms["lead_types"] or doc_lead_type in team_perms["lead_types"]
+		if lead_type_match:
+			if any(e in team_perms["executives"] for e in doc_execs if e):
+				is_team_lead = True
+			if any(e in team_perms["manager_for_execs"] for e in doc_execs if e):
+				is_team_manager = True
+	except Exception:
+		pass
+
+	can_read = is_subordinate_lead or is_team_lead
+
+	if ptype == "read":
+		return can_read
+
+	if ptype == "write":
+		if not can_read:
+			return False
+		# Managers can edit subordinate / team leads
+		user_role = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
+		if user_role == "Manager" and is_subordinate_lead:
+			return True
+		if is_team_manager:
+			return True
+		# Other Reports-To / Supervisors are read-only
+		return False
+
+	if ptype == "delete":
+		return False
+
+	return can_read
 
 
 @frappe.whitelist()

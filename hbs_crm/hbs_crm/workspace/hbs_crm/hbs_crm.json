@@ -1,8 +1,8 @@
 {
  "app": "hbs_crm",
  "charts": [],
- "content": "[{\"id\":\"I2we-fpgai\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">HBS CRM Workspace</span>\",\"col\":12}},{\"id\":\"Vn_mC3YTa9\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hbs Crm Lead\",\"col\":3}},{\"id\":\"uh9NniWJJN\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hbs Customer\",\"col\":3}},{\"id\":\"mYJez-yqDT\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hbs Product\",\"col\":3}},{\"id\":\"GkJU5luVKh\",\"type\":\"card\",\"data\":{\"card_name\":\"CRM Management\",\"col\":4}}]",
- "creation": "2026-08-19 14:54:00",
+ "content": "[{\"id\":\"hdr-1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">HBS CRM Workspace</span>\",\"col\":12}},{\"id\":\"sc-1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hbs Crm Lead\",\"col\":3}},{\"id\":\"sc-2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Tally Renewals\",\"col\":3}},{\"id\":\"sc-3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hbs Customer\",\"col\":3}},{\"id\":\"card-1\",\"type\":\"card\",\"data\":{\"card_name\":\"CRM Management\",\"col\":6}},{\"id\":\"card-2\",\"type\":\"card\",\"data\":{\"card_name\":\"Tally Renewals\",\"col\":6}}]",
+ "creation": "2026-09-16 15:29:25.788908",
  "custom_blocks": [],
  "docstatus": 0,
  "doctype": "Workspace",
@@ -13,12 +13,43 @@
  "indicator_color": "blue",
  "is_hidden": 0,
  "label": "HBS CRM",
+ "link_type": "DocType",
  "links": [
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Hbs Print Format",
+   "link_count": 0,
+   "link_to": "Print Format",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Tally Renewals",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hbs Tally Renewal",
+   "link_count": 0,
+   "link_to": "Hbs Tally Renewal",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "CRM Management",
-   "link_count": 5,
+   "link_count": 7,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -60,6 +91,17 @@
    "dependencies": "",
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Hbs CRM Settings",
+   "link_count": 0,
+   "link_to": "Hbs CRM Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Hbs CRM Email Settings",
    "link_count": 0,
    "link_to": "Hbs CRM Email Settings",
@@ -76,15 +118,25 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Report Hierarchy",
+   "link_count": 0,
+   "link_to": "Hbs Lead Team Hierarchy",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-08-26 12:37:40.212190",
+ "modified": "2026-09-30 11:18:11.836400",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "HBS CRM",
  "number_cards": [],
  "owner": "Administrator",
- "parent_page": "HBS CRM",
+ "parent_page": "",
  "public": 1,
  "quick_lists": [],
  "roles": [],
@@ -98,17 +150,18 @@
    "type": "DocType"
   },
   {
+   "color": "Purple",
+   "doc_view": "List",
+   "label": "Tally Renewals",
+   "link_to": "Hbs Tally Renewal",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
    "color": "Green",
    "doc_view": "List",
    "label": "Hbs Customer",
    "link_to": "Hbs Customer",
-   "type": "DocType"
-  },
-  {
-   "color": "Orange",
-   "doc_view": "List",
-   "label": "Hbs Product",
-   "link_to": "Hbs Product",
    "type": "DocType"
   }
  ],
