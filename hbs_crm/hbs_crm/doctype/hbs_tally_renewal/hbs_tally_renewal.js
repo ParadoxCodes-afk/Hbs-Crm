@@ -1392,9 +1392,8 @@ function check_and_warn_duplicate_serial(frm) {
 function auto_sync_portal_on_open(frm) {
 	if (frm._is_syncing_portal || frm._portal_synced) return;
 
-	// Cooldown: 1 hour (3600000 ms) so it syncs once, then stops.
-	// When opened after some time (> 1 hour), it will sync again.
-	const COOLDOWN_MS = 60 * 60 * 1000;
+	// Cooldown: 15 minutes (900000 ms) so it syncs once, then waits 15 mins before syncing again.
+	const COOLDOWN_MS = 15 * 60 * 1000;
 	let last_sync = localStorage.getItem("hbs_portal_sync_" + frm.doc.name);
 	let now = Date.now();
 	if (last_sync && (now - parseInt(last_sync, 10)) < COOLDOWN_MS) {

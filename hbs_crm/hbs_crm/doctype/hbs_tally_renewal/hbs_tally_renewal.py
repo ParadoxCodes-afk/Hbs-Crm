@@ -1535,6 +1535,61 @@ def is_owner_or_admin(user=None):
 	return role_type == "Owner"
 
 
+def is_admin_owner_or_manager(user=None):
+	"""Check if user is Admin, Owner, or Manager in hierarchy or CRM settings."""
+	user = user or (frappe.session.user if frappe.session else "Administrator")
+	if not user or user in ("Administrator", "System"):
+		return True
+	user_roles = frappe.get_roles(user) if hasattr(frappe, "get_roles") else []
+	admin_roles = ["System Manager", "Administrator", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"]
+	if any(r in user_roles for r in admin_roles):
+		return True
+	role_type = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
+	if role_type in ("Owner", "Manager"):
+		return True
+	default_owner = frappe.db.get_single_value("Hbs CRM Settings", "default_lead_owner")
+	if default_owner and default_owner == user:
+		return True
+	return False
+
+
+@frappe.whitelist()
+def get_overdue_renewal_summary():
+	"""Return count and cutoff date of active renewals with no follow-up for >= 10 days scoped by user role."""
+	user = frappe.session.user
+	cutoff_date = frappe.utils.add_days(frappe.utils.nowdate(), -10)
+	is_admin_mgr = is_admin_owner_or_manager(user)
+
+	if is_admin_mgr:
+		count = frappe.db.sql("""
+			SELECT COUNT(*) FROM `tabHbs Tally Renewal`
+			WHERE (crm_status NOT IN ('SOLD', 'LOST', 'WON', 'Sold', 'Lost', 'Won') OR crm_status IS NULL OR crm_status = '')
+			  AND (
+				(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
+				OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
+			  )
+		""", (cutoff_date, cutoff_date))[0][0]
+	else:
+		subordinates = get_subordinates_from_hierarchy(user)
+		team = list(set([user] + subordinates))
+		escaped_team = ", ".join([frappe.db.escape(u) for u in team])
+		count = frappe.db.sql(f"""
+			SELECT COUNT(*) FROM `tabHbs Tally Renewal`
+			WHERE (crm_status NOT IN ('SOLD', 'LOST', 'WON', 'Sold', 'Lost', 'Won') OR crm_status IS NULL OR crm_status = '')
+			  AND (crm_ex_1 IN ({escaped_team}) OR owner IN ({escaped_team}))
+			  AND (
+				(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
+				OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
+			  )
+		""", (cutoff_date, cutoff_date))[0][0]
+
+	return {
+		"count": count or 0,
+		"cutoff_date": cutoff_date,
+		"is_admin_or_manager": is_admin_mgr
+	}
+
+
 def get_subordinates_from_hierarchy(user, visited=None, is_root=True):
 	"""Recursively get all subordinates reporting directly or indirectly to user."""
 	if not hasattr(frappe.local, "subordinates_cache"):
@@ -1574,9 +1629,9 @@ def get_permission_query_conditions(user=None):
 	if is_owner_or_admin(user):
 		return ""
 
-	# Managers in Hbs User Hierarchy can see all leads
+	# Managers and Owners in Hbs User Hierarchy can see all renewals
 	role_type = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
-	if role_type == "Manager":
+	if role_type in ("Manager", "Owner"):
 		return ""
 
 	subordinates = get_subordinates_from_hierarchy(user)
@@ -1597,9 +1652,9 @@ def has_permission(doc, ptype="read", user=None):
 	if ptype == "import":
 		return False
 
-	# Managers in Hbs User Hierarchy can view, email, and print all leads
+	# Managers in Hbs User Hierarchy can view, edit, email, and print all renewals
 	role_type = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
-	if role_type == "Manager" and ptype in ("read", "email", "print"):
+	if role_type in ("Manager", "Owner") and ptype in ("read", "write", "save", "email", "print"):
 		return True
 
 	if getattr(frappe.flags, "in_takeover", False):

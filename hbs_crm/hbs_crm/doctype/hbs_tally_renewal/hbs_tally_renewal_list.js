@@ -97,6 +97,43 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			}
 		}, 100);
 
+		// Overdue remarks/follow-up alert banner (>= 10 days inactive)
+		frappe.call({
+			method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.get_overdue_renewal_summary",
+			callback: function (r) {
+				if (r && r.message && r.message.count > 0) {
+					listview.page.main.find(".renewal-overdue-banner").remove();
+					let renewal_text = r.message.is_admin_or_manager
+						? `<b>${r.message.count}</b> active renewal(s) have not received any follow-up/remarks in the last 10+ days.`
+						: `<b>${r.message.count}</b> of your active renewal(s) have not received any follow-up/remarks in the last 10+ days.`;
+
+					let banner_html = `
+						<div class="renewal-overdue-banner" style="display: flex; align-items: center; justify-content: space-between; margin: 8px 15px 4px 15px; padding: 9px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 13px; color: #92400e;">
+							<div style="display: flex; align-items: center; gap: 8px;">
+								<span style="font-size: 15px;">⚠️</span>
+								<span><b>Attention:</b> ${renewal_text}</span>
+							</div>
+							<button class="btn btn-xs btn-warning btn-filter-overdue" style="font-weight: 600; cursor: pointer; border-radius: 4px;">
+								🔍 View Inactive Renewals
+							</button>
+						</div>
+					`;
+					listview.page.main.prepend(banner_html);
+					listview.page.main.find(".btn-filter-overdue").on("click", function () {
+						listview.filter_area.clear();
+						let filters = [
+							["Hbs Tally Renewal", "crm_status", "not in", ["SOLD", "LOST"]],
+							["Hbs Tally Renewal", "last_remarks_date", "<=", r.message.cutoff_date]
+						];
+						if (!r.message.is_admin_or_manager) {
+							filters.push(["Hbs Tally Renewal", "crm_ex_1", "=", frappe.session.user]);
+						}
+						listview.filter_area.add(filters);
+					});
+				}
+			}
+		});
+
 		// 1. Bulk Email toolbar button (Available to all users under Operations)
 		listview.page.add_inner_button(__("📧 Send Bulk Quotation"), () => {
 			open_bulk_email_dialog(listview);

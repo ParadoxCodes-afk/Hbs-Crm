@@ -68,6 +68,22 @@ def check_is_admin_or_owner():
 	return is_owner_or_admin(frappe.session.user)
 
 
+@frappe.whitelist()
+def can_access_lead_summary(user=None):
+	"""Return True if user is Admin, Owner, or an assigned Team Supervisor (TL) in Hbs Lead Team Hierarchy."""
+	user = user or frappe.session.user
+	if is_owner_or_admin(user):
+		return True
+
+	from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
+	from hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead import get_subordinates_from_hierarchy
+
+	team_perms = get_user_lead_team_permissions(user)
+	subordinates = get_subordinates_from_hierarchy(user)
+	return bool(team_perms.get("executives") or subordinates)
+
+
+
 def get_logged_in_user_context(user=None):
 	"""Build the `logged_in_user` dict used by email templates."""
 	user = user or (frappe.session.user if frappe.session else "Administrator")
@@ -140,10 +156,9 @@ def get_last_lead_pi_info(is_new_age=False):
 def assign_lead_pi_and_date(doc):
 	"""Assign quotation date and increment PI number checking both DB and Hbs CRM Settings."""
 	today = frappe.utils.nowdate()
-	if not getattr(doc, "quotation_date", None):
-		if not doc.is_new():
-			doc.db_set("quotation_date", today)
-		doc.quotation_date = today
+	doc.quotation_date = today
+	if not doc.is_new():
+		doc.db_set("quotation_date", today)
 	is_new_age = (getattr(doc, "quotation_format", None) == "New Age Quotation")
 	has_wrong_prefix = bool(doc.pi_number and (
 		(is_new_age and not str(doc.pi_number).startswith("NIPL/")) or
@@ -229,8 +244,7 @@ class HbsCrmLead(Document):
 		self.calculate_totals()
 		self.render_activity_html()
 
-		if not self.quotation_date:
-			self.quotation_date = frappe.utils.nowdate()
+		self.quotation_date = frappe.utils.nowdate()
 
 		if self.is_new():
 			self.last_remarks_date = frappe.utils.nowdate()
@@ -917,26 +931,42 @@ def get_subordinates_from_hierarchy(user, visited=None):
 
 
 def get_permission_query_conditions(user=None):
-	"""Permission hook to scope lead visibility based on User Hierarchy only."""
+	"""Permission hook to scope lead visibility based on User Hierarchy and Lead Team Hierarchy."""
 	if not user:
 		user = frappe.session.user
 
-	# Administrator / System Manager / Owner sees ALL leads without date restrictions
+	# Administrator / System Manager / Owner sees ALL leads
 	if is_owner_or_admin(user):
 		return ""
 
-	# Standard user level (Manager, Executive): Team members only (no date restrictions on permissions)
-	subordinates = get_subordinates_from_hierarchy(user)
-	team_members = list(set([user] + subordinates))
-	team_escaped = ", ".join([frappe.db.escape(u) for u in team_members])
+	user_escaped = frappe.db.escape(user)
+	conditions = [
+		f"(`tabHbs Crm Lead`.`executive_1` = {user_escaped} OR `tabHbs Crm Lead`.`executive_2` = {user_escaped} OR `tabHbs Crm Lead`.`executive_3` = {user_escaped} OR `tabHbs Crm Lead`.`owner` = {user_escaped})"
+	]
 
-	user_cond = f"(`tabHbs Crm Lead`.`executive_1` IN ({team_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({team_escaped}) OR `tabHbs Crm Lead`.`executive_3` IN ({team_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({team_escaped}))"
+	# Team hierarchy permissions (configured in Hbs Lead Team Hierarchy)
+	try:
+		from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
+		team_perms = get_user_lead_team_permissions(user)
+		if team_perms["executives"]:
+			exec_escaped = ", ".join([frappe.db.escape(u) for u in team_perms["executives"]])
+			if team_perms["lead_types"]:
+				lt_escaped = ", ".join([frappe.db.escape(lt) for lt in team_perms["lead_types"]])
+				conditions.append(f"((`tabHbs Crm Lead`.`executive_1` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({exec_escaped})) AND `tabHbs Crm Lead`.`lead_type` IN ({lt_escaped}))")
+			else:
+				conditions.append(f"(`tabHbs Crm Lead`.`executive_1` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({exec_escaped}))")
+	except Exception:
+		pass
 
-	return user_cond
+	return f"({' OR '.join(conditions)})"
 
 
 def has_permission(doc, ptype="read", user=None):
-	"""Check document-level read permission based on Hbs User Hierarchy."""
+	"""Check document-level read and write permission based strictly on Hbs Lead Team Hierarchy.
+	- Assigned executives (executive_1, executive_2, executive_3, owner): Full read & write.
+	- Team Managers (configured in Hbs Lead Team Hierarchy): Full read & write for assigned lead types.
+	- Team Supervisors (configured in Hbs Lead Team Hierarchy): Strictly READ-ONLY (write denied).
+	"""
 	if not user:
 		user = frappe.session.user
 
@@ -949,16 +979,39 @@ def has_permission(doc, ptype="read", user=None):
 	if not doc:
 		return True
 
-	subordinates = get_subordinates_from_hierarchy(user)
-	team_members = set([user] + subordinates)
-
 	doc_obj = doc if hasattr(doc, "get") else frappe.get_doc("Hbs Crm Lead", doc)
-	return (
-		doc_obj.get("executive_1") in team_members or
-		doc_obj.get("executive_2") in team_members or
-		doc_obj.get("executive_3") in team_members or
-		doc_obj.get("owner") in team_members
-	)
+	doc_execs = [doc_obj.get("executive_1"), doc_obj.get("executive_2"), doc_obj.get("executive_3"), doc_obj.get("owner")]
+	doc_lead_type = doc_obj.get("lead_type")
+
+	# Assigned executives have full access to their own leads
+	if user in doc_execs:
+		return True
+
+	# Check Team Hierarchy permissions
+	is_team_lead = False
+	is_team_manager = False
+	try:
+		from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
+		team_perms = get_user_lead_team_permissions(user)
+		lead_type_match = not team_perms["lead_types"] or doc_lead_type in team_perms["lead_types"]
+		if lead_type_match:
+			if any(e in team_perms["executives"] for e in doc_execs if e):
+				is_team_lead = True
+			if any(e in team_perms["manager_for_execs"] for e in doc_execs if e):
+				is_team_manager = True
+	except Exception:
+		pass
+
+	if ptype == "read":
+		return is_team_lead
+
+	if ptype == "write":
+		return is_team_manager
+
+	if ptype == "delete":
+		return False
+
+	return is_team_lead
 
 
 @frappe.whitelist()
@@ -1200,7 +1253,7 @@ def backfill_last_remarks():
 
 
 def is_admin_owner_or_manager(user=None):
-	"""Check if user is Admin, Owner, or Manager in hierarchy or CRM settings."""
+	"""Check if user is Admin, Owner, or CRM Settings owner."""
 	user = user or (frappe.session.user if frappe.session else "Administrator")
 	if not user or user in ("Administrator", "System"):
 		return True
@@ -1209,7 +1262,7 @@ def is_admin_owner_or_manager(user=None):
 	if any(r in user_roles for r in admin_roles):
 		return True
 	role_type = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
-	if role_type in ("Owner", "Manager"):
+	if role_type == "Owner":
 		return True
 	default_owner = frappe.db.get_single_value("Hbs CRM Settings", "default_lead_owner")
 	if default_owner and default_owner == user:
@@ -1234,15 +1287,30 @@ def get_overdue_followup_summary():
 			  )
 		""", (cutoff_date, cutoff_date))[0][0]
 	else:
-		count = frappe.db.sql("""
-			SELECT COUNT(*) FROM `tabHbs Crm Lead`
-			WHERE status NOT IN ('won', 'lost')
-			  AND (executive_1 = %s OR executive_2 = %s OR executive_3 = %s OR owner = %s)
-			  AND (
-				(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
-				OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
-			  )
-		""", (user, user, user, user, cutoff_date, cutoff_date))[0][0]
+		conditions = [
+			"status NOT IN ('won', 'lost')",
+			"((last_remarks_date IS NOT NULL AND last_remarks_date <= %(cutoff)s) OR (last_remarks_date IS NULL AND DATE(creation) <= %(cutoff)s))"
+		]
+		params = {"cutoff": cutoff_date, "user": user}
+		user_clause = "(executive_1 = %(user)s OR executive_2 = %(user)s OR executive_3 = %(user)s OR owner = %(user)s)"
+
+		try:
+			from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
+			team_perms = get_user_lead_team_permissions(user)
+			if team_perms["executives"]:
+				params["team_execs"] = tuple(team_perms["executives"])
+				if team_perms["lead_types"]:
+					params["team_lead_types"] = tuple(team_perms["lead_types"])
+					team_clause = "((executive_1 IN %(team_execs)s OR executive_2 IN %(team_execs)s OR owner IN %(team_execs)s) AND lead_type IN %(team_lead_types)s)"
+				else:
+					team_clause = "(executive_1 IN %(team_execs)s OR executive_2 IN %(team_execs)s OR owner IN %(team_execs)s)"
+				conditions.append(f"({user_clause} OR {team_clause})")
+			else:
+				conditions.append(user_clause)
+		except Exception:
+			conditions.append(user_clause)
+
+		count = frappe.db.sql(f"SELECT COUNT(*) FROM `tabHbs Crm Lead` WHERE {' AND '.join(conditions)}", params)[0][0]
 
 	return {
 		"count": count or 0,
@@ -1251,55 +1319,13 @@ def get_overdue_followup_summary():
 	}
 
 
-def send_daily_pending_followup_digest():
-	"""Send daily email digest to managers for all leads with no follow-up for >= 10 days."""
-	cutoff_date = frappe.utils.add_days(frappe.utils.nowdate(), -10)
-	leads = frappe.db.sql("""
-		SELECT 
-			name, company_name, contact_name, contact_phone, lead_type, status,
-			executive_1, COALESCE(last_remarks_date, DATE(creation)) as last_date,
-			last_remark
-		FROM `tabHbs Crm Lead`
-		WHERE status NOT IN ('won', 'lost')
-		  AND (
-			(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
-			OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
-		  )
-		ORDER BY executive_1 ASC, last_date ASC
-	""", (cutoff_date, cutoff_date), as_dict=True)
-
-	if not leads:
-		return
-
+def build_pending_followup_html(leads, site_url, today_str):
+	"""Build structured HTML table digest for a given list of inactive leads."""
 	from collections import defaultdict
 	exec_leads = defaultdict(list)
 	for l in leads:
 		exec_user = l.executive_1 or "Unassigned"
 		exec_leads[exec_user].append(l)
-
-	managers = frappe.db.get_all(
-		"Hbs User Hierarchy",
-		filters={"role_type": ["in", ["Manager", "Owner"]]},
-		pluck="user"
-	)
-	for exec_user in exec_leads.keys():
-		reports_to = frappe.db.get_value("Hbs User Hierarchy", {"user": exec_user}, "reports_to")
-		if reports_to and reports_to not in managers:
-			managers.append(reports_to)
-
-	default_owner = frappe.db.get_single_value("Hbs CRM Settings", "default_lead_owner")
-	if default_owner and default_owner not in managers:
-		managers.append(default_owner)
-
-	if not managers:
-		managers = frappe.get_all("Has Role", filters={"role": "System Manager", "parenttype": "User"}, pluck="parent")
-
-	managers = [m for m in set(managers) if m and m != "Administrator" and "@" in m]
-	if not managers:
-		return
-
-	site_url = frappe.utils.get_url()
-	today_str = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-MMM-yyyy")
 
 	html = f"""
 	<div style="font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; max-width: 750px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
@@ -1372,25 +1398,124 @@ def send_daily_pending_followup_digest():
 	html += """
 	</div>
 	"""
+	return html
 
-	subject = f"🚨 CRM Alert: {len(leads)} Leads Overdue for Follow-up (10+ Days Inactive)"
-	try:
-		frappe.sendmail(
-			recipients=managers,
-			subject=subject,
-			message=html
-		)
-	except Exception:
-		pass
 
-	for mgr in managers:
+def send_daily_pending_followup_digest():
+	"""Send daily email digest of inactive leads (>= 10 days):
+	- Owners receive all inactive leads across all teams.
+	- Supervisors receive only inactive leads matching their assigned executives and lead types in Hbs Lead Team Hierarchy.
+	"""
+	cutoff_date = frappe.utils.add_days(frappe.utils.nowdate(), -10)
+	leads = frappe.db.sql("""
+		SELECT 
+			name, company_name, contact_name, contact_phone, lead_type, status,
+			executive_1, COALESCE(last_remarks_date, DATE(creation)) as last_date,
+			last_remark
+		FROM `tabHbs Crm Lead`
+		WHERE status NOT IN ('won', 'lost')
+		  AND (
+			(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
+			OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
+		  )
+		ORDER BY executive_1 ASC, last_date ASC
+	""", (cutoff_date, cutoff_date), as_dict=True)
+
+	if not leads:
+		return
+
+	site_url = frappe.utils.get_url()
+	today_str = frappe.utils.formatdate(frappe.utils.nowdate(), "dd-MMM-yyyy")
+
+	# 1. Resolve Owners (Full visibility)
+	owners = frappe.db.get_all(
+		"Hbs User Hierarchy",
+		filters={"role_type": "Owner"},
+		pluck="user"
+	)
+	default_owner = frappe.db.get_single_value("Hbs CRM Settings", "default_lead_owner")
+	if default_owner and default_owner not in owners:
+		owners.append(default_owner)
+
+	owners = [o for o in set(owners) if o and o != "Administrator" and "@" in o]
+
+	# Send full digest to Owners
+	if owners:
+		owner_html = build_pending_followup_html(leads, site_url, today_str)
+		owner_subject = f"🚨 CRM Alert: {len(leads)} Leads Overdue for Follow-up (10+ Days Inactive)"
+		try:
+			frappe.sendmail(
+				recipients=owners,
+				subject=owner_subject,
+				message=owner_html
+			)
+		except Exception:
+			pass
+
+		for o in owners:
+			try:
+				notif = frappe.new_doc("Notification Log")
+				notif.for_user = o
+				notif.type = "Alert"
+				notif.document_type = "Hbs Crm Lead"
+				notif.subject = f"⚠️ {len(leads)} Leads have no follow-up for 10+ days across all teams."
+				notif.email_content = owner_html
+				notif.insert(ignore_permissions=True)
+			except Exception:
+				pass
+
+	# 2. Resolve Supervisors from Hbs Lead Team Hierarchy
+	from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
+
+	supervisors = frappe.db.sql("""
+		SELECT DISTINCT s.user
+		FROM `tabHbs Team Supervisor` s
+		INNER JOIN `tabHbs Lead Team Hierarchy` h ON h.name = s.parent
+		WHERE h.enabled = 1 AND s.user IS NOT NULL AND s.user != ''
+	""", pluck="user")
+
+	owner_set = set(owners)
+
+	for sup in set(supervisors):
+		if not sup or sup in owner_set or "@" not in sup or sup == "Administrator":
+			continue
+
+		perms = get_user_lead_team_permissions(sup)
+		allowed_execs = perms.get("executives") or set()
+		allowed_types = perms.get("lead_types") or set()
+
+		if not allowed_execs:
+			continue
+
+		# Filter leads strictly for this supervisor's assigned executives and lead types
+		sup_leads = [
+			l for l in leads
+			if (l.executive_1 in allowed_execs)
+			and (not allowed_types or l.lead_type in allowed_types)
+		]
+
+		if not sup_leads:
+			continue
+
+		sup_html = build_pending_followup_html(sup_leads, site_url, today_str)
+		sup_subject = f"🚨 CRM Alert: {len(sup_leads)} Leads Overdue for Follow-up in Your Team (10+ Days Inactive)"
+
+		try:
+			frappe.sendmail(
+				recipients=[sup],
+				subject=sup_subject,
+				message=sup_html
+			)
+		except Exception:
+			pass
+
 		try:
 			notif = frappe.new_doc("Notification Log")
-			notif.for_user = mgr
+			notif.for_user = sup
 			notif.type = "Alert"
 			notif.document_type = "Hbs Crm Lead"
-			notif.subject = f"⚠️ {len(leads)} Leads have no follow-up for 10+ days across your team."
-			notif.email_content = html
+			notif.subject = f"⚠️ {len(sup_leads)} Leads have no follow-up for 10+ days in your team."
+			notif.email_content = sup_html
 			notif.insert(ignore_permissions=True)
 		except Exception:
 			pass

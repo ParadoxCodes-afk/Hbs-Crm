@@ -5,6 +5,10 @@ frappe.ui.form.on("Hbs Crm Lead", {
 	onload(frm) {
 		frm.set_df_property("last_remarks_date", "hidden", 1);
 		frm.set_df_property("last_remarks_date", "read_only", 1);
+		frm.set_df_property("quotation_date", "hidden", 1);
+		if (frm.doc.quotation_date !== frappe.datetime.get_today()) {
+			frm.set_value("quotation_date", frappe.datetime.get_today());
+		}
 		set_customer_details_read_only(frm);
 		if (frm.is_new()) {
 			if (!frm.doc.executive_1) {
@@ -16,9 +20,6 @@ frappe.ui.form.on("Hbs Crm Lead", {
 			if (!frm.doc.follow_up_time) {
 				frm.set_value("follow_up_time", frappe.datetime.now_time());
 			}
-			if (!frm.doc.quotation_date) {
-				frm.set_value("quotation_date", frappe.datetime.get_today());
-			}
 		}
 		handle_executive_1_permission(frm);
 	},
@@ -26,6 +27,10 @@ frappe.ui.form.on("Hbs Crm Lead", {
 	refresh(frm) {
 		frm.set_df_property("last_remarks_date", "hidden", 1);
 		frm.set_df_property("last_remarks_date", "read_only", 1);
+		frm.set_df_property("quotation_date", "hidden", 1);
+		if (frm.doc.quotation_date !== frappe.datetime.get_today()) {
+			frm.set_value("quotation_date", frappe.datetime.get_today());
+		}
 		render_activity_timeline_js(frm);
 		toggle_won_status_read_only(frm);
 		set_customer_details_read_only(frm);
@@ -34,8 +39,13 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		handle_executive_1_permission(frm);
 		apply_quotation_format_color(frm);
 		frm.set_df_property("pi_number", "read_only", 1);
-		if (!frm.doc.quotation_date) {
-			frm.set_value("quotation_date", frappe.datetime.get_today());
+
+		if (!frm.is_new() && !frm.has_perm("write")) {
+			frm.disable_save();
+			frm.dashboard.set_headline_alert(
+				__("👁️ <b>Read-Only Mode:</b> You are viewing this lead in supervisory/reports-to mode."),
+				"blue"
+			);
 		}
 
 		frm.clear_custom_buttons();

@@ -261,6 +261,7 @@ has_permission = {
 	"Hbs Crm Lead": "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.has_permission",
 	"Hbs Tally Renewal": "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.has_permission",
 	"Hbs User Hierarchy": "hbs_crm.hbs_crm.doctype.hbs_user_hierarchy.hbs_user_hierarchy.has_permission",
+	"Hbs Lead Team Hierarchy": "hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy.has_permission",
 	"Data Import": "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.has_data_import_permission",
 }
 
