@@ -387,6 +387,7 @@
    "default": "Today",
    "fieldname": "quotation_date",
    "fieldtype": "Date",
+   "hidden": 1,
    "label": "Quotation Date"
   },
   {

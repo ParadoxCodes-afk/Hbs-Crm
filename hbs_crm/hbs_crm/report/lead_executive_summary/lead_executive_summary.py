@@ -9,18 +9,18 @@ from hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead import is_owner_or_admin
 
 def execute(filters=None):
 	user = frappe.session.user
+	filters = frappe._dict(filters or {})
 	if not is_owner_or_admin(user):
 		from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
-		from hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead import get_subordinates_from_hierarchy
 
 		team_perms = get_user_lead_team_permissions(user)
-		subordinates = get_subordinates_from_hierarchy(user)
-		allowed_execs = set(team_perms["executives"]).union(subordinates)
+		allowed_execs = set(team_perms["executives"])
 
 		if not allowed_execs:
 			frappe.throw(_("Only supervisors can access the Lead Executive Summary report."), frappe.PermissionError)
 
-	filters = frappe._dict(filters or {})
+		if filters.get("group_by") not in ("Executive 1", "Executive 2"):
+			filters["group_by"] = "Executive 1"
 	columns = get_columns(filters)
 	data = get_data(filters)
 	report_summary = get_report_summary(data, filters)
@@ -171,11 +171,9 @@ def get_data(filters):
 	user = frappe.session.user
 	if not is_owner_or_admin(user):
 		from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
-		from hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead import get_subordinates_from_hierarchy
 
 		team_perms = get_user_lead_team_permissions(user)
-		subordinates = get_subordinates_from_hierarchy(user)
-		allowed_execs = set(team_perms["executives"]).union(subordinates)
+		allowed_execs = set(team_perms["executives"])
 
 		if not allowed_execs:
 			return []
@@ -408,11 +406,9 @@ def get_executive_lead_details(
 	user = frappe.session.user
 	if not is_owner_or_admin(user):
 		from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
-		from hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead import get_subordinates_from_hierarchy
 
 		team_perms = get_user_lead_team_permissions(user)
-		subordinates = get_subordinates_from_hierarchy(user)
-		allowed_execs = set(team_perms["executives"]).union(subordinates)
+		allowed_execs = set(team_perms["executives"])
 		if not allowed_execs:
 			frappe.throw(_("Not permitted"), frappe.PermissionError)
 
@@ -426,6 +422,9 @@ def get_executive_lead_details(
 		if team_perms.get("lead_types") and not lead_type:
 			params["user_allowed_lead_types"] = tuple(team_perms["lead_types"])
 			conditions.append("l.lead_type IN %(user_allowed_lead_types)s")
+
+		if group_by not in ("Executive 1", "Executive 2"):
+			group_by = "Executive 1"
 
 	target_group = group_by or ("Lead Type" if (not executive and lead_type) else "Executive 1")
 

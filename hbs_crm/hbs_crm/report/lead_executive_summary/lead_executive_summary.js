@@ -112,6 +112,34 @@ frappe.query_reports["Lead Executive Summary"] = {
 			frappe.app.sidebar.setup("HBS CRM");
 		}
 
+		// Restrict Group By options for supervisors to Executive 1 and Executive 2
+		function set_group_by_options(only_execs) {
+			let group_by_filter = report.get_filter("group_by");
+			if (!group_by_filter) return;
+			let opts = only_execs ? "Executive 1\nExecutive 2" : "Executive 1\nExecutive 2\nLead Type\nSummary";
+			group_by_filter.df.options = opts;
+			if (group_by_filter.set_options) {
+				group_by_filter.set_options(opts);
+			}
+			let cur = group_by_filter.get_value();
+			if (only_execs && cur !== "Executive 1" && cur !== "Executive 2") {
+				group_by_filter.set_value("Executive 1");
+			}
+			group_by_filter.refresh();
+		}
+
+		let is_owner = frappe.session.user === "Administrator" || (frappe.user_roles || []).some(r => ["System Manager", "Administrator", "Owner", "Hbs Owner"].includes(r));
+		if (!is_owner) {
+			set_group_by_options(true);
+		}
+
+		frappe.call({
+			method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.check_is_admin_or_owner",
+			callback: function(r) {
+				set_group_by_options(!r.message);
+			}
+		});
+
 		// Bind delegated click listener on both wrapper and document for bulletproof triggering
 		report.page.wrapper.off("click", ".btn-drilldown-lead").on("click", ".btn-drilldown-lead", function(e) {
 			frappe.query_reports["Lead Executive Summary"].open_leads(this, e);

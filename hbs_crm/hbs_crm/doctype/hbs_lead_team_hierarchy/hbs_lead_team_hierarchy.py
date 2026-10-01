@@ -117,9 +117,7 @@ def get_assigned_executives_query(doctype, txt, searchfield, start, page_len, fi
 		""", {"txt": f"%{txt}%", "start": int(start or 0), "page_len": int(page_len or 20)})
 
 	perms = get_user_lead_team_permissions(user)
-	from hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead import get_subordinates_from_hierarchy
-	subordinates = get_subordinates_from_hierarchy(user)
-	allowed = list(perms["executives"].union(subordinates))
+	allowed = list(perms["executives"])
 	if not allowed:
 		return []
 
