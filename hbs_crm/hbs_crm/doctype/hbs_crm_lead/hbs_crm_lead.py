@@ -51,15 +51,13 @@ def find_duplicate_phone_warning(contact_phone, current_lead_name=None, session_
 	company = lead.get("company_name") or lead.get("contact_name") or "Unnamed"
 	return _("This number is already working with Executive - {0} for company {1}").format(exec_name, company)
 
-
-def is_owner_or_admin(user):
-	"""True if the given user is Administrator/System, has System Manager role, or is an Owner in the hierarchy."""
-	if not user or user in ("Administrator", "System"):
-		return True
-	if "System Manager" in frappe.get_roles(user):
-		return True
-	role_type = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
-	return role_type == "Owner"
+# Shared auth/hierarchy helpers live in utils.py — imported here for backward compatibility
+from hbs_crm.hbs_crm.utils import (
+	is_owner_or_admin,
+	is_admin_owner_or_manager,
+	get_subordinates_from_hierarchy,
+	get_logged_in_user_context,
+)
 
 
 @frappe.whitelist()
@@ -70,36 +68,15 @@ def check_is_admin_or_owner():
 
 @frappe.whitelist()
 def can_access_lead_summary(user=None):
-	"""Return True if user is Admin, Owner, or an assigned Team Supervisor (TL) in Hbs Lead Team Hierarchy."""
+	"""Return True if user is Admin, Owner, or an assigned Team Supervisor in Hbs Lead Team Hierarchy."""
 	user = user or frappe.session.user
 	if is_owner_or_admin(user):
 		return True
-
 	from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
-	from hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead import get_subordinates_from_hierarchy
-
 	team_perms = get_user_lead_team_permissions(user)
 	subordinates = get_subordinates_from_hierarchy(user)
 	return bool(team_perms.get("executives") or subordinates)
 
-
-
-def get_logged_in_user_context(user=None):
-	"""Build the `logged_in_user` dict used by email templates."""
-	user = user or (frappe.session.user if frappe.session else "Administrator")
-	user_doc = frappe.get_doc("User", user) if frappe.db.exists("User", user) else None
-
-	phone = ""
-	if user_doc:
-		phone = user_doc.get("phone_number") or user_doc.get("mobile_no") or user_doc.get("phone") or ""
-
-	return {
-		"full_name": (user_doc.full_name if user_doc and user_doc.full_name else "Sales Representative"),
-		"mobile_no": phone,
-		"phone": phone,
-		"phone_number": phone,
-		"email": (user_doc.email if user_doc and user_doc.email else ""),
-	}
 
 
 def extract_pi_number_and_prefix(val, default_prefix="HBS/TS"):
@@ -121,7 +98,7 @@ def extract_pi_number_and_prefix(val, default_prefix="HBS/TS"):
 
 
 def get_current_fy_str(date_val=None):
-	"""Return financial year string like '26-27' for given date (defaults to today)."""
+	"""Return financial year string like '26-27' for given date. Kept for any external callers."""
 	d = frappe.utils.getdate(date_val or frappe.utils.nowdate())
 	fy_start = d.year if d.month >= 4 else (d.year - 1)
 	return f"{str(fy_start)[-2:]}-{str(fy_start + 1)[-2:]}"
@@ -178,7 +155,9 @@ def assign_lead_pi_and_date(doc):
 		last_db_num, _ = get_last_lead_pi_info(is_new_age=is_new_age)
 
 		next_num = max(admin_num, last_gen_num, last_db_num) + 1
-		fy_str = suffix or get_current_fy_str(today)
+		d = frappe.utils.getdate(today)
+		fy_start = d.year if d.month >= 4 else (d.year - 1)
+		fy_str = suffix or f"{str(fy_start)[-2:]}-{str(fy_start + 1)[-2:]}"
 		prefix_clean = prefix or default_prefix
 		full_pi_number = f"{prefix_clean}/{next_num}/{fy_str}"
 
@@ -899,35 +878,8 @@ def get_activity_html(lead_name):
 	return doc.activity
 
 
-def get_subordinates_from_hierarchy(user, visited=None):
-	"""Recursively get all users reporting directly or indirectly to the given user in Hbs User Hierarchy (cached in request)."""
-	if not hasattr(frappe.local, "subordinates_cache"):
-		frappe.local.subordinates_cache = {}
 
-	if visited is None and user in frappe.local.subordinates_cache:
-		return frappe.local.subordinates_cache[user]
 
-	if visited is None:
-		visited = set()
-	if user in visited:
-		return []
-	visited.add(user)
-
-	subordinates = []
-	direct_reports = frappe.get_all(
-		"Hbs User Hierarchy",
-		filters={"reports_to": user},
-		pluck="user"
-	)
-	for report in direct_reports:
-		if report not in subordinates:
-			subordinates.append(report)
-			subordinates.extend(get_subordinates_from_hierarchy(report, visited))
-
-	result = list(set(subordinates))
-	if len(visited) == 1:
-		frappe.local.subordinates_cache[user] = result
-	return result
 
 
 def get_permission_query_conditions(user=None):
@@ -1265,22 +1217,8 @@ def backfill_last_remarks():
 		pass
 
 
-def is_admin_owner_or_manager(user=None):
-	"""Check if user is Admin, Owner, or CRM Settings owner."""
-	user = user or (frappe.session.user if frappe.session else "Administrator")
-	if not user or user in ("Administrator", "System"):
-		return True
-	user_roles = frappe.get_roles(user) if hasattr(frappe, "get_roles") else []
-	admin_roles = ["System Manager", "Administrator", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"]
-	if any(r in user_roles for r in admin_roles):
-		return True
-	role_type = frappe.db.get_value("Hbs User Hierarchy", {"user": user}, "role_type")
-	if role_type == "Owner":
-		return True
-	default_owner = frappe.db.get_single_value("Hbs CRM Settings", "default_lead_owner")
-	if default_owner and default_owner == user:
-		return True
-	return False
+
+
 
 
 @frappe.whitelist()
