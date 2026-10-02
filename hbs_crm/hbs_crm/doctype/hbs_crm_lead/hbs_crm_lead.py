@@ -1086,7 +1086,21 @@ def take_over_lead(lead_name):
 	if not lead_name:
 		frappe.throw(_("Lead Name is required."), title=_("Invalid Request"))
 
+	# Atomic row lock — prevents two users taking over simultaneously.
+	# FOR UPDATE holds a MariaDB row lock for the duration of this transaction.
+	locked = frappe.db.sql(
+		"SELECT executive_1 FROM `tabHbs Crm Lead` WHERE name = %s FOR UPDATE",
+		lead_name, as_dict=True
+	)
+	if not locked:
+		frappe.throw(_("Lead not found."), title=_("Invalid Request"))
+
+	# Re-read doc inside the lock so we have the freshest state.
 	doc = frappe.get_doc("Hbs Crm Lead", lead_name)
+
+	user = frappe.session.user
+	if doc.executive_1 == user:
+		frappe.throw(_("You already own this lead."), title=_("Already Taken"))
 
 	last_date = get_last_activity_date(doc.name, doc.creation)
 	days_diff = frappe.utils.date_diff(frappe.utils.getdate(), frappe.utils.getdate(last_date))
@@ -1094,7 +1108,6 @@ def take_over_lead(lead_name):
 	if days_diff <= 15:
 		frappe.throw(_("This lead has active follow-ups ({0} days ago) and cannot be taken over.").format(days_diff), title=_("Lead Active"))
 
-	user = frappe.session.user
 	user_full_name = frappe.db.get_value("User", user, "full_name") or user
 
 	old_exec = doc.executive_1 or doc.owner or "Previous Executive"
