@@ -903,23 +903,29 @@ def check_portal(name, only_expiry=False):
 				resp = None
 
 			if resp and isinstance(resp, dict):
-				exp_det = resp.get("expiry_details", {}) or {}
-				serial_status = frappe.utils.cint(exp_det.get("serial_status"))
-				has_data = bool(exp_det.get("serial_data"))
-				if serial_status == 1 or has_data:
-					res = resp
-					break
-				else:
-					api_msg = exp_det.get("message")
-					if api_msg and str(api_msg).strip().upper() != "SUCCESS":
-						last_err = str(api_msg).strip()
+				exp_det = resp.get("expiry_details")
+				if isinstance(exp_det, dict):
+					serial_status = frappe.utils.cint(exp_det.get("serial_status"))
+					has_data = bool(exp_det.get("serial_data"))
+					if serial_status == 1 or has_data:
+						res = resp
+						break
 					else:
-						last_err = "Serial not mapped or inactive in portal"
+						api_msg = exp_det.get("message")
+						if api_msg and str(api_msg).strip().upper() != "SUCCESS":
+							last_err = str(api_msg).strip()
+						else:
+							last_err = "Serial not mapped or inactive in portal"
+				elif isinstance(exp_det, str) and exp_det.strip():
+					last_err = exp_det.strip()
+				elif resp.get("message"):
+					last_err = str(resp.get("message")).strip()
 
 		doc.response = json.dumps(res or resp, indent=2)
 
-		if res:
-			data = res.get("expiry_details", {}).get("serial_data", {})
+		if res and isinstance(res, dict):
+			exp_det = res.get("expiry_details") if isinstance(res.get("expiry_details"), dict) else {}
+			data = exp_det.get("serial_data", {}) if isinstance(exp_det.get("serial_data"), dict) else {}
 			synced_fields = []
 			unsynced_fields = []
 
@@ -1616,9 +1622,12 @@ def has_permission(doc, ptype="read", user=None):
 		return True
 
 	subordinates = get_subordinates_from_hierarchy(user)
-	team_members = set([user] + subordinates)
-
-	doc_obj = doc if hasattr(doc, "get") else frappe.get_doc("Hbs Tally Renewal", doc)
+	if isinstance(doc, str):
+		if not frappe.db.exists("Hbs Tally Renewal", doc):
+			return True
+		doc_obj = frappe.get_doc("Hbs Tally Renewal", doc)
+	else:
+		doc_obj = doc
 
 	if getattr(doc_obj, "flags", None) and getattr(doc_obj.flags, "in_takeover", False):
 		return True
