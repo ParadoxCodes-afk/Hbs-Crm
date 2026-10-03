@@ -6,7 +6,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		frm.set_df_property("last_remarks_date", "hidden", 1);
 		frm.set_df_property("last_remarks_date", "read_only", 1);
 		frm.set_df_property("quotation_date", "hidden", 1);
-		if (frm.doc.quotation_date !== frappe.datetime.get_today()) {
+		if (frm.is_new() && frm.doc.quotation_date !== frappe.datetime.get_today()) {
 			frm.set_value("quotation_date", frappe.datetime.get_today());
 		}
 		set_customer_details_read_only(frm);
@@ -28,7 +28,7 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		frm.set_df_property("last_remarks_date", "hidden", 1);
 		frm.set_df_property("last_remarks_date", "read_only", 1);
 		frm.set_df_property("quotation_date", "hidden", 1);
-		if (frm.doc.quotation_date !== frappe.datetime.get_today()) {
+		if (frm.is_new() && frm.doc.quotation_date !== frappe.datetime.get_today()) {
 			frm.set_value("quotation_date", frappe.datetime.get_today());
 		}
 		render_activity_timeline_js(frm);
@@ -1485,179 +1485,183 @@ function open_quotation_preview_dialog(frm, doctype) {
 		frappe.msgprint(__("Please save the record first before viewing quotation."));
 		return;
 	}
-	if (frm.is_dirty()) {
-		frm.save(() => {
-			open_quotation_preview_dialog(frm, doctype);
-		});
-		return;
-	}
-	if (!frm.doc.items || frm.doc.items.length === 0) {
-		frappe.msgprint({
-			title: __("No Items"),
-			indicator: "orange",
-			message: __("Please add at least one item in the Items table to preview quotation.")
-		});
-		return;
-	}
 
 	let method_name = (doctype === "Hbs Tally Renewal" || frm.doctype === "Hbs Tally Renewal")
 		? "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.get_renewal_quotation_html"
 		: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.get_lead_quotation_html";
 
-	frappe.call({
-		method: method_name,
-		args: {
-			name: frm.doc.name,
-			print_format: frm.doc.quotation_format || "HBS Quotation"
-		},
-		freeze: true,
-		freeze_message: __("Generating Quotation Preview..."),
-		callback: function (r) {
-			if (!r || !r.message) {
-				frappe.msgprint(__("Unable to load quotation preview."));
-				return;
-			}
-
-			let raw_html = r.message;
-
-			// Strip out action-banner (Print and Get PDF) if present in raw_html
-			let cleaned_html = raw_html.replace(/<div class="action-banner[^>]*>[\s\S]*?<\/div>/gi, "");
-
-			let security_tags = `
-				<style>
-					.action-banner, .print-hide {
-						display: none !important;
-						visibility: hidden !important;
-					}
-					.print-format-gutter {
-						padding: 0 !important;
-						background: transparent !important;
-					}
-					@media print {
-						html, body, * {
-							display: none !important;
-							visibility: hidden !important;
-						}
-					}
-					body {
-						-webkit-user-select: none !important;
-						-moz-user-select: none !important;
-						-ms-user-select: none !important;
-						user-select: none !important;
-					}
-				</style>
-				<script>
-					document.addEventListener('contextmenu', function(e) { e.preventDefault(); return false; });
-					document.addEventListener('keydown', function(e) {
-						if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
-							e.preventDefault();
-							e.stopPropagation();
-							return false;
-						}
-					});
-				<\/script>
-			`;
-
-			let final_html = cleaned_html;
-			if (final_html.indexOf("<head>") !== -1) {
-				final_html = final_html.replace("<head>", "<head>" + security_tags);
-			} else {
-				final_html = security_tags + final_html;
-			}
-
-			let d = new frappe.ui.Dialog({
-				title: __("📄 Quotation Preview (View Only)"),
-				size: "extra-large",
-				fields: [
-					{
-						fieldtype: "HTML",
-						fieldname: "quotation_preview_html"
-					}
-				],
-				primary_action_label: __("Close"),
-				primary_action() {
-					d.hide();
+	let show_preview = function () {
+		frappe.call({
+			method: method_name,
+			args: {
+				name: frm.doc.name,
+				print_format: frm.doc.quotation_format || "HBS Quotation"
+			},
+			freeze: true,
+			freeze_message: __("Generating Quotation Preview..."),
+			callback: function (r) {
+				if (!r || !r.message) {
+					frappe.msgprint(__("Unable to load quotation preview."));
+					return;
 				}
-			});
 
-			d.$wrapper.addClass("quotation-preview-modal no-print-quotation-dialog");
+				let raw_html = r.message;
 
-			let preview_container = `
-				<style>
-					.quotation-preview-modal .modal-dialog {
-						max-width: 1250px !important;
-						width: 96vw !important;
-						margin: 15px auto !important;
-					}
-					.quotation-preview-modal .modal-content {
-						border-radius: 8px !important;
-						box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
-					}
-					.quotation-preview-modal .modal-body {
-						padding: 8px !important;
-					}
-					@media print {
-						.no-print-quotation-dialog, .no-print-quotation-dialog * {
+				// Strip out action-banner (Print and Get PDF) if present in raw_html
+				let cleaned_html = raw_html.replace(/<div class="action-banner[^>]*>[\s\S]*?<\/div>/gi, "");
+
+				let security_tags = `
+					<style>
+						.action-banner, .print-hide {
 							display: none !important;
 							visibility: hidden !important;
 						}
-					}
-					.quotation-iframe-wrapper {
-						background: #334155;
-						padding: 8px;
-						border-radius: 6px;
-						box-shadow: inset 0 2px 5px rgba(0,0,0,0.25);
-					}
-					.quotation-preview-iframe {
-						width: 100%;
-						height: 87vh;
-						border: none;
-						border-radius: 4px;
-						background: #fff;
-						display: block;
-					}
-				</style>
-				<div class="quotation-iframe-wrapper" oncontextmenu="return false;">
-					<iframe class="quotation-preview-iframe" srcdoc="${frappe.utils.escape_html(final_html)}"></iframe>
-				</div>
-			`;
-
-			d.fields_dict.quotation_preview_html.$wrapper.html(preview_container);
-
-			let iframe_el = d.fields_dict.quotation_preview_html.$wrapper.find("iframe")[0];
-			if (iframe_el) {
-				iframe_el.onload = function() {
-					try {
-						let doc = iframe_el.contentDocument || iframe_el.contentWindow.document;
-						doc.addEventListener("contextmenu", function(e) { e.preventDefault(); return false; });
-						doc.addEventListener("keydown", function(e) {
+						.print-format-gutter {
+							padding: 0 !important;
+							background: transparent !important;
+						}
+						@media print {
+							html, body, * {
+								display: none !important;
+								visibility: hidden !important;
+							}
+						}
+						body {
+							-webkit-user-select: none !important;
+							-moz-user-select: none !important;
+							-ms-user-select: none !important;
+							user-select: none !important;
+						}
+					</style>
+					<script>
+						document.addEventListener('contextmenu', function(e) { e.preventDefault(); return false; });
+						document.addEventListener('keydown', function(e) {
 							if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
 								e.preventDefault();
 								e.stopPropagation();
 								return false;
 							}
 						});
-					} catch(err) {}
+					<\/script>
+				`;
+
+				let final_html = cleaned_html;
+				if (final_html.indexOf("<head>") !== -1) {
+					final_html = final_html.replace("<head>", "<head>" + security_tags);
+				} else {
+					final_html = security_tags + final_html;
+				}
+
+				let preview_container = `
+					<style>
+						.quotation-preview-modal .modal-dialog {
+							max-width: 1250px !important;
+							width: 96vw !important;
+							margin: 15px auto !important;
+						}
+						.quotation-preview-modal .modal-content {
+							border-radius: 8px !important;
+							box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
+						}
+						.quotation-preview-modal .modal-body {
+							padding: 8px !important;
+						}
+						@media print {
+							.no-print-quotation-dialog, .no-print-quotation-dialog * {
+								display: none !important;
+								visibility: hidden !important;
+							}
+						}
+						.quotation-iframe-wrapper {
+							background: #334155;
+							padding: 8px;
+							border-radius: 6px;
+							box-shadow: inset 0 2px 5px rgba(0,0,0,0.25);
+						}
+						.quotation-preview-iframe {
+							width: 100%;
+							height: 87vh;
+							border: none;
+							border-radius: 4px;
+							background: #fff;
+							display: block;
+						}
+					</style>
+					<div class="quotation-iframe-wrapper" oncontextmenu="return false;">
+						<iframe class="quotation-preview-iframe"></iframe>
+					</div>
+				`;
+
+				let d = new frappe.ui.Dialog({
+					title: __("📄 Quotation Preview (View Only) - {0}", [frm.doc.name]),
+					size: "extra-large",
+					fields: [
+						{
+							fieldtype: "HTML",
+							fieldname: "quotation_preview_html",
+							options: preview_container
+						}
+					],
+					primary_action_label: __("Close"),
+					primary_action() {
+						d.hide();
+					}
+				});
+
+				d.$wrapper.addClass("quotation-preview-modal no-print-quotation-dialog");
+				d.show();
+
+				// Write directly to iframe document for clean uncorrupted rendering
+				setTimeout(function () {
+					let iframe_el = d.$wrapper.find("iframe")[0];
+					if (iframe_el) {
+						try {
+							let idoc = iframe_el.contentDocument || iframe_el.contentWindow.document;
+							idoc.open();
+							idoc.write(final_html);
+							idoc.close();
+
+							idoc.addEventListener("contextmenu", function (e) { e.preventDefault(); return false; });
+							idoc.addEventListener("keydown", function (e) {
+								if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
+									e.preventDefault();
+									e.stopPropagation();
+									return false;
+								}
+							});
+						} catch (err) {
+							console.error("Quotation iframe write error:", err);
+						}
+					}
+				}, 50);
+
+				let block_print = function (e) {
+					if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
+						e.preventDefault();
+						e.stopPropagation();
+						frappe.show_alert({ message: __("Printing and exporting is disabled in Quotation Preview."), indicator: "orange" }, 3);
+						return false;
+					}
+				};
+
+				$(window).on("keydown.block_quotation_print", block_print);
+				d.onhide = function () {
+					$(window).off("keydown.block_quotation_print");
 				};
 			}
+		});
+	};
 
-			let block_print = function(e) {
-				if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
-					e.preventDefault();
-					e.stopPropagation();
-					frappe.show_alert({ message: __("Printing and exporting is disabled in Quotation Preview."), indicator: "orange" }, 3);
-					return false;
-				}
-			};
-
-			$(window).on("keydown.block_quotation_print", block_print);
-			d.onhide = function () {
-				$(window).off("keydown.block_quotation_print");
-			};
-
-			d.show();
-		}
-	});
+	// If form was modified and user has write permissions, save first, otherwise show directly
+	if (frm.is_dirty() && frm.has_perm("write")) {
+		frm.save().then(() => {
+			show_preview();
+		}).catch(() => {
+			show_preview();
+		});
+	} else {
+		show_preview();
+	}
 }
 
 
