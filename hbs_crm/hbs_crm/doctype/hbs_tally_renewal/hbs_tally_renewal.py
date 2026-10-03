@@ -1622,6 +1622,7 @@ def has_permission(doc, ptype="read", user=None):
 		return True
 
 	subordinates = get_subordinates_from_hierarchy(user)
+	team_members = set([user] + subordinates)
 	if isinstance(doc, str):
 		if not frappe.db.exists("Hbs Tally Renewal", doc):
 			return True
