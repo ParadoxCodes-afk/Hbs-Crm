@@ -1552,6 +1552,23 @@ function open_quotation_preview_dialog(frm, doctype) {
 					final_html = security_tags + final_html;
 				}
 
+				let d = new frappe.ui.Dialog({
+					title: __("📄 Quotation Preview (View Only) - {0}", [frm.doc.name]),
+					size: "extra-large",
+					fields: [
+						{
+							fieldtype: "HTML",
+							fieldname: "quotation_preview_html"
+						}
+					],
+					primary_action_label: __("Close"),
+					primary_action() {
+						d.hide();
+					}
+				});
+
+				d.$wrapper.addClass("quotation-preview-modal no-print-quotation-dialog");
+
 				let preview_container = `
 					<style>
 						.quotation-preview-modal .modal-dialog {
@@ -1588,52 +1605,28 @@ function open_quotation_preview_dialog(frm, doctype) {
 						}
 					</style>
 					<div class="quotation-iframe-wrapper" oncontextmenu="return false;">
-						<iframe class="quotation-preview-iframe"></iframe>
+						<iframe class="quotation-preview-iframe" srcdoc="${frappe.utils.escape_html(final_html)}"></iframe>
 					</div>
 				`;
 
-				let d = new frappe.ui.Dialog({
-					title: __("📄 Quotation Preview (View Only) - {0}", [frm.doc.name]),
-					size: "extra-large",
-					fields: [
-						{
-							fieldtype: "HTML",
-							fieldname: "quotation_preview_html",
-							options: preview_container
-						}
-					],
-					primary_action_label: __("Close"),
-					primary_action() {
-						d.hide();
-					}
-				});
+				d.fields_dict.quotation_preview_html.$wrapper.html(preview_container);
 
-				d.$wrapper.addClass("quotation-preview-modal no-print-quotation-dialog");
-				d.show();
-
-				// Write directly to iframe document for clean uncorrupted rendering
-				setTimeout(function () {
-					let iframe_el = d.$wrapper.find("iframe")[0];
-					if (iframe_el) {
+				let iframe_el = d.fields_dict.quotation_preview_html.$wrapper.find("iframe")[0];
+				if (iframe_el) {
+					iframe_el.onload = function () {
 						try {
-							let idoc = iframe_el.contentDocument || iframe_el.contentWindow.document;
-							idoc.open();
-							idoc.write(final_html);
-							idoc.close();
-
-							idoc.addEventListener("contextmenu", function (e) { e.preventDefault(); return false; });
-							idoc.addEventListener("keydown", function (e) {
+							let doc = iframe_el.contentDocument || iframe_el.contentWindow.document;
+							doc.addEventListener("contextmenu", function (e) { e.preventDefault(); return false; });
+							doc.addEventListener("keydown", function (e) {
 								if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
 									e.preventDefault();
 									e.stopPropagation();
 									return false;
 								}
 							});
-						} catch (err) {
-							console.error("Quotation iframe write error:", err);
-						}
-					}
-				}, 50);
+						} catch (err) {}
+					};
+				}
 
 				let block_print = function (e) {
 					if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
@@ -1648,6 +1641,8 @@ function open_quotation_preview_dialog(frm, doctype) {
 				d.onhide = function () {
 					$(window).off("keydown.block_quotation_print");
 				};
+
+				d.show();
 			}
 		});
 	};
