@@ -14,7 +14,6 @@
   "bill_date",
   "party_name",
   "company_name",
-  "customer",
   "status",
   "column_break_amounts",
   "bill_amt",
@@ -25,8 +24,6 @@
   "assignment_section",
   "executive_1",
   "executive_2",
-  "executive_1_name",
-  "executive_2_name",
   "last_sync_date",
   "remarks_section",
   "remarks",
@@ -77,13 +74,6 @@
    "in_standard_filter": 1,
    "label": "Company Name",
    "search_index": 1
-  },
-  {
-   "fieldname": "customer",
-   "fieldtype": "Link",
-   "in_standard_filter": 1,
-   "label": "Customer",
-   "options": "Hbs Customer"
   },
   {
    "default": "Pending",
@@ -150,16 +140,6 @@
    "in_standard_filter": 1,
    "label": "Executive 2",
    "options": "User"
-  },
-  {
-   "fieldname": "executive_1_name",
-   "fieldtype": "Data",
-   "label": "Executive 1 (Raw Name)"
-  },
-  {
-   "fieldname": "executive_2_name",
-   "fieldtype": "Data",
-   "label": "Executive 2 (Raw Name)"
   },
   {
    "fieldname": "last_sync_date",

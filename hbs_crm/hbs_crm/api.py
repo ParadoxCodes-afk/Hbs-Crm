@@ -50,7 +50,6 @@ def sync_outstanding(data=None, **kwargs):
 	  2. Updates existing records with fresh amounts and overdue days.
 	  3. Inserts new bills.
 	- Resolves executive links to User records.
-	- Links to Hbs Customer if party_name matches an existing customer.
 	"""
 	# Extract JSON payload across all possible caller methods (direct arg, kwargs, form_dict, raw request body)
 	if data is None:
@@ -199,7 +198,6 @@ def sync_outstanding(data=None, **kwargs):
 			"bill_date": bill_date,
 			"party_name": party_name_clean,
 			"company_name": company_name_clean,
-			"customer": None,
 			"bill_amt": bill_amt,
 			"pending_amt": pending_amt,
 			"due_date": due_date,
@@ -207,8 +205,6 @@ def sync_outstanding(data=None, **kwargs):
 			"is_tds": is_tds,
 			"executive_1": ex1_user,
 			"executive_2": ex2_user,
-			"executive_1_name": str(ex1_raw).strip() if ex1_raw else None,
-			"executive_2_name": str(ex2_raw).strip() if ex2_raw else None,
 			"status": status,
 			"last_sync_date": now_dt,
 		})
@@ -249,7 +245,6 @@ def sync_outstanding(data=None, **kwargs):
 				"bill_date": row["bill_date"],
 				"party_name": row["party_name"],
 				"company_name": row["company_name"],
-				"customer": row["customer"],
 				"bill_amt": row["bill_amt"],
 				"pending_amt": row["pending_amt"],
 				"due_date": row["due_date"],
@@ -257,8 +252,6 @@ def sync_outstanding(data=None, **kwargs):
 				"is_tds": row["is_tds"],
 				"executive_1": row["executive_1"],
 				"executive_2": row["executive_2"],
-				"executive_1_name": row["executive_1_name"],
-				"executive_2_name": row["executive_2_name"],
 				"status": row["status"],
 				"last_sync_date": row["last_sync_date"],
 			}, update_modified=False)
