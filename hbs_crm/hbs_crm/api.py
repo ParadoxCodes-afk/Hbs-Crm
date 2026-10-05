@@ -14,7 +14,7 @@ def _safe_date(val):
 	except Exception:
 		# Try DD-MM-YYYY or DD/MM/YYYY
 		val_str = str(val).strip()
-		for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
+		for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%d-%b-%y", "%d-%b-%Y", "%d/%b/%y", "%d/%b/%Y"):
 			try:
 				import datetime
 				return datetime.datetime.strptime(val_str, fmt).date()
@@ -44,7 +44,7 @@ def _normalize_key(row, *keys):
 @frappe.whitelist(methods=["POST"])
 def sync_outstanding(data=None):
 	"""Ingest live Outstanding billing report snapshot via JSON API.
-	- Matches schema from D:\\api HBS.xlsx (OUTSTANDING sheet).
+	- Matches schema from billing system (OUTSTANDING sheet / JSON).
 	- Idempotent snapshot sync:
 	  1. Deletes records from DB whose bill_no is not in the incoming payload (cleared/paid).
 	  2. Updates existing records with fresh amounts and overdue days.
@@ -65,8 +65,11 @@ def sync_outstanding(data=None):
 		except Exception:
 			pass
 
-	if isinstance(data, dict) and "data" in data:
-		data = data["data"]
+	if isinstance(data, dict):
+		for key in ("data", "Outstanding", "outstanding", "bills", "items", "records"):
+			if key in data and isinstance(data[key], list):
+				data = data[key]
+				break
 
 	if not isinstance(data, list):
 		if isinstance(data, dict):
@@ -134,7 +137,7 @@ def sync_outstanding(data=None):
 		incoming_bill_nos.add(bill_no_clean)
 
 		party_name = _normalize_key(raw, "party Name", "party_name", "Party Name", "customer_name", "party") or "Unknown Party"
-		party_name_clean = str(party_name).strip()
+		party_name_clean = str(party_name).strip() or "Unknown Party"
 
 		bill_date = _safe_date(_normalize_key(raw, "Date", "date", "bill_date", "Bill Date")) or now_date
 		due_date = _safe_date(_normalize_key(raw, "Due Date", "due_date", "DueDate", "Due_Date"))
@@ -164,9 +167,9 @@ def sync_outstanding(data=None):
 		cust_link = cust_map.get(party_name_clean.lower())
 
 		# Status
-		if pending_amt <= 0:
+		if pending_amt == 0:
 			status = "Cleared"
-		elif bill_amt and pending_amt < bill_amt:
+		elif bill_amt and abs(pending_amt) < abs(bill_amt):
 			status = "Partially Paid"
 		else:
 			status = "Pending"

@@ -11,15 +11,15 @@ class HbsOutstanding(Document):
 		# Auto-derive status from pending_amt
 		bill_val = frappe.utils.flt(self.bill_amt)
 		pending_val = frappe.utils.flt(self.pending_amt)
-		if pending_val <= 0:
+		if pending_val == 0:
 			self.status = "Cleared"
-		elif bill_val and pending_val < bill_val:
+		elif bill_val and abs(pending_val) < abs(bill_val):
 			self.status = "Partially Paid"
 		else:
 			self.status = "Pending"
 
 		# Auto-calculate overdue days if due_date is provided and overdue_days is missing
-		if self.due_date and not self.overdue_days:
+		if self.due_date and self.overdue_days is None:
 			diff = frappe.utils.date_diff(frappe.utils.nowdate(), self.due_date)
 			self.overdue_days = max(0, diff)
 
