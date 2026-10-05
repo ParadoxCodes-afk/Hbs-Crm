@@ -138,19 +138,6 @@ def sync_outstanding(data=None, **kwargs):
 			user_map[u.full_name.strip().lower()] = u.name
 		if u.first_name:
 			user_map[u.first_name.strip().lower()] = u.name
-
-	# Build customer party name lookup cache
-	customers = frappe.db.sql(
-		"SELECT `name`, LOWER(`customer_name`) as c_name, LOWER(`company_name`) as comp_name FROM `tabHbs Customer`",
-		as_dict=True
-	)
-	cust_map = {}
-	for c in customers:
-		if c.c_name:
-			cust_map[c.c_name.strip()] = c.name
-		if c.comp_name:
-			cust_map[c.comp_name.strip()] = c.name
-
 	now_dt = frappe.utils.now_datetime()
 	now_date = frappe.utils.nowdate()
 
@@ -169,7 +156,7 @@ def sync_outstanding(data=None, **kwargs):
 		bill_no_clean = str(bill_no).strip()
 		incoming_bill_nos.add(bill_no_clean)
 
-		party_name = _normalize_key(raw, "party Name", "party_name", "Party Name", "customer_name", "party") or "Unknown Party"
+		party_name = _normalize_key(raw, "party Name", "party_name", "Party Name", "PartyName", "Party", "party", "customer_name", "Customer Name", "Customer", "customer", "Particulars", "particulars", "Ledger Name", "ledger_name") or "Unknown Party"
 		party_name_clean = str(party_name).strip() or "Unknown Party"
 
 		bill_date = _safe_date(_normalize_key(raw, "Date", "date", "bill_date", "Bill Date")) or now_date
@@ -196,9 +183,6 @@ def sync_outstanding(data=None, **kwargs):
 		ex1_user = user_map.get(str(ex1_raw).strip().lower()) if ex1_raw else None
 		ex2_user = user_map.get(str(ex2_raw).strip().lower()) if ex2_raw else None
 
-		# Customer linkage
-		cust_link = cust_map.get(party_name_clean.lower())
-
 		# Status
 		if pending_amt == 0:
 			status = "Cleared"
@@ -211,7 +195,7 @@ def sync_outstanding(data=None, **kwargs):
 			"bill_no": bill_no_clean,
 			"bill_date": bill_date,
 			"party_name": party_name_clean,
-			"customer": cust_link,
+			"customer": None,
 			"bill_amt": bill_amt,
 			"pending_amt": pending_amt,
 			"due_date": due_date,
