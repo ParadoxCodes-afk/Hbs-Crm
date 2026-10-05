@@ -106,9 +106,10 @@ def get_last_renewal_pi_info():
 def assign_renewal_pi_and_date(doc):
 	"""Assign quotation date and increment renewal PI number checking both DB and Hbs CRM Settings."""
 	today = frappe.utils.nowdate()
-	doc.quotation_date = today
-	if not doc.is_new():
-		doc.db_set("quotation_date", today)
+	if not getattr(doc, "quotation_date", None):
+		doc.quotation_date = today
+		if not doc.is_new():
+			doc.db_set("quotation_date", today, update_modified=False)
 
 	if not getattr(doc, "pi_number", None):
 		admin_val = frappe.db.get_single_value("Hbs CRM Settings", "renewal_pi_number_order") or "HBS/PI/91957"
@@ -126,7 +127,7 @@ def assign_renewal_pi_and_date(doc):
 			full_pi_number = f"{prefix_clean}/{next_num}"
 
 		if not doc.is_new():
-			doc.db_set("pi_number", full_pi_number)
+			doc.db_set("pi_number", full_pi_number, update_modified=False)
 		doc.pi_number = full_pi_number
 
 		# Only update last_generated_renewal_pi_number; preserve admin's base order in renewal_pi_number_order
@@ -1883,7 +1884,7 @@ def send_manual_renewal_email(name, to_email, subject, message, cc_email=None, f
 		frappe.throw(_("The 'To' field cannot be your own executive email ({0}). Please enter the client's email address.").format(to_email))
 
 	if not doc.cc_email and recipients_list:
-		doc.db_set("cc_email", recipients_list[0])
+		doc.db_set("cc_email", recipients_list[0], update_modified=False)
 		doc.cc_email = recipients_list[0]
 
 	display_name = sender_name or "HBS Sales Team"

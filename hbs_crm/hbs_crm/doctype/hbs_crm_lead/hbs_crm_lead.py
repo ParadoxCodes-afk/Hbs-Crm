@@ -133,9 +133,11 @@ def get_last_lead_pi_info(is_new_age=False):
 def assign_lead_pi_and_date(doc):
 	"""Assign quotation date and increment PI number checking both DB and Hbs CRM Settings."""
 	today = frappe.utils.nowdate()
-	doc.quotation_date = today
-	if not doc.is_new():
-		doc.db_set("quotation_date", today)
+	if not getattr(doc, "quotation_date", None):
+		doc.quotation_date = today
+		if not doc.is_new():
+			doc.db_set("quotation_date", today, update_modified=False)
+
 	is_new_age = (getattr(doc, "quotation_format", None) == "New Age Quotation")
 	has_wrong_prefix = bool(doc.pi_number and (
 		(is_new_age and not str(doc.pi_number).startswith("NIPL/")) or
@@ -162,7 +164,7 @@ def assign_lead_pi_and_date(doc):
 		full_pi_number = f"{prefix_clean}/{next_num}/{fy_str}"
 
 		if not doc.is_new():
-			doc.db_set("pi_number", full_pi_number)
+			doc.db_set("pi_number", full_pi_number, update_modified=False)
 		doc.pi_number = full_pi_number
 
 		# Only update last_generated field; preserve admin's base order
@@ -687,7 +689,7 @@ class HbsCrmLead(Document):
 			self.customer = cust_doc.name
 
 		if not self.is_new() and self.customer:
-			self.db_set("customer", self.customer)
+			self.db_set("customer", self.customer, update_modified=False)
 
 	def send_auto_welcome_email(self):
 		"""Send automated welcome email if enabled in Hbs CRM Email Settings."""
@@ -780,7 +782,7 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 
 	recipients_list = [e.strip() for e in to_email.split(",") if e.strip()]
 	if not doc.contact_email and recipients_list:
-		doc.db_set("contact_email", recipients_list[0])
+		doc.db_set("contact_email", recipients_list[0], update_modified=False)
 		doc.contact_email = recipients_list[0]
 
 	display_name = sender_name or "HBS Sales Team"
