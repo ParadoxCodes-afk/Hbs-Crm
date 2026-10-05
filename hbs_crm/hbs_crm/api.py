@@ -42,7 +42,7 @@ def _normalize_key(row, *keys):
 
 
 @frappe.whitelist(methods=["POST"])
-def sync_outstanding(data=None):
+def sync_outstanding(data=None, **kwargs):
 	"""Ingest live Outstanding billing report snapshot via JSON API.
 	- Matches schema from billing system (OUTSTANDING sheet / JSON).
 	- Idempotent snapshot sync:
@@ -52,23 +52,56 @@ def sync_outstanding(data=None):
 	- Resolves executive links to User records.
 	- Links to Hbs Customer if party_name matches an existing customer.
 	"""
-	# Extract JSON payload
+	# Extract JSON payload across all possible caller methods (direct arg, kwargs, form_dict, raw request body)
 	if data is None:
-		if frappe.request and getattr(frappe.request, "data", None):
+		for k in ("Outstanding", "outstanding", "data", "bills", "items", "records"):
+			if k in kwargs and kwargs[k]:
+				data = kwargs[k]
+				break
+
+	if data is None and hasattr(frappe, "form_dict"):
+		for k in ("Outstanding", "outstanding", "data", "bills", "items", "records"):
+			if k in frappe.form_dict and frappe.form_dict[k]:
+				data = frappe.form_dict[k]
+				break
+
+	if data is None and hasattr(frappe, "request") and frappe.request:
+		req_data = getattr(frappe.request, "data", None)
+		if not req_data and hasattr(frappe.request, "get_data"):
 			try:
-				data = frappe.parse_json(frappe.request.data)
+				req_data = frappe.request.get_data()
 			except Exception:
 				pass
-	elif isinstance(data, str):
+		if req_data:
+			try:
+				parsed = frappe.parse_json(req_data)
+				if isinstance(parsed, dict):
+					for k in ("Outstanding", "outstanding", "data", "bills", "items", "records"):
+						if k in parsed:
+							data = parsed[k]
+							break
+					if data is None:
+						data = parsed
+				elif isinstance(parsed, list):
+					data = parsed
+			except Exception:
+				pass
+
+	if isinstance(data, str):
 		try:
 			data = frappe.parse_json(data)
 		except Exception:
 			pass
 
 	if isinstance(data, dict):
-		for key in ("data", "Outstanding", "outstanding", "bills", "items", "records"):
-			if key in data and isinstance(data[key], list):
+		for key in ("Outstanding", "outstanding", "data", "bills", "items", "records"):
+			if key in data and isinstance(data[key], (list, str)):
 				data = data[key]
+				if isinstance(data, str):
+					try:
+						data = frappe.parse_json(data)
+					except Exception:
+						pass
 				break
 
 	if not isinstance(data, list):
@@ -76,7 +109,7 @@ def sync_outstanding(data=None):
 			data = [data]
 		else:
 			frappe.throw(
-				_("Invalid payload. Expected a list of bills or { 'data': [...] }"),
+				_("Invalid payload. Expected a list of bills or { 'Outstanding': [...] }"),
 				title=_("Invalid Request")
 			)
 
