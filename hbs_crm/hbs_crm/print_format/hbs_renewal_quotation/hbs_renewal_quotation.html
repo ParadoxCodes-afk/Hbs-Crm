@@ -4,9 +4,17 @@
     <meta charset="utf-8">
     <title>HBS Renewal Quotation</title>
     <style>
+        .print-format {
+            margin-top: 5mm;
+            margin-bottom: 5mm;
+            margin-left: 7mm;
+            margin-right: 7mm;
+            padding: 0mm !important;
+        }
+
         @page {
             size: A4 portrait;
-            margin: 6mm 8mm 6mm 8mm;
+            margin: 5mm 8mm 5mm 8mm;
         }
 
         body {
@@ -15,7 +23,7 @@
             color: #000;
             margin: 0;
             padding: 0;
-            line-height: 1.3;
+            line-height: 1.25;
         }
 
         .full-img {
@@ -32,11 +40,11 @@
             text-align: center;
             font-weight: bold;
             font-size: 11px;
-            margin: 5px 0 4px 0;
+            margin: 4px 0 3px 0;
         }
 
         .terms-title {
-            margin-top: 8px;
+            margin-top: 5px;
             margin-bottom: 2px;
             font-weight: bold;
             font-size: 11px;
@@ -45,16 +53,22 @@
         .bottom-section {
             width: 100%;
             display: table;
-            margin-top: 8px;
+            margin-top: 5px;
             page-break-inside: avoid;
             break-inside: avoid;
         }
 
         .bank-col {
             display: table-cell;
-            width: 48%;
-            font-size: 10.5px;
+            width: 50%;
+            font-size: 10px;
             vertical-align: top;
+            line-height: 1.15;
+        }
+
+        .bank-col table td {
+            padding: 0.5px 0;
+            line-height: 1.15;
         }
 
         .qr-col {
@@ -65,14 +79,14 @@
         }
 
         .qr-col img {
-            width: 75px;
-            height: 75px;
+            width: 70px;
+            height: 70px;
             display: inline-block;
         }
 
         .sign-col {
             display: table-cell;
-            width: 38%;
+            width: 36%;
             text-align: right;
             vertical-align: top;
             font-size: 11px;
@@ -80,12 +94,12 @@
 
         .company-name {
             font-weight: bold;
-            margin-bottom: 35px;
+            margin-bottom: 22px;
             white-space: nowrap;
         }
 
         .page-footer {
-            margin-top: 8px;
+            margin-top: 5px;
             width: 100%;
             display: block;
             page-break-inside: avoid;
@@ -174,8 +188,8 @@
                 {% set item_rate = (item.rate | float) if item.rate else 0.0 %}
                 {% set item_row_total = item_qty * item_rate %}
                 <tr>
-                    <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">{{ loop.index }}</td>
-                    <td style="border: 1px solid #000; padding: 6px 8px; vertical-align: top;">
+                    <td style="border: 1px solid #000; padding: 4px 4px; text-align: center; vertical-align: top;">{{ loop.index }}</td>
+                    <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">
                         <div style="font-weight: bold;">
                             {{ (prod_name or item.item_name or 'TALLY PRIME SILVER Subscription') }}
                         </div>
@@ -187,10 +201,10 @@
                         <div>Expiry Date : {{ frappe.utils.formatdate(doc.acc_expiry_date, "dd-MMM-yy") }}</div>
                         {% endif %}
                     </td>
-                    <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">{{ hsn }}</td>
-                    <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">{{ item_qty }} Pcs</td>
-                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top;">{{ "{:,.2f}".format(item_rate) }}/Pcs</td>
-                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top; font-weight: bold;">{{ "{:,.2f}".format(item_row_total) }}</td>
+                    <td style="border: 1px solid #000; padding: 4px 4px; text-align: center; vertical-align: top;">{{ hsn }}</td>
+                    <td style="border: 1px solid #000; padding: 4px 4px; text-align: center; vertical-align: top;">{{ item_qty }} Pcs</td>
+                    <td style="border: 1px solid #000; padding: 4px 8px; text-align: right; vertical-align: top;">{{ "{:,.2f}".format(item_rate) }}/Pcs</td>
+                    <td style="border: 1px solid #000; padding: 4px 8px; text-align: right; vertical-align: top; font-weight: bold;">{{ "{:,.2f}".format(item_row_total) }}</td>
                 </tr>
                 {% endfor %}
             {% else %}
@@ -198,8 +212,8 @@
                 {% set default_amount = doc.final_total or doc.cc_amount or 5310 %}
                 {% set license_flavour = (doc.license or doc.flavour or 'SILVER').upper() %}
                 <tr>
-                    <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">1</td>
-                    <td style="border: 1px solid #000; padding: 6px 8px; vertical-align: top;">
+                    <td style="border: 1px solid #000; padding: 4px 4px; text-align: center; vertical-align: top;">1</td>
+                    <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">
                         <div style="font-weight: bold;">
                             TALLY PRIME {{ license_flavour if 'TALLY' not in license_flavour else license_flavour }} Subscription
                         </div>
@@ -208,10 +222,10 @@
                         <div>Expiry Date : {{ frappe.utils.formatdate(doc.acc_expiry_date, "dd-MMM-yy") }}</div>
                         {% endif %}
                     </td>
-                    <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">998313</td>
-                    <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; vertical-align: top;">1 Pcs</td>
-                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top;">{{ "{:,.2f}".format(default_amount | float) }}/Pcs</td>
-                    <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; vertical-align: top; font-weight: bold;">{{ "{:,.2f}".format(default_amount | float) }}</td>
+                    <td style="border: 1px solid #000; padding: 4px 4px; text-align: center; vertical-align: top;">998313</td>
+                    <td style="border: 1px solid #000; padding: 4px 4px; text-align: center; vertical-align: top;">1 Pcs</td>
+                    <td style="border: 1px solid #000; padding: 4px 8px; text-align: right; vertical-align: top;">{{ "{:,.2f}".format(default_amount | float) }}/Pcs</td>
+                    <td style="border: 1px solid #000; padding: 4px 8px; text-align: right; vertical-align: top; font-weight: bold;">{{ "{:,.2f}".format(default_amount | float) }}</td>
                 </tr>
             {% endif %}
         </tbody>
@@ -253,10 +267,10 @@
             {% endif %}
 
             <tr>
-                <td colspan="5" style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; font-size: 11px; vertical-align: middle;">
+                <td colspan="5" style="border: 1px solid #000; padding: 4px 8px; font-weight: bold; font-size: 11px; vertical-align: middle;">
                     {{ words }}
                 </td>
-                <td style="border: 1px solid #000; padding: 6px 8px; text-align: right; font-weight: bold; font-size: 12px; vertical-align: middle;">
+                <td style="border: 1px solid #000; padding: 4px 8px; text-align: right; font-weight: bold; font-size: 12px; vertical-align: middle;">
                     {{ "{:,.2f}".format(final_val) }}
                 </td>
             </tr>
@@ -265,31 +279,31 @@
 
     <!-- TERMS AND CONDITIONS -->
     <div class="terms-title">Terms and Conditions :-</div>
-    <table style="border: 1px solid #000; font-size: 11px;">
+    <table style="border: 1px solid #000; font-size: 10.5px;">
         <tr>
-            <td style="width: 25px; border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">1.</td>
-            <td style="width: 130px; border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">Payment Terms</td>
-            <td style="border: 1px solid #000; padding: 3px 8px; vertical-align: top;">{{ doc.payment_terms or '100% advance along with confirm order.' }}</td>
+            <td style="width: 25px; border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">1.</td>
+            <td style="width: 130px; border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">Payment Terms</td>
+            <td style="border: 1px solid #000; padding: 2px 8px; vertical-align: top;">{{ doc.payment_terms or '100% advance along with confirm order.' }}</td>
         </tr>
         <tr>
-            <td style="border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">2.</td>
-            <td style="border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">Delivery</td>
-            <td style="border: 1px solid #000; padding: 3px 8px; vertical-align: top;">{{ doc.delivery or '2-3 working days.' }}</td>
+            <td style="border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">2.</td>
+            <td style="border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">Delivery</td>
+            <td style="border: 1px solid #000; padding: 2px 8px; vertical-align: top;">{{ doc.delivery or '2-3 working days.' }}</td>
         </tr>
         <tr>
-            <td style="border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">3.</td>
-            <td style="border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">Support</td>
-            <td style="border: 1px solid #000; padding: 3px 8px; vertical-align: top;">{{ doc.support or '3 Months Telephonic Support from the date of Invoice.' }}</td>
+            <td style="border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">3.</td>
+            <td style="border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">Support</td>
+            <td style="border: 1px solid #000; padding: 2px 8px; vertical-align: top;">{{ doc.support or '3 Months Telephonic Support from the date of Invoice.' }}</td>
         </tr>
         <tr>
-            <td style="border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">4.</td>
-            <td style="border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">Taxes</td>
-            <td style="border: 1px solid #000; padding: 3px 8px; vertical-align: top;">{{ doc.taxes or 'All Inclusive' }}</td>
+            <td style="border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">4.</td>
+            <td style="border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">Taxes</td>
+            <td style="border: 1px solid #000; padding: 2px 8px; vertical-align: top;">{{ doc.taxes or 'All Inclusive' }}</td>
         </tr>
         <tr>
-            <td style="border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">5.</td>
-            <td style="border: 1px solid #000; padding: 3px 5px; font-weight: bold; vertical-align: top;">Validity</td>
-            <td style="border: 1px solid #000; padding: 3px 8px; vertical-align: top;">{{ doc.validity or 'ONE WEEK.' }}</td>
+            <td style="border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">5.</td>
+            <td style="border: 1px solid #000; padding: 2px 5px; font-weight: bold; vertical-align: top;">Validity</td>
+            <td style="border: 1px solid #000; padding: 2px 8px; vertical-align: top;">{{ doc.validity or 'ONE WEEK.' }}</td>
         </tr>
     </table>
 
@@ -297,12 +311,11 @@
     <div class="bottom-section">
         <div class="bank-col">
             <div style="font-weight: bold; margin-bottom: 2px;">Company’s Bank Details</div>
-            <table style="width: 100%; border: none; border-collapse: collapse; font-size: 10.5px;">
-                <tr><td style="border: none; padding: 1px 0; width: 110px;">A/c Holder’s Name</td><td style="border: none; padding: 1px 0; width: 10px;">:</td><td style="border: none; padding: 1px 0; font-weight: bold;">HBS SOLUTIONS PVT LTD</td></tr>
-                <tr><td style="border: none; padding: 1px 0;">Bank Name</td><td style="border: none; padding: 1px 0;">:</td><td style="border: none; padding: 1px 0; font-weight: bold;">HDFC BANK</td></tr>
-                <tr><td style="border: none; padding: 1px 0;">A/c No.</td><td style="border: none; padding: 1px 0;">:</td><td style="border: none; padding: 1px 0; font-weight: bold;">07117630000061</td></tr>
-                <tr><td style="border: none; padding: 1px 0;">Branch & IFS Code</td><td style="border: none; padding: 1px 0;">:</td><td style="border: none; padding: 1px 0; font-weight: bold;">PUSHPANJALI ENCLAVE & HDFC0000711</td></tr>
-                <tr><td style="border: none; padding: 1px 0;">SWIFT Code</td><td style="border: none; padding: 1px 0;">:</td><td style="border: none; padding: 1px 0;"></td></tr>
+            <table style="width: 100%; border: none; border-collapse: collapse; font-size: 10px; line-height: 1.15;">
+                <tr><td style="border: none; padding: 0.5px 0; width: 120px; white-space: nowrap;">A/c Holder’s Name</td><td style="border: none; padding: 0.5px 0; width: 10px;">:</td><td style="border: none; padding: 0.5px 0; font-weight: bold;">HBS SOLUTIONS PVT LTD</td></tr>
+                <tr><td style="border: none; padding: 0.5px 0; white-space: nowrap;">Bank Name</td><td style="border: none; padding: 0.5px 0;">:</td><td style="border: none; padding: 0.5px 0; font-weight: bold;">HDFC BANK</td></tr>
+                <tr><td style="border: none; padding: 0.5px 0; white-space: nowrap;">A/c No.</td><td style="border: none; padding: 0.5px 0;">:</td><td style="border: none; padding: 0.5px 0; font-weight: bold;">07117630000061</td></tr>
+                <tr><td style="border: none; padding: 0.5px 0; white-space: nowrap;">Branch & IFS Code</td><td style="border: none; padding: 0.5px 0;">:</td><td style="border: none; padding: 0.5px 0; font-weight: bold;">PUSHPANJALI ENCLAVE & HDFC0000711</td></tr>
             </table>
         </div>
         <div class="qr-col">
