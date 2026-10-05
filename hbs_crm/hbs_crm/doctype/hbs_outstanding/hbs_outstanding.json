@@ -1,19 +1,18 @@
 {
  "actions": [],
- "allow_bulk_edit": 0,
  "allow_import": 1,
- "allow_rename": 0,
  "autoname": "autoincrement",
- "creation": "2026-10-02 18:22:00",
+ "creation": "2026-10-05 15:26:30.933319",
  "default_view": "List",
  "doctype": "DocType",
  "engine": "InnoDB",
+ "title_field": "bill_no",
  "field_order": [
   "bill_details_section",
   "bill_no",
+  "company_name",
   "bill_date",
   "party_name",
-  "company_name",
   "status",
   "column_break_amounts",
   "bill_amt",
@@ -46,7 +45,6 @@
    "in_standard_filter": 1,
    "label": "Bill No",
    "reqd": 1,
-   "search_index": 1,
    "unique": 1
   },
   {
@@ -69,6 +67,7 @@
   {
    "fieldname": "company_name",
    "fieldtype": "Data",
+   "in_filter": 1,
    "in_global_search": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
@@ -155,8 +154,7 @@
   {
    "fieldname": "remarks",
    "fieldtype": "Small Text",
-   "hidden": 1,
-   "label": "Remarks / Notes"
+   "label": "Add Remark / Activity Note"
   },
   {
    "fieldname": "last_remark",
@@ -189,7 +187,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-02 18:22:00",
+ "modified": "2026-10-05 15:31:51.213288",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Outstanding",
@@ -209,28 +207,20 @@
    "write": 1
   },
   {
-   "create": 0,
-   "delete": 0,
    "email": 1,
    "export": 1,
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Sales User",
-   "share": 0,
-   "write": 0
+   "role": "Sales User"
   },
   {
-   "create": 0,
-   "delete": 0,
    "email": 1,
    "export": 1,
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "All",
-   "share": 0,
-   "write": 0
+   "role": "All"
   }
  ],
  "row_format": "Dynamic",

@@ -205,5 +205,20 @@ def log_remark(name, remark):
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 
-	return {"status": "success", "message": _("Remark logged successfully!")}
+	return {
+		"status": "success",
+		"message": _("Follow-up remark logged successfully!"),
+		"activity_html": doc.activity
+	}
+
+
+@frappe.whitelist()
+def get_activity_html(name):
+	"""Fetch rendered activity timeline HTML for desk form display."""
+	if not name:
+		return ""
+	doc = frappe.get_doc("Hbs Outstanding", name)
+	doc.render_activity_html()
+	return doc.activity
+
 
