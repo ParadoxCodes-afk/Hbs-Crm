@@ -159,6 +159,9 @@ def sync_outstanding(data=None, **kwargs):
 		party_name = _normalize_key(raw, "party Name", "party_name", "Party Name", "PartyName", "Party", "party", "customer_name", "Customer Name", "Customer", "customer", "Particulars", "particulars", "Ledger Name", "ledger_name") or "Unknown Party"
 		party_name_clean = str(party_name).strip() or "Unknown Party"
 
+		company_name = _normalize_key(raw, "Company Name", "company_name", "Company", "company", "Company_Name", "comp_name")
+		company_name_clean = str(company_name or "").strip()
+
 		bill_date = _safe_date(_normalize_key(raw, "Date", "date", "bill_date", "Bill Date")) or now_date
 		due_date = _safe_date(_normalize_key(raw, "Due Date", "due_date", "DueDate", "Due_Date"))
 
@@ -195,6 +198,7 @@ def sync_outstanding(data=None, **kwargs):
 			"bill_no": bill_no_clean,
 			"bill_date": bill_date,
 			"party_name": party_name_clean,
+			"company_name": company_name_clean,
 			"customer": None,
 			"bill_amt": bill_amt,
 			"pending_amt": pending_amt,
@@ -244,6 +248,7 @@ def sync_outstanding(data=None, **kwargs):
 			frappe.db.set_value("Hbs Outstanding", doc_name, {
 				"bill_date": row["bill_date"],
 				"party_name": row["party_name"],
+				"company_name": row["company_name"],
 				"customer": row["customer"],
 				"bill_amt": row["bill_amt"],
 				"pending_amt": row["pending_amt"],
@@ -260,6 +265,7 @@ def sync_outstanding(data=None, **kwargs):
 			updated_count += 1
 		else:
 			new_doc = frappe.new_doc("Hbs Outstanding")
+			new_doc.flags.in_api_sync = True
 			new_doc.update(row)
 			new_doc.insert(ignore_permissions=True)
 			existing_active_map[b_no] = new_doc.name

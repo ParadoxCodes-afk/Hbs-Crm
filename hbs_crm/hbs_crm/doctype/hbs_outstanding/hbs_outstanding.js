@@ -12,6 +12,59 @@ frappe.ui.form.on("Hbs Outstanding", {
 				"orange"
 			);
 		}
+		// Add Remark dialog button
+		if (!frm.is_new()) {
+			frm.add_custom_button(__("+ Add Remark"), function () {
+				let d = new frappe.ui.Dialog({
+					title: __("Add Remark - Bill {0}", [frm.doc.bill_no]),
+					fields: [
+						{
+							label: __("Party Name"),
+							fieldname: "party_name",
+							fieldtype: "Data",
+							default: frm.doc.party_name,
+							read_only: 1
+						},
+						{
+							label: __("Pending Amount"),
+							fieldname: "pending_amt",
+							fieldtype: "Currency",
+							default: frm.doc.pending_amt,
+							read_only: 1
+						},
+						{
+							label: __("Remark / Note"),
+							fieldname: "remark",
+							fieldtype: "Small Text",
+							reqd: 1
+						}
+					],
+					primary_action_label: __("Save Remark"),
+					primary_action: function (values) {
+						frappe.call({
+							method: "hbs_crm.hbs_crm.doctype.hbs_outstanding.hbs_outstanding.log_remark",
+							args: {
+								name: frm.doc.name,
+								remark: values.remark
+							},
+							freeze: true,
+							freeze_message: __("Saving remark..."),
+							callback: function (r) {
+								if (r.message && r.message.status === "success") {
+									d.hide();
+									frappe.show_alert({
+										message: r.message.message,
+										indicator: "green"
+									});
+									frm.reload_doc();
+								}
+							}
+						});
+					}
+				});
+				d.show();
+			}).addClass("btn-primary");
+		}
 
 		// Read-only guard for non-admin users
 		frappe.call({

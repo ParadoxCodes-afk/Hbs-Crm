@@ -13,6 +13,7 @@
   "bill_no",
   "bill_date",
   "party_name",
+  "company_name",
   "customer",
   "status",
   "column_break_amounts",
@@ -26,7 +27,13 @@
   "executive_2",
   "executive_1_name",
   "executive_2_name",
-  "last_sync_date"
+  "last_sync_date",
+  "remarks_section",
+  "remarks",
+  "last_remark",
+  "last_remarks_date",
+  "custom_activities",
+  "activity"
  ],
  "fields": [
   {
@@ -60,6 +67,15 @@
    "in_standard_filter": 1,
    "label": "Party Name",
    "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "company_name",
+   "fieldtype": "Data",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company Name",
    "search_index": 1
   },
   {
@@ -150,6 +166,44 @@
    "fieldtype": "Datetime",
    "label": "Last Sync Date",
    "read_only": 1
+  },
+  {
+   "fieldname": "remarks_section",
+   "fieldtype": "Section Break",
+   "label": "Remarks & Follow-ups"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Remarks / Notes"
+  },
+  {
+   "fieldname": "last_remark",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Last Remark",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_remarks_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Last Remarks Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom_activities",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Activities",
+   "options": "Hbs Lead Activity"
+  },
+  {
+   "fieldname": "activity",
+   "fieldtype": "HTML",
+   "label": "All Activities"
   }
  ],
  "grid_page_length": 50,
