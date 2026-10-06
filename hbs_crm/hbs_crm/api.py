@@ -210,65 +210,165 @@ def sync_outstanding(data=None, **kwargs):
 	if not incoming_bill_nos:
 		frappe.throw(_("No valid bill numbers found in payload."), title=_("Invalid Data"))
 
-	# Step 1: Remove DB records whose bill_no is NOT in the incoming payload (bills cleared/paid)
-	existing_all = frappe.db.sql(
-		"SELECT `name`, `bill_no` FROM `tabHbs Outstanding`",
-		as_dict=True
-	)
-	to_delete = [r.name for r in existing_all if r.bill_no not in incoming_bill_nos]
+	# Determine company scope from incoming data and request parameters
+	incoming_companies = set()
+	param_company = kwargs.get("company") or kwargs.get("company_name") or (frappe.form_dict.get("company") if hasattr(frappe, "form_dict") else None)
+	if param_company and str(param_company).strip():
+		incoming_companies.add(str(param_company).strip())
+
+	for r in parsed_rows:
+		c = r.get("company_name")
+		if c and str(c).strip():
+			incoming_companies.add(str(c).strip())
+
+	# Determine whether to delete missing bills (default: True, unless intermediate batch is specified)
+	def _to_bool(val, default=True):
+		if val is None:
+			return default
+		if isinstance(val, bool):
+			return val
+		s = str(val).strip().lower()
+		return s in ("1", "true", "yes", "y", "t")
+
+	del_param = kwargs.get("delete_missing")
+	if del_param is None and hasattr(frappe, "form_dict"):
+		del_param = frappe.form_dict.get("delete_missing")
+	if del_param is None:
+		del_param = kwargs.get("clear_unmatched") or (frappe.form_dict.get("clear_unmatched") if hasattr(frappe, "form_dict") else None)
+
+	is_batch_param = kwargs.get("is_batch") or (frappe.form_dict.get("is_batch") if hasattr(frappe, "form_dict") else None)
+	is_last_batch_param = kwargs.get("is_last_batch") or (frappe.form_dict.get("is_last_batch") if hasattr(frappe, "form_dict") else None)
+
+	should_delete = True
+	if is_batch_param is not None and _to_bool(is_batch_param, False):
+		should_delete = False
+	if is_last_batch_param is not None and _to_bool(is_last_batch_param, False):
+		should_delete = True
+	if del_param is not None:
+		should_delete = _to_bool(del_param, True)
+
 	deleted_count = 0
-	if to_delete:
-		# Batch delete in chunks of 500
-		for i in range(0, len(to_delete), 500):
-			chunk = to_delete[i:i + 500]
-			frappe.db.delete("Hbs Outstanding", {"name": ["in", chunk]})
-		deleted_count = len(to_delete)
+	# Step 1: Remove DB records for THIS COMPANY ONLY whose bill_no is NOT in the incoming payload (bills cleared/paid)
+	if should_delete:
+		if incoming_companies:
+			existing_company_records = frappe.db.sql(
+				"SELECT `name`, `bill_no` FROM `tabHbs Outstanding` WHERE `company_name` IN %s",
+				[tuple(incoming_companies)],
+				as_dict=True
+			)
+		else:
+			existing_company_records = frappe.db.sql(
+				"SELECT `name`, `bill_no` FROM `tabHbs Outstanding` WHERE (`company_name` IS NULL OR `company_name` = '')",
+				as_dict=True
+			)
+
+		to_delete = [r.name for r in existing_company_records if r.bill_no not in incoming_bill_nos]
+		if to_delete:
+			for i in range(0, len(to_delete), 50):
+				chunk = to_delete[i:i + 50]
+				frappe.db.delete("Hbs Outstanding", {"name": ["in", chunk]})
+			deleted_count = len(to_delete)
 
 	# Step 2: Index current records by bill_no
-	existing_active_map = {
-		r.bill_no: r.name
-		for r in existing_all
-		if r.bill_no in incoming_bill_nos
-	}
+	bill_no_list = list(incoming_bill_nos)
+	existing_active_map = {}
+	for i in range(0, len(bill_no_list), 500):
+		chunk = bill_no_list[i:i + 500]
+		active_rows = frappe.db.sql(
+			"SELECT `name`, `bill_no` FROM `tabHbs Outstanding` WHERE `bill_no` IN %s",
+			[tuple(chunk)],
+			as_dict=True
+		)
+		for r in active_rows:
+			existing_active_map[r.bill_no] = r.name
+
+	rows_to_update = []
+	rows_to_insert = []
+	for row in parsed_rows:
+		if row["bill_no"] in existing_active_map:
+			rows_to_update.append((existing_active_map[row["bill_no"]], row))
+		else:
+			rows_to_insert.append(row)
 
 	inserted_count = 0
 	updated_count = 0
+	BATCH_SIZE = 50
 
-	# Step 3: Insert or update incoming rows
-	for row in parsed_rows:
-		b_no = row["bill_no"]
-		if b_no in existing_active_map:
-			doc_name = existing_active_map[b_no]
-			frappe.db.set_value("Hbs Outstanding", doc_name, {
-				"bill_date": row["bill_date"],
-				"party_name": row["party_name"],
-				"company_name": row["company_name"],
-				"bill_amt": row["bill_amt"],
-				"pending_amt": row["pending_amt"],
-				"due_date": row["due_date"],
-				"overdue_days": row["overdue_days"],
-				"is_tds": row["is_tds"],
-				"executive_1": row["executive_1"],
-				"executive_2": row["executive_2"],
-				"status": row["status"],
-				"last_sync_date": row["last_sync_date"],
-			}, update_modified=False)
-			updated_count += 1
-		else:
-			new_doc = frappe.new_doc("Hbs Outstanding")
-			new_doc.flags.in_api_sync = True
-			new_doc.update(row)
-			new_doc.insert(ignore_permissions=True)
-			existing_active_map[b_no] = new_doc.name
-			inserted_count += 1
+	# Step 3: Fast batch update existing rows (in batches of 50)
+	for i in range(0, len(rows_to_update), BATCH_SIZE):
+		batch = rows_to_update[i:i + BATCH_SIZE]
+		for doc_name, r in batch:
+			frappe.db.sql("""
+				UPDATE `tabHbs Outstanding`
+				SET `bill_date` = %(bill_date)s,
+					`party_name` = %(party_name)s,
+					`company_name` = %(company_name)s,
+					`bill_amt` = %(bill_amt)s,
+					`pending_amt` = %(pending_amt)s,
+					`due_date` = %(due_date)s,
+					`overdue_days` = %(overdue_days)s,
+					`is_tds` = %(is_tds)s,
+					`executive_1` = %(executive_1)s,
+					`executive_2` = %(executive_2)s,
+					`status` = %(status)s,
+					`last_sync_date` = %(last_sync_date)s,
+					`modified` = %(modified)s
+				WHERE `name` = %(name)s
+			""", {
+				**r,
+				"name": doc_name,
+				"modified": now_dt
+			})
+		updated_count += len(batch)
+		frappe.db.commit()
 
-	frappe.db.commit()
+	# Step 4: Fast batch insert new rows (in batches of 50)
+	for i in range(0, len(rows_to_insert), BATCH_SIZE):
+		batch = rows_to_insert[i:i + BATCH_SIZE]
+		val_tuples = []
+		for r in batch:
+			seq_val = frappe.db.get_next_sequence_val("Hbs Outstanding")
+			val_tuples.append((
+				seq_val,
+				r["bill_no"],
+				r["party_name"],
+				r["company_name"],
+				r["bill_date"],
+				r["due_date"],
+				r["bill_amt"],
+				r["pending_amt"],
+				r["overdue_days"],
+				r["is_tds"],
+				r["executive_1"],
+				r["executive_2"],
+				r["status"],
+				r["last_sync_date"],
+				now_dt,
+				now_dt,
+				"Administrator",
+				"Administrator",
+				0
+			))
+		if val_tuples:
+			placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"] * len(val_tuples))
+			flat_vals = [item for sub in val_tuples for item in sub]
+			frappe.db.sql(f"""
+				INSERT INTO `tabHbs Outstanding` (
+					`name`, `bill_no`, `party_name`, `company_name`, `bill_date`, `due_date`,
+					`bill_amt`, `pending_amt`, `overdue_days`, `is_tds`, `executive_1`,
+					`executive_2`, `status`, `last_sync_date`, `creation`, `modified`,
+					`owner`, `modified_by`, `docstatus`
+				) VALUES {placeholders}
+			""", flat_vals)
+		inserted_count += len(batch)
+		frappe.db.commit()
 
 	return {
 		"status": "success",
-		"message": f"Synced {len(parsed_rows)} bills successfully.",
+		"message": f"Synced {len(parsed_rows)} bills successfully in batches of 50.",
 		"total_received": len(data),
 		"inserted": inserted_count,
 		"updated": updated_count,
 		"deleted": deleted_count,
+		"companies": list(incoming_companies)
 	}
