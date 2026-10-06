@@ -92,6 +92,7 @@ frappe.listview_settings["Hbs Outstanding"] = {
 				listview.apply_column_widths();
 			}
 		}
+		setTimeout(() => $(window).trigger("resize"), 100);
 	},
 	onload(listview) {
 		if (!frappe.route_options) {

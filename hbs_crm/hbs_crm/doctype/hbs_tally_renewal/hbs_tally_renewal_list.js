@@ -39,6 +39,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		if (typeof listview.lock_expiry_filter_tag === "function") {
 			listview.lock_expiry_filter_tag();
 		}
+		setTimeout(() => $(window).trigger("resize"), 100);
 	},
 	onload(listview) {
 		frappe.dom.set_style(`
