@@ -36,6 +36,9 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			}
 		}
 		attach_serial_remarks_and_preview(listview);
+		if (typeof listview.enforce_locked_expiry_filter === "function") {
+			listview.enforce_locked_expiry_filter();
+		}
 	},
 	onload(listview) {
 		frappe.dom.set_style(`
@@ -73,6 +76,74 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 
 		setup_renewal_caller_preview(listview);
 
+		let is_admin_or_manager = has_common(frappe.user_roles, ["Administrator", "System Manager", "CRM Manager"]);
+		let default_cutoff_date = moment().endOf("month").format("YYYY-MM-DD");
+
+		// Dedicated Date filter field on page toolbar
+		let expiry_date_field = listview.page.add_field({
+			label: __("Date"),
+			fieldtype: "Date",
+			fieldname: "tss_expiry_cutoff_date",
+			default: default_cutoff_date,
+			change: function () {
+				let selected_date = expiry_date_field.get_value();
+				if (selected_date) {
+					apply_locked_expiry_filter(selected_date);
+				}
+			}
+		});
+
+		function apply_locked_expiry_filter(date_val) {
+			if (!listview.filter_area) return;
+			let existing_filters = listview.filter_area.get() || [];
+			let filtered = existing_filters.filter(f => f[1] !== "acc_expiry_date");
+			filtered.push(["Hbs Tally Renewal", "acc_expiry_date", "<=", date_val]);
+			listview.filter_area.clear(false);
+			listview.filter_area.add(filtered);
+			enforce_locked_expiry_filter();
+		}
+
+		function enforce_locked_expiry_filter() {
+			if (is_admin_or_manager) return;
+			setTimeout(() => {
+				listview.page.main.find(".filter-tag").each(function () {
+					let $tag = $(this);
+					let text = $tag.find(".toggle-filter").text() || "";
+					if (text.includes("TSS Expiry Date") || text.includes("acc_expiry_date")) {
+						$tag.find(".remove-filter").css({
+							"display": "none",
+							"pointer-events": "none"
+						});
+					}
+				});
+			}, 50);
+		}
+
+		listview.enforce_locked_expiry_filter = enforce_locked_expiry_filter;
+
+		if (!is_admin_or_manager && listview.filter_area) {
+			let orig_remove = listview.filter_area.remove.bind(listview.filter_area);
+			listview.filter_area.remove = function (fieldname) {
+				if (fieldname === "acc_expiry_date") {
+					frappe.show_alert({
+						message: __("TSS Expiry Date filter cannot be removed."),
+						indicator: "orange"
+					});
+					return Promise.resolve();
+				}
+				return orig_remove(fieldname);
+			};
+
+			let orig_clear = listview.filter_area.clear.bind(listview.filter_area);
+			listview.filter_area.clear = function (refresh) {
+				let p = orig_clear(refresh);
+				let current_date = (expiry_date_field && expiry_date_field.get_value()) || default_cutoff_date;
+				listview.filter_area.add([["Hbs Tally Renewal", "acc_expiry_date", "<=", current_date]]);
+				enforce_locked_expiry_filter();
+				return p;
+			};
+		}
+
 		if (!frappe.route_options) {
 			frappe.route_options = {};
 		}
@@ -84,9 +155,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			frappe.route_options["follow_up_date"] = ["<=", frappe.datetime.get_today()];
 		}
 		if (!frappe.route_options["acc_expiry_date"]) {
-			let month_start = moment().startOf("month").format("YYYY-MM-DD");
-			let month_end = moment().endOf("month").format("YYYY-MM-DD");
-			frappe.route_options["acc_expiry_date"] = ["Between", [month_start, month_end]];
+			frappe.route_options["acc_expiry_date"] = ["<=", default_cutoff_date];
 		}
 
 		setTimeout(() => {
@@ -95,6 +164,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				delete frappe.route_options.follow_up_date;
 				delete frappe.route_options.acc_expiry_date;
 			}
+			enforce_locked_expiry_filter();
 		}, 100);
 
 		// Overdue remarks/follow-up alert banner (>= 10 days inactive)
@@ -120,15 +190,18 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 					`;
 					listview.page.main.prepend(banner_html);
 					listview.page.main.find(".btn-filter-overdue").on("click", function () {
-						listview.filter_area.clear();
+						listview.filter_area.clear(false);
+						let current_date = (expiry_date_field && expiry_date_field.get_value()) || default_cutoff_date;
 						let filters = [
-							["Hbs Tally Renewal", "crm_status", "not in", ["SOLD", "LOST"]],
-							["Hbs Tally Renewal", "last_remarks_date", "<=", r.message.cutoff_date]
+							["Hbs Tally Renewal", "crm_status", "=", "PENDING"],
+							["Hbs Tally Renewal", "last_remarks_date", "<=", r.message.cutoff_date],
+							["Hbs Tally Renewal", "acc_expiry_date", "<=", current_date]
 						];
 						if (!r.message.is_admin_or_manager) {
 							filters.push(["Hbs Tally Renewal", "crm_ex_1", "=", frappe.session.user]);
 						}
 						listview.filter_area.add(filters);
+						enforce_locked_expiry_filter();
 					});
 				}
 			}

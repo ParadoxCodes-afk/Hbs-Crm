@@ -1551,7 +1551,7 @@ def get_overdue_renewal_summary():
 	if is_admin_mgr:
 		count = frappe.db.sql("""
 			SELECT COUNT(*) FROM `tabHbs Tally Renewal`
-			WHERE (crm_status NOT IN ('SOLD', 'LOST', 'WON', 'Sold', 'Lost', 'Won') OR crm_status IS NULL OR crm_status = '')
+			WHERE UPPER(TRIM(COALESCE(crm_status, ''))) = 'PENDING'
 			  AND (
 				(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
 				OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
@@ -1563,7 +1563,7 @@ def get_overdue_renewal_summary():
 		escaped_team = ", ".join([frappe.db.escape(u) for u in team])
 		count = frappe.db.sql(f"""
 			SELECT COUNT(*) FROM `tabHbs Tally Renewal`
-			WHERE (crm_status NOT IN ('SOLD', 'LOST', 'WON', 'Sold', 'Lost', 'Won') OR crm_status IS NULL OR crm_status = '')
+			WHERE UPPER(TRIM(COALESCE(crm_status, ''))) = 'PENDING'
 			  AND (crm_ex_1 IN ({escaped_team}) OR owner IN ({escaped_team}))
 			  AND (
 				(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
