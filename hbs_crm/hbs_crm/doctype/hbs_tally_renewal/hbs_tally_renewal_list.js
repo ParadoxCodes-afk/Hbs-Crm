@@ -111,20 +111,16 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 
 		function apply_locked_expiry_filter(date_val) {
 			if (!listview.filter_area) return;
-			let existing_filters = listview.filter_area.get() || [];
-			let has_existing = false;
-			let new_filters = existing_filters.map(f => {
-				if (f[1] === "acc_expiry_date") {
-					has_existing = true;
-					return ["Hbs Tally Renewal", "acc_expiry_date", "<=", date_val];
-				}
-				return f;
-			});
-			if (!has_existing) {
-				new_filters.push(["Hbs Tally Renewal", "acc_expiry_date", "<=", date_val]);
+			let existing_filter = (listview.filter_area.filter_list?.filters || []).find(f => f.fieldname === "acc_expiry_date");
+			if (existing_filter && typeof existing_filter.set_values === "function") {
+				existing_filter.set_values(existing_filter.doctype, "acc_expiry_date", "<=", date_val);
+			} else {
+				let existing = listview.filter_area.get() || [];
+				let filtered = existing.filter(f => f[1] !== "acc_expiry_date");
+				filtered.push(["Hbs Tally Renewal", "acc_expiry_date", "<=", date_val]);
+				listview.filter_area.filter_list.filters = [];
+				listview.filter_area.add(filtered);
 			}
-			listview.filter_area.clear(false);
-			listview.filter_area.add(new_filters);
 			lock_expiry_filter_tag();
 		}
 
@@ -162,6 +158,20 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				let res = orig_remove(fieldname);
 				lock_expiry_filter_tag();
 				return res;
+			};
+
+			let orig_clear = listview.filter_area.clear.bind(listview.filter_area);
+			listview.filter_area.clear = function (refresh = true) {
+				let current_date = get_current_cutoff_date();
+				return orig_clear(refresh).then(() => {
+					let current_filters = listview.filter_area.get() || [];
+					let has_expiry = current_filters.some(f => f[1] === "acc_expiry_date");
+					if (!has_expiry) {
+						return listview.filter_area.add([["Hbs Tally Renewal", "acc_expiry_date", "<=", current_date]], refresh);
+					}
+				}).then(() => {
+					lock_expiry_filter_tag();
+				});
 			};
 		}
 
