@@ -6,19 +6,19 @@ frappe.ui.form.on("Hbs Outstanding", {
 		// Render activity timeline matching Hbs Tally Renewal and Hbs Crm Lead
 		render_activity_timeline(frm);
 
-		// Load dynamic statuses from Hbs CRM Settings
+		// Load dynamic payment statuses from Hbs CRM Settings
 		frappe.call({
 			method: "hbs_crm.hbs_crm.doctype.hbs_outstanding.hbs_outstanding.get_outstanding_statuses",
 			callback: function (r) {
 				if (r.message && r.message.length) {
-					frm.set_df_property("status", "options", r.message.join("\n"));
+					frm.set_df_property("payment_status", "options", r.message.join("\n"));
 				}
 			}
 		});
 
 		// Color status indicator
-		if (frm.doc.status === "Payment Received") {
-			frm.dashboard.set_headline_alert(__("Payment Received for this bill."), "green");
+		if (frm.doc.status === "Cleared") {
+			frm.dashboard.set_headline_alert(__("This bill is fully cleared."), "green");
 		} else if (frm.doc.overdue_days > 0) {
 			frm.dashboard.set_headline_alert(
 				__("Overdue by {0} days (Pending: ₹{1})", [frm.doc.overdue_days, frappe.format(frm.doc.pending_amt, { fieldtype: "Currency" })]),
@@ -104,11 +104,11 @@ function open_follow_up_dialog(frm) {
 						read_only: 1
 					},
 					{
-						label: __("Status"),
-						fieldname: "status",
+						label: __("Payment Status"),
+						fieldname: "payment_status",
 						fieldtype: "Select",
 						options: status_options,
-						default: frm.doc.status || ""
+						default: frm.doc.payment_status || ""
 					},
 					{
 						label: __("Remarks / Notes"),
@@ -125,7 +125,7 @@ function open_follow_up_dialog(frm) {
 						args: {
 							name: frm.doc.name,
 							remark: values.remarks,
-							status: values.status || ""
+							payment_status: values.payment_status || ""
 						},
 						freeze: true,
 						freeze_message: __("Saving follow-up remark..."),

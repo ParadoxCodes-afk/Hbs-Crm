@@ -167,10 +167,8 @@ def sync_outstanding(data=None, **kwargs):
 		bill_amt = frappe.utils.flt(_normalize_key(raw, "Bill Amt", "bill_amt", "Bill Amount", "bill_amount", "amount"))
 		pending_amt = frappe.utils.flt(_normalize_key(raw, "Pending Amt", "pending_amt", "Pending Amount", "pending_amount"))
 
-		overdue_days_val = _normalize_key(raw, "Over Due Days", "overdue_days", "Overdue Days", "over_due_days", "overdue")
-		if overdue_days_val is not None and str(overdue_days_val).strip() != "":
-			overdue_days = frappe.utils.cint(overdue_days_val)
-		elif due_date:
+		# Overdue days calculated strictly from current date - due_date (not from api sync)
+		if due_date:
 			overdue_days = max(0, frappe.utils.date_diff(now_date, due_date))
 		else:
 			overdue_days = 0
@@ -185,8 +183,13 @@ def sync_outstanding(data=None, **kwargs):
 		ex1_user = user_map.get(str(ex1_raw).strip().lower()) if ex1_raw else None
 		ex2_user = user_map.get(str(ex2_raw).strip().lower()) if ex2_raw else None
 
-		# Status
-		status = ""
+		# Status auto-derived locally (never from incoming api)
+		if pending_amt == 0:
+			status = "Cleared"
+		elif bill_amt and abs(pending_amt) < abs(bill_amt):
+			status = "Partially Paid"
+		else:
+			status = "Pending"
 
 		parsed_rows.append({
 			"bill_no": bill_no_clean,
@@ -247,6 +250,7 @@ def sync_outstanding(data=None, **kwargs):
 				"is_tds": row["is_tds"],
 				"executive_1": row["executive_1"],
 				"executive_2": row["executive_2"],
+				"status": row["status"],
 				"last_sync_date": row["last_sync_date"],
 			}, update_modified=False)
 			updated_count += 1

@@ -14,10 +14,22 @@ class HbsOutstanding(Document):
 		self.render_activity_html()
 
 	def validate(self):
-		# Auto-calculate overdue days if due_date is provided and overdue_days is missing
-		if self.due_date and self.overdue_days is None:
+		# Auto-derive status from pending_amt
+		bill_val = frappe.utils.flt(self.bill_amt)
+		pending_val = frappe.utils.flt(self.pending_amt)
+		if pending_val == 0:
+			self.status = "Cleared"
+		elif bill_val and abs(pending_val) < abs(bill_val):
+			self.status = "Partially Paid"
+		else:
+			self.status = "Pending"
+
+		# Auto-calculate overdue days from current date - due_date
+		if self.due_date:
 			diff = frappe.utils.date_diff(frappe.utils.nowdate(), self.due_date)
 			self.overdue_days = max(0, diff)
+		else:
+			self.overdue_days = 0
 
 		# Read-only enforcement for executives on bill fields
 		user = frappe.session.user if frappe.session else "System"
@@ -182,8 +194,8 @@ def get_outstanding_statuses():
 
 
 @frappe.whitelist()
-def log_remark(name, remark, status=None):
-	"""Log remark for Hbs Outstanding record and update activity timeline."""
+def log_remark(name, remark, payment_status=None, status=None):
+	"""Log remark for Hbs Outstanding record and update activity timeline and payment_status."""
 	if not name:
 		frappe.throw(_("Record name is required."))
 	if not remark or not str(remark).strip():
@@ -208,8 +220,11 @@ def log_remark(name, remark, status=None):
 	doc.last_remark = clean_rem
 	doc.last_remarks_date = now_d
 	doc.remarks = ""
-	if status is not None:
-		doc.status = status.strip()
+
+	chosen_ps = payment_status if payment_status is not None else status
+	if chosen_ps is not None:
+		doc.payment_status = chosen_ps.strip()
+
 	doc.render_activity_html()
 
 	doc.flags.in_log_remark = True
@@ -220,7 +235,8 @@ def log_remark(name, remark, status=None):
 		"status": "success",
 		"message": _("Follow-up remark logged successfully!"),
 		"activity_html": doc.activity,
-		"new_status": doc.status
+		"payment_status": doc.payment_status,
+		"status": doc.status
 	}
 
 
