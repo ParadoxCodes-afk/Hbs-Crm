@@ -39,7 +39,7 @@ frappe.listview_settings["Hbs Outstanding"] = {
 		},
 		status(val) {
 			if (!val) return "";
-			let color = (val === "Complete" || val === "Cleared") ? "green" : (val === "Partially Paid" ? "orange" : "blue");
+			let color = val === "Complete" ? "green" : "orange";
 			return `<span class="indicator-pill ${color}" style="font-size: 10.5px; padding: 2px 6px; white-space: nowrap;">${frappe.utils.escape_html(val)}</span>`;
 		},
 		payment_status(val) {
@@ -66,12 +66,10 @@ frappe.listview_settings["Hbs Outstanding"] = {
 		}
 	},
 	get_indicator: function (doc) {
-		if (doc.status === "Complete" || doc.status === "Cleared") {
+		if (doc.status === "Complete") {
 			return [__("Complete"), "green", "status,=,Complete"];
-		} else if (doc.overdue_days > 0) {
-			return [__("Overdue ({0} d)", [doc.overdue_days]), "red", "status,=,Pending"];
 		} else {
-			return [__("Pending"), "blue", "status,=,Pending"];
+			return [__("Pending"), "orange", "status,=,Pending"];
 		}
 	},
 	refresh(listview) {
