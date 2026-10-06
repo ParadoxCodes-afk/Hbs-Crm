@@ -1522,11 +1522,12 @@ def get_activity_html(name):
 
 @frappe.whitelist()
 def check_user_hierarchy_role(user=None):
-	"""Check if current or given user is Owner or Admin safely without throwing permission errors."""
+	"""Check if current or given user is Owner, Admin, or Manager safely without throwing permission errors."""
 	if not user:
 		user = frappe.session.user if frappe.session else "Administrator"
 	return {
-		"is_owner_or_admin": is_owner_or_admin(user)
+		"is_owner_or_admin": is_owner_or_admin(user),
+		"is_manager": is_admin_owner_or_manager(user),
 	}
 
 

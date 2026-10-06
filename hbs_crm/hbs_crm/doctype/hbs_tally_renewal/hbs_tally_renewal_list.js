@@ -89,7 +89,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 
 		let is_admin_or_manager = has_common(frappe.user_roles || [], [
 			"Administrator", "System Manager", "CRM Manager", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"
-		]) || frappe.session.user === "Administrator";
+		]) || frappe.session.user === "Administrator" || !!(window._hbs_user_hierarchy_info && window._hbs_user_hierarchy_info.is_manager);
 		let default_cutoff_date = moment().endOf("month").format("YYYY-MM-DD");
 
 		// Render custom Date input in toolbar (NOT via page.add_field to avoid registering in page.fields_dict as an invalid query field)
@@ -107,6 +107,13 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		} else if (listview.page.page_actions) {
 			listview.page.page_actions.prepend($date_wrapper);
 		}
+
+		check_if_owner_or_admin(function (is_owner_admin, is_mgr) {
+			if (is_owner_admin || is_mgr) {
+				is_admin_or_manager = true;
+				listview.page.main.find(".tss-cutoff-date-input").removeAttr("max");
+			}
+		});
 
 		$date_wrapper.find(".tss-cutoff-date-input").on("change", function () {
 			let val = $(this).val();
@@ -805,12 +812,12 @@ function start_bulk_email_batch_runner(listview, checked, email_params) {
 
 function check_if_owner_or_admin(callback) {
 	if (frappe.session.user === "Administrator" || frappe.user.has_role("System Manager")) {
-		callback(true);
+		callback(true, true);
 		return;
 	}
 
-	if (window._hbs_is_owner_or_admin !== undefined) {
-		callback(window._hbs_is_owner_or_admin);
+	if (window._hbs_user_hierarchy_info !== undefined) {
+		callback(window._hbs_user_hierarchy_info.is_owner_or_admin, window._hbs_user_hierarchy_info.is_manager);
 		return;
 	}
 
@@ -818,8 +825,13 @@ function check_if_owner_or_admin(callback) {
 		method: "hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.check_user_hierarchy_role",
 		callback: function (r) {
 			let is_allowed = !!(r.message && r.message.is_owner_or_admin);
+			let is_mgr = !!(r.message && (r.message.is_manager || r.message.is_owner_or_admin));
+			window._hbs_user_hierarchy_info = {
+				is_owner_or_admin: is_allowed,
+				is_manager: is_mgr
+			};
 			window._hbs_is_owner_or_admin = is_allowed;
-			callback(is_allowed);
+			callback(is_allowed, is_mgr);
 		}
 	});
 }
