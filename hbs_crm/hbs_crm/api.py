@@ -248,21 +248,27 @@ def sync_outstanding(data=None, **kwargs):
 		should_delete = _to_bool(del_param, True)
 
 	deleted_count = 0
+	company_deleted = {}
 	# Step 1: Remove DB records for THIS COMPANY ONLY whose bill_no is NOT in the incoming payload (bills cleared/paid)
 	if should_delete:
 		if incoming_companies:
 			existing_company_records = frappe.db.sql(
-				"SELECT `name`, `bill_no` FROM `tabHbs Outstanding` WHERE `company_name` IN %s",
+				"SELECT `name`, `bill_no`, `company_name` FROM `tabHbs Outstanding` WHERE `company_name` IN %s",
 				[tuple(incoming_companies)],
 				as_dict=True
 			)
 		else:
 			existing_company_records = frappe.db.sql(
-				"SELECT `name`, `bill_no` FROM `tabHbs Outstanding` WHERE (`company_name` IS NULL OR `company_name` = '')",
+				"SELECT `name`, `bill_no`, `company_name` FROM `tabHbs Outstanding` WHERE (`company_name` IS NULL OR `company_name` = '')",
 				as_dict=True
 			)
 
-		to_delete = [r.name for r in existing_company_records if r.bill_no not in incoming_bill_nos]
+		to_delete_rows = [r for r in existing_company_records if r.bill_no not in incoming_bill_nos]
+		to_delete = [r.name for r in to_delete_rows]
+		for r in to_delete_rows:
+			c = r.company_name or "Unspecified"
+			company_deleted[c] = company_deleted.get(c, 0) + 1
+
 		if to_delete:
 			for i in range(0, len(to_delete), 50):
 				chunk = to_delete[i:i + 50]
@@ -292,12 +298,16 @@ def sync_outstanding(data=None, **kwargs):
 
 	inserted_count = 0
 	updated_count = 0
+	company_updated = {}
+	company_inserted = {}
 	BATCH_SIZE = 50
 
 	# Step 3: Fast batch update existing rows (in batches of 50)
 	for i in range(0, len(rows_to_update), BATCH_SIZE):
 		batch = rows_to_update[i:i + BATCH_SIZE]
 		for doc_name, r in batch:
+			c = r.get("company_name") or "Unspecified"
+			company_updated[c] = company_updated.get(c, 0) + 1
 			frappe.db.sql("""
 				UPDATE `tabHbs Outstanding`
 				SET `bill_date` = %(bill_date)s,
@@ -327,6 +337,8 @@ def sync_outstanding(data=None, **kwargs):
 		batch = rows_to_insert[i:i + BATCH_SIZE]
 		val_tuples = []
 		for r in batch:
+			c = r.get("company_name") or "Unspecified"
+			company_inserted[c] = company_inserted.get(c, 0) + 1
 			seq_val = frappe.db.get_next_sequence_val("Hbs Outstanding")
 			val_tuples.append((
 				seq_val,
@@ -363,6 +375,23 @@ def sync_outstanding(data=None, **kwargs):
 		inserted_count += len(batch)
 		frappe.db.commit()
 
+	# Company breakdown calculation
+	company_counts = {}
+	for r in parsed_rows:
+		comp = r.get("company_name") or "Unspecified"
+		company_counts[comp] = company_counts.get(comp, 0) + 1
+
+	all_company_keys = sorted(set(incoming_companies) | set(company_counts.keys()) | set(company_deleted.keys()))
+	company_summary = {
+		comp: {
+			"received": company_counts.get(comp, 0),
+			"inserted": company_inserted.get(comp, 0),
+			"updated": company_updated.get(comp, 0),
+			"deleted": company_deleted.get(comp, 0),
+		}
+		for comp in all_company_keys
+	}
+
 	return {
 		"status": "success",
 		"message": f"Synced {len(parsed_rows)} bills successfully in batches of 50.",
@@ -370,5 +399,7 @@ def sync_outstanding(data=None, **kwargs):
 		"inserted": inserted_count,
 		"updated": updated_count,
 		"deleted": deleted_count,
-		"companies": list(incoming_companies)
+		"companies": list(incoming_companies),
+		"company_counts": company_counts,
+		"company_summary": company_summary
 	}
