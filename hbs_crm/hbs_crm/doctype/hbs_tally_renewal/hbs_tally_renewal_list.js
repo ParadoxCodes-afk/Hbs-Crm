@@ -87,15 +87,18 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 
 		setup_renewal_caller_preview(listview);
 
-		let is_admin_or_manager = has_common(frappe.user_roles, ["Administrator", "System Manager", "CRM Manager"]);
+		let is_admin_or_manager = has_common(frappe.user_roles || [], [
+			"Administrator", "System Manager", "CRM Manager", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"
+		]) || frappe.session.user === "Administrator";
 		let default_cutoff_date = moment().endOf("month").format("YYYY-MM-DD");
 
 		// Render custom Date input in toolbar (NOT via page.add_field to avoid registering in page.fields_dict as an invalid query field)
 		listview.page.main.find(".tss-expiry-cutoff-wrapper").remove();
+		let max_attr = is_admin_or_manager ? "" : `max="${default_cutoff_date}"`;
 		let $date_wrapper = $(`
 			<div class="tss-expiry-cutoff-wrapper" style="display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; vertical-align: middle;">
 				<span style="font-size: 12px; font-weight: 600; color: var(--text-color);">📅 Date:</span>
-				<input type="date" class="form-control input-xs tss-cutoff-date-input" value="${default_cutoff_date}" max="${default_cutoff_date}" style="width: 130px; height: 28px; font-size: 12px; display: inline-block; cursor: pointer; border-radius: 4px;">
+				<input type="date" class="form-control input-xs tss-cutoff-date-input" value="${default_cutoff_date}" ${max_attr} style="width: 130px; height: 28px; font-size: 12px; display: inline-block; cursor: pointer; border-radius: 4px;">
 			</div>
 		`);
 
@@ -107,7 +110,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 
 		$date_wrapper.find(".tss-cutoff-date-input").on("change", function () {
 			let val = $(this).val();
-			if (val > default_cutoff_date) {
+			if (!is_admin_or_manager && val > default_cutoff_date) {
 				val = default_cutoff_date;
 				$(this).val(default_cutoff_date);
 				frappe.show_alert({
@@ -122,12 +125,15 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 
 		function get_current_cutoff_date() {
 			let val = listview.page.main.find(".tss-cutoff-date-input").val();
-			return (val && val <= default_cutoff_date) ? val : default_cutoff_date;
+			if (!is_admin_or_manager && val && val > default_cutoff_date) {
+				return default_cutoff_date;
+			}
+			return val || default_cutoff_date;
 		}
 
 		function apply_locked_expiry_filter(date_val) {
 			if (!listview.filter_area) return;
-			if (date_val > default_cutoff_date) date_val = default_cutoff_date;
+			if (!is_admin_or_manager && date_val > default_cutoff_date) date_val = default_cutoff_date;
 			let existing_filter = (listview.filter_area.filter_list?.filters || []).find(f => f.fieldname === "acc_expiry_date");
 			if (existing_filter && typeof existing_filter.set_values === "function") {
 				let p = existing_filter.set_values(existing_filter.doctype, "acc_expiry_date", "<=", date_val);
@@ -149,7 +155,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		}
 
 		function apply_filter_box_lock($box) {
-			if (!$box || !$box.length) return;
+			if (!$box || !$box.length || is_admin_or_manager) return;
 			$box.attr("data-fieldname", "acc_expiry_date");
 			$box.attr("data-locked-filter", "true");
 			$box.find(".remove-filter").remove();
@@ -424,6 +430,10 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		}, __("Operations"));
 
 		check_if_owner_or_admin(function (is_owner_admin) {
+			if (is_owner_admin) {
+				is_admin_or_manager = true;
+				listview.page.main.find(".tss-cutoff-date-input").removeAttr("max");
+			}
 			if (!is_owner_admin) return;
 
 			// Sync Portal API in Batches (Admin & Owner only under Operations)
