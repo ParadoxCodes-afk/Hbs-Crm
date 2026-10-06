@@ -4,6 +4,7 @@
 frappe.listview_settings["Hbs Outstanding"] = {
 	hide_name_column: true,
 	hide_name_filter: true,
+	filters: [["status", "=", "Pending"]],
 	add_fields: [
 		"bill_no",
 		"party_name",
@@ -38,7 +39,7 @@ frappe.listview_settings["Hbs Outstanding"] = {
 		},
 		status(val) {
 			if (!val) return "";
-			let color = val === "Cleared" ? "green" : (val === "Partially Paid" ? "orange" : "blue");
+			let color = (val === "Complete" || val === "Cleared") ? "green" : (val === "Partially Paid" ? "orange" : "blue");
 			return `<span class="indicator-pill ${color}" style="font-size: 10.5px; padding: 2px 6px; white-space: nowrap;">${frappe.utils.escape_html(val)}</span>`;
 		},
 		payment_status(val) {
@@ -65,10 +66,8 @@ frappe.listview_settings["Hbs Outstanding"] = {
 		}
 	},
 	get_indicator: function (doc) {
-		if (doc.status === "Cleared") {
-			return [__("Cleared"), "green", "status,=,Cleared"];
-		} else if (doc.status === "Partially Paid") {
-			return [__("Partially Paid"), "orange", "status,=,Partially Paid"];
+		if (doc.status === "Complete" || doc.status === "Cleared") {
+			return [__("Complete"), "green", "status,=,Complete"];
 		} else if (doc.overdue_days > 0) {
 			return [__("Overdue ({0} d)", [doc.overdue_days]), "red", "status,=,Pending"];
 		} else {
@@ -97,6 +96,14 @@ frappe.listview_settings["Hbs Outstanding"] = {
 		}
 	},
 	onload(listview) {
+		if (!frappe.route_options) {
+			const current_filters = listview.filter_area ? listview.filter_area.get() : [];
+			const has_status_filter = current_filters.some(f => f[1] === "status");
+			if (!has_status_filter && listview.filter_area) {
+				listview.filter_area.add([[listview.doctype, "status", "=", "Pending"]]);
+			}
+		}
+
 		frappe.dom.set_style(`
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row,

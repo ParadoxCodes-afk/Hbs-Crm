@@ -183,13 +183,8 @@ def sync_outstanding(data=None, **kwargs):
 		ex1_user = user_map.get(str(ex1_raw).strip().lower()) if ex1_raw else None
 		ex2_user = user_map.get(str(ex2_raw).strip().lower()) if ex2_raw else None
 
-		# Status auto-derived locally (never from incoming api)
-		if pending_amt == 0:
-			status = "Cleared"
-		elif bill_amt and abs(pending_amt) < abs(bill_amt):
-			status = "Partially Paid"
-		else:
-			status = "Pending"
+		# Status: all active records in incoming outstanding sync are Pending
+		status = "Pending"
 
 		parsed_rows.append({
 			"bill_no": bill_no_clean,
@@ -221,7 +216,7 @@ def sync_outstanding(data=None, **kwargs):
 		if c and str(c).strip():
 			incoming_companies.add(str(c).strip())
 
-	# Determine whether to delete missing bills (default: True, unless intermediate batch is specified)
+	# Determine whether to mark missing bills Complete (default: True, unless intermediate batch is specified)
 	def _to_bool(val, default=True):
 		if val is None:
 			return default
@@ -247,27 +242,31 @@ def sync_outstanding(data=None, **kwargs):
 	if del_param is not None:
 		should_delete = _to_bool(del_param, True)
 
-	deleted_count = 0
-	# Step 1: Remove DB records for THIS COMPANY ONLY whose bill_no is NOT in the incoming payload (bills cleared/paid)
+	completed_count = 0
+	# Step 1: Update DB records for THIS COMPANY ONLY whose bill_no is NOT in the incoming payload to 'Complete'
 	if should_delete:
 		if incoming_companies:
 			existing_company_records = frappe.db.sql(
-				"SELECT `name`, `bill_no` FROM `tabHbs Outstanding` WHERE `company_name` IN %s",
+				"SELECT `name`, `bill_no`, `status` FROM `tabHbs Outstanding` WHERE `company_name` IN %s",
 				[tuple(incoming_companies)],
 				as_dict=True
 			)
 		else:
 			existing_company_records = frappe.db.sql(
-				"SELECT `name`, `bill_no` FROM `tabHbs Outstanding` WHERE (`company_name` IS NULL OR `company_name` = '')",
+				"SELECT `name`, `bill_no`, `status` FROM `tabHbs Outstanding` WHERE (`company_name` IS NULL OR `company_name` = '')",
 				as_dict=True
 			)
 
-		to_delete = [r.name for r in existing_company_records if r.bill_no not in incoming_bill_nos]
-		if to_delete:
-			for i in range(0, len(to_delete), 50):
-				chunk = to_delete[i:i + 50]
-				frappe.db.delete("Hbs Outstanding", {"name": ["in", chunk]})
-			deleted_count = len(to_delete)
+		to_complete = [r.name for r in existing_company_records if r.bill_no not in incoming_bill_nos and r.status != "Complete"]
+		if to_complete:
+			for i in range(0, len(to_complete), 50):
+				chunk = to_complete[i:i + 50]
+				frappe.db.sql(
+					"UPDATE `tabHbs Outstanding` SET `status` = 'Complete', `modified` = %s WHERE `name` IN %s",
+					[now_dt, tuple(chunk)]
+				)
+			completed_count = len(to_complete)
+			frappe.db.commit()
 
 	# Step 2: Index current records by bill_no
 	bill_no_list = list(incoming_bill_nos)
@@ -369,6 +368,7 @@ def sync_outstanding(data=None, **kwargs):
 		"total_received": len(data),
 		"inserted": inserted_count,
 		"updated": updated_count,
-		"deleted": deleted_count,
+		"completed": completed_count,
+		"deleted": 0,
 		"companies": list(incoming_companies)
 	}
