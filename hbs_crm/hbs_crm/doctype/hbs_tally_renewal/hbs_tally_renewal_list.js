@@ -46,6 +46,12 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				display: none !important;
 				pointer-events: none !important;
 			}
+			.filter-box[data-fieldname="acc_expiry_date"] .remove-filter,
+			.filter-box[data-locked-filter="true"] .remove-filter {
+				display: none !important;
+				visibility: hidden !important;
+				pointer-events: none !important;
+			}
 			.frappe-list[data-doctype="Hbs Tally Renewal"] .list-row-col.license,
 			.list-view[data-doctype="Hbs Tally Renewal"] .list-row-col.license {
 				max-width: 90px !important;
@@ -124,6 +130,63 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			lock_expiry_filter_tag();
 		}
 
+		function apply_filter_box_lock($box) {
+			if (!$box || !$box.length) return;
+			$box.attr("data-fieldname", "acc_expiry_date");
+			$box.attr("data-locked-filter", "true");
+			$box.find(".remove-filter").remove();
+			$box.find(".fieldname-select-area input").prop("disabled", true).css({
+				"background-color": "var(--control-bg, #f4f5f6)",
+				"cursor": "not-allowed"
+			});
+		}
+
+		function lock_popover_expiry_filter() {
+			if (is_admin_or_manager) return;
+			if (!listview.filter_area || !listview.filter_area.filter_list) return;
+
+			let fl = listview.filter_area.filter_list;
+			(fl.filters || []).forEach(f => {
+				let fname = f.fieldname || (f.field && f.field.df && f.field.df.fieldname);
+				if (fname === "acc_expiry_date") {
+					if (!f._hbs_locked) {
+						f._hbs_locked = true;
+						let orig_f_remove = f.remove ? f.remove.bind(f) : null;
+						f.remove = function (force) {
+							if (!force && !is_admin_or_manager) {
+								frappe.show_alert({
+									message: __("TSS Expiry Date filter cannot be removed."),
+									indicator: "orange"
+								});
+								return;
+							}
+							if (orig_f_remove) return orig_f_remove(force);
+						};
+
+						let orig_f_make = f.make ? f.make.bind(f) : null;
+						if (orig_f_make) {
+							f.make = function () {
+								orig_f_make();
+								apply_filter_box_lock(f.filter_edit_area);
+							};
+						}
+					}
+
+					if (f.filter_edit_area && f.filter_edit_area.length) {
+						apply_filter_box_lock(f.filter_edit_area);
+					}
+				}
+			});
+
+			$(".filter-popover .filter-box").each(function () {
+				let $box = $(this);
+				let val = ($box.find(".fieldname-select-area input").val() || "").trim();
+				if (val === "TSS Expiry Date" || val === "acc_expiry_date" || $box.attr("data-fieldname") === "acc_expiry_date") {
+					apply_filter_box_lock($box);
+				}
+			});
+		}
+
 		function lock_expiry_filter_tag() {
 			if (is_admin_or_manager) return;
 			setTimeout(() => {
@@ -140,12 +203,79 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 						});
 					}
 				});
+				lock_popover_expiry_filter();
 			}, 30);
 		}
 
 		listview.lock_expiry_filter_tag = lock_expiry_filter_tag;
 
+		$(document).on("shown.bs.popover", function () {
+			let route = frappe.get_route ? frappe.get_route() : null;
+			if (route && route[1] === "Hbs Tally Renewal") {
+				setTimeout(lock_popover_expiry_filter, 10);
+				setTimeout(lock_popover_expiry_filter, 50);
+				setTimeout(lock_popover_expiry_filter, 150);
+			}
+		});
+
+		listview.page.wrapper.on("click", ".filter-button", function () {
+			setTimeout(lock_popover_expiry_filter, 30);
+			setTimeout(lock_popover_expiry_filter, 100);
+		});
+
+		if (!window._hbs_renewal_capture_listener_attached) {
+			window._hbs_renewal_capture_listener_attached = true;
+			document.addEventListener("click", function (e) {
+				let route = frappe.get_route ? frappe.get_route() : null;
+				if (!route || route[1] !== "Hbs Tally Renewal") return;
+				if (has_common(frappe.user_roles || [], ["Administrator", "System Manager", "CRM Manager"])) return;
+
+				let removeBtn = e.target.closest ? e.target.closest(".remove-filter") : null;
+				if (!removeBtn) return;
+
+				let box = removeBtn.closest ? removeBtn.closest(".filter-box") : null;
+				if (box) {
+					let inputVal = (box.querySelector(".fieldname-select-area input")?.value || "").trim();
+					let isLocked = box.getAttribute("data-locked-filter") === "true" ||
+						box.getAttribute("data-fieldname") === "acc_expiry_date" ||
+						inputVal === "TSS Expiry Date" ||
+						inputVal === "acc_expiry_date";
+
+					if (isLocked) {
+						e.preventDefault();
+						e.stopPropagation();
+						e.stopImmediatePropagation();
+						frappe.show_alert({
+							message: __("TSS Expiry Date filter cannot be removed."),
+							indicator: "orange"
+						});
+						return false;
+					}
+				}
+			}, true);
+		}
+
 		if (!is_admin_or_manager && listview.filter_area) {
+			if (listview.filter_area.filter_list) {
+				let fl = listview.filter_area.filter_list;
+				let orig_fl_clear = fl.clear_filters.bind(fl);
+				fl.clear_filters = function () {
+					let current_date = get_current_cutoff_date();
+					let expiry_filter = this.filters.find(f => (f.fieldname === "acc_expiry_date" || f.field?.df?.fieldname === "acc_expiry_date"));
+					this.filters.forEach(f => {
+						if (f !== expiry_filter) {
+							f.remove(true);
+						}
+					});
+					if (expiry_filter) {
+						this.filters = [expiry_filter];
+					} else {
+						this.filters = [];
+						this.add_filter("Hbs Tally Renewal", "acc_expiry_date", "<=", current_date);
+					}
+				};
+			}
+
 			let orig_remove = listview.filter_area.remove.bind(listview.filter_area);
 			listview.filter_area.remove = function (fieldname) {
 				if (fieldname === "acc_expiry_date") {
