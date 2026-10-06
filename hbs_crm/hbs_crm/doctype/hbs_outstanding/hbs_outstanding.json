@@ -25,7 +25,7 @@
   "executive_1",
   "executive_2",
   "last_sync_date",
-  "remarks_section",
+  "activity_section",
   "remarks",
   "last_remark",
   "last_remarks_date",
@@ -159,21 +159,23 @@
    "read_only": 1
   },
   {
-   "fieldname": "remarks_section",
+   "fieldname": "activity_section",
    "fieldtype": "Section Break",
-   "label": "Remarks & Follow-ups"
+   "label": "Activity Timeline"
   },
   {
    "fieldname": "remarks",
    "fieldtype": "Small Text",
-   "label": "Add Remark / Activity Note"
+   "label": "Add Remark / Activity Note",
+   "hidden": 1
   },
   {
    "fieldname": "last_remark",
    "fieldtype": "Small Text",
    "in_list_view": 1,
    "label": "Last Remark",
-   "read_only": 1
+   "read_only": 1,
+   "hidden": 1
   },
   {
    "fieldname": "last_remarks_date",
@@ -181,7 +183,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Last Remarks Date",
-   "read_only": 1
+   "read_only": 1,
+   "hidden": 1
   },
   {
    "fieldname": "custom_activities",
