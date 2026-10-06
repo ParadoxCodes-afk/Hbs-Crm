@@ -75,13 +75,13 @@
    "search_index": 1
   },
   {
-   "default": "Pending",
+   "default": "",
    "fieldname": "status",
    "fieldtype": "Select",
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Pending\nPartially Paid\nCleared"
+   "options": "\nPayment Received"
   },
   {
    "fieldname": "column_break_amounts",

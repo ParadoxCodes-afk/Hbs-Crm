@@ -14,16 +14,6 @@ class HbsOutstanding(Document):
 		self.render_activity_html()
 
 	def validate(self):
-		# Auto-derive status from pending_amt
-		bill_val = frappe.utils.flt(self.bill_amt)
-		pending_val = frappe.utils.flt(self.pending_amt)
-		if pending_val == 0:
-			self.status = "Cleared"
-		elif bill_val and abs(pending_val) < abs(bill_val):
-			self.status = "Partially Paid"
-		else:
-			self.status = "Pending"
-
 		# Auto-calculate overdue days if due_date is provided and overdue_days is missing
 		if self.due_date and self.overdue_days is None:
 			diff = frappe.utils.date_diff(frappe.utils.nowdate(), self.due_date)
@@ -173,7 +163,26 @@ def has_permission(doc, ptype="read", user=None):
 
 
 @frappe.whitelist()
-def log_remark(name, remark):
+def get_outstanding_statuses():
+	"""Fetch configured statuses from Hbs CRM Settings, ensuring blank option is included."""
+	options = [""]
+	try:
+		settings = frappe.get_single("Hbs CRM Settings")
+		if hasattr(settings, "outstanding_statuses") and settings.outstanding_statuses:
+			for row in settings.outstanding_statuses:
+				s = (row.status_name or "").strip()
+				if s and s not in options:
+					options.append(s)
+	except Exception:
+		pass
+
+	if "Payment Received" not in options:
+		options.append("Payment Received")
+	return options
+
+
+@frappe.whitelist()
+def log_remark(name, remark, status=None):
 	"""Log remark for Hbs Outstanding record and update activity timeline."""
 	if not name:
 		frappe.throw(_("Record name is required."))
@@ -199,6 +208,8 @@ def log_remark(name, remark):
 	doc.last_remark = clean_rem
 	doc.last_remarks_date = now_d
 	doc.remarks = ""
+	if status is not None:
+		doc.status = status.strip()
 	doc.render_activity_html()
 
 	doc.flags.in_log_remark = True
@@ -208,7 +219,8 @@ def log_remark(name, remark):
 	return {
 		"status": "success",
 		"message": _("Follow-up remark logged successfully!"),
-		"activity_html": doc.activity
+		"activity_html": doc.activity,
+		"new_status": doc.status
 	}
 
 

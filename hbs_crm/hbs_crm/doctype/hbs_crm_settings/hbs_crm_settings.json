@@ -20,7 +20,9 @@
   "default_lead_owner",
   "untagged_renewal_user",
   "renewal_pi_number_order",
-  "last_generated_renewal_pi_number"
+  "last_generated_renewal_pi_number",
+  "outstanding_settings_section",
+  "outstanding_statuses"
  ],
  "fields": [
   {
@@ -126,6 +128,17 @@
    "fieldtype": "Link",
    "label": "Untagged Renewal User",
    "options": "User"
+  },
+  {
+   "fieldname": "outstanding_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Outstanding Settings"
+  },
+  {
+   "fieldname": "outstanding_statuses",
+   "fieldtype": "Table",
+   "label": "Outstanding Statuses",
+   "options": "Hbs Outstanding Status"
   }
  ],
  "issingle": 1,

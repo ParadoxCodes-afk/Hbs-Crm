@@ -186,12 +186,7 @@ def sync_outstanding(data=None, **kwargs):
 		ex2_user = user_map.get(str(ex2_raw).strip().lower()) if ex2_raw else None
 
 		# Status
-		if pending_amt == 0:
-			status = "Cleared"
-		elif bill_amt and abs(pending_amt) < abs(bill_amt):
-			status = "Partially Paid"
-		else:
-			status = "Pending"
+		status = ""
 
 		parsed_rows.append({
 			"bill_no": bill_no_clean,
@@ -252,7 +247,6 @@ def sync_outstanding(data=None, **kwargs):
 				"is_tds": row["is_tds"],
 				"executive_1": row["executive_1"],
 				"executive_2": row["executive_2"],
-				"status": row["status"],
 				"last_sync_date": row["last_sync_date"],
 			}, update_modified=False)
 			updated_count += 1
