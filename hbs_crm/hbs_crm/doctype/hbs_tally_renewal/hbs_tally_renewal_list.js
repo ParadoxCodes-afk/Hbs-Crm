@@ -95,7 +95,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		let $date_wrapper = $(`
 			<div class="tss-expiry-cutoff-wrapper" style="display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; vertical-align: middle;">
 				<span style="font-size: 12px; font-weight: 600; color: var(--text-color);">📅 Date:</span>
-				<input type="date" class="form-control input-xs tss-cutoff-date-input" value="${default_cutoff_date}" style="width: 130px; height: 28px; font-size: 12px; display: inline-block; cursor: pointer; border-radius: 4px;">
+				<input type="date" class="form-control input-xs tss-cutoff-date-input" value="${default_cutoff_date}" max="${default_cutoff_date}" style="width: 130px; height: 28px; font-size: 12px; display: inline-block; cursor: pointer; border-radius: 4px;">
 			</div>
 		`);
 
@@ -107,17 +107,27 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 
 		$date_wrapper.find(".tss-cutoff-date-input").on("change", function () {
 			let val = $(this).val();
+			if (val > default_cutoff_date) {
+				val = default_cutoff_date;
+				$(this).val(default_cutoff_date);
+				frappe.show_alert({
+					message: __("Date cannot be after current month end ({0}).", [default_cutoff_date]),
+					indicator: "orange"
+				});
+			}
 			if (val) {
 				apply_locked_expiry_filter(val);
 			}
 		});
 
 		function get_current_cutoff_date() {
-			return listview.page.main.find(".tss-cutoff-date-input").val() || default_cutoff_date;
+			let val = listview.page.main.find(".tss-cutoff-date-input").val();
+			return (val && val <= default_cutoff_date) ? val : default_cutoff_date;
 		}
 
 		function apply_locked_expiry_filter(date_val) {
 			if (!listview.filter_area) return;
+			if (date_val > default_cutoff_date) date_val = default_cutoff_date;
 			let existing_filter = (listview.filter_area.filter_list?.filters || []).find(f => f.fieldname === "acc_expiry_date");
 			if (existing_filter && typeof existing_filter.set_values === "function") {
 				let p = existing_filter.set_values(existing_filter.doctype, "acc_expiry_date", "<=", date_val);
@@ -151,6 +161,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				"background-color": "var(--control-bg, #f4f5f6)",
 				"cursor": "not-allowed"
 			});
+			$box.find(".filter-field input").attr("max", default_cutoff_date);
 		}
 
 		function lock_popover_expiry_filter() {
