@@ -92,7 +92,9 @@ def sync_outstanding(data=None, **kwargs):
 		except Exception:
 			pass
 
+	top_dict = {}
 	if isinstance(data, dict):
+		top_dict = data
 		for key in ("Outstanding", "outstanding", "data", "bills", "items", "records"):
 			if key in data and isinstance(data[key], (list, str)):
 				data = data[key]
@@ -207,9 +209,31 @@ def sync_outstanding(data=None, **kwargs):
 
 	# Determine company scope from incoming data and request parameters
 	incoming_companies = set()
-	param_company = kwargs.get("company") or kwargs.get("company_name") or (frappe.form_dict.get("company") if hasattr(frappe, "form_dict") else None)
+	param_company = (
+		kwargs.get("company")
+		or kwargs.get("company_name")
+		or top_dict.get("company")
+		or top_dict.get("company_name")
+		or (frappe.form_dict.get("company") if hasattr(frappe, "form_dict") else None)
+	)
 	if param_company and str(param_company).strip():
 		incoming_companies.add(str(param_company).strip())
+
+	param_companies = (
+		kwargs.get("companies")
+		or top_dict.get("companies")
+		or (frappe.form_dict.get("companies") if hasattr(frappe, "form_dict") else None)
+	)
+	if param_companies:
+		if isinstance(param_companies, str):
+			try:
+				param_companies = frappe.parse_json(param_companies)
+			except Exception:
+				param_companies = [c.strip() for c in param_companies.split(",") if c.strip()]
+		if isinstance(param_companies, (list, tuple, set)):
+			for c in param_companies:
+				if c and str(c).strip():
+					incoming_companies.add(str(c).strip())
 
 	for r in parsed_rows:
 		c = r.get("company_name")
