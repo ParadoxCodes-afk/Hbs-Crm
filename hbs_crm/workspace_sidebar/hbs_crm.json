@@ -114,18 +114,6 @@
   {
    "child": 1,
    "collapsible": 1,
-   "icon": "settings",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "CRM Settings",
-   "link_to": "Hbs CRM Settings",
-   "link_type": "DocType",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 1,
-   "collapsible": 1,
    "icon": "mail",
    "indent": 0,
    "keep_closed": 0,
@@ -136,20 +124,20 @@
    "type": "Link"
   },
   {
-   "child": 1,
+   "child": 0,
    "collapsible": 1,
-   "icon": "users",
+   "icon": "file-chart-pie",
    "indent": 0,
    "keep_closed": 0,
-   "label": "Team Hierarchy",
-   "link_to": "Hbs Lead Team Hierarchy",
+   "label": "OutStanding",
+   "link_to": "Hbs Outstanding",
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
   }
  ],
- "modified": "2026-09-30 02:15:00.000000",
- "modified_by": "Administrator",
+ "modified": "2026-10-06 13:05:26.236781",
+ "modified_by": "jyoti@hbsmail.in",
  "module": "Hbs Crm",
  "name": "HBS CRM",
  "owner": "Administrator",
