@@ -79,19 +79,31 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		let is_admin_or_manager = has_common(frappe.user_roles, ["Administrator", "System Manager", "CRM Manager"]);
 		let default_cutoff_date = moment().endOf("month").format("YYYY-MM-DD");
 
-		// Dedicated Date filter field on page toolbar
-		let expiry_date_field = listview.page.add_field({
-			label: __("Date"),
-			fieldtype: "Date",
-			fieldname: "tss_expiry_cutoff_date",
-			default: default_cutoff_date,
-			change: function () {
-				let selected_date = expiry_date_field.get_value();
-				if (selected_date) {
-					apply_locked_expiry_filter(selected_date);
-				}
+		// Render custom Date input in toolbar (NOT via page.add_field to avoid registering in page.fields_dict as an invalid query field)
+		listview.page.main.find(".tss-expiry-cutoff-wrapper").remove();
+		let $date_wrapper = $(`
+			<div class="tss-expiry-cutoff-wrapper" style="display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; vertical-align: middle;">
+				<span style="font-size: 12px; font-weight: 600; color: var(--text-color);">📅 Date:</span>
+				<input type="date" class="form-control input-xs tss-cutoff-date-input" value="${default_cutoff_date}" style="width: 130px; height: 28px; font-size: 12px; display: inline-block; cursor: pointer; border-radius: 4px;">
+			</div>
+		`);
+
+		if (listview.page.custom_actions) {
+			listview.page.custom_actions.removeClass("hide").prepend($date_wrapper);
+		} else if (listview.page.page_actions) {
+			listview.page.page_actions.prepend($date_wrapper);
+		}
+
+		$date_wrapper.find(".tss-cutoff-date-input").on("change", function () {
+			let val = $(this).val();
+			if (val) {
+				apply_locked_expiry_filter(val);
 			}
 		});
+
+		function get_current_cutoff_date() {
+			return listview.page.main.find(".tss-cutoff-date-input").val() || default_cutoff_date;
+		}
 
 		function apply_locked_expiry_filter(date_val) {
 			if (!listview.filter_area) return;
@@ -137,7 +149,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			let orig_clear = listview.filter_area.clear.bind(listview.filter_area);
 			listview.filter_area.clear = function (refresh) {
 				let p = orig_clear(refresh);
-				let current_date = (expiry_date_field && expiry_date_field.get_value()) || default_cutoff_date;
+				let current_date = get_current_cutoff_date();
 				listview.filter_area.add([["Hbs Tally Renewal", "acc_expiry_date", "<=", current_date]]);
 				enforce_locked_expiry_filter();
 				return p;
@@ -191,7 +203,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 					listview.page.main.prepend(banner_html);
 					listview.page.main.find(".btn-filter-overdue").on("click", function () {
 						listview.filter_area.clear(false);
-						let current_date = (expiry_date_field && expiry_date_field.get_value()) || default_cutoff_date;
+						let current_date = get_current_cutoff_date();
 						let filters = [
 							["Hbs Tally Renewal", "crm_status", "=", "PENDING"],
 							["Hbs Tally Renewal", "last_remarks_date", "<=", r.message.cutoff_date],
