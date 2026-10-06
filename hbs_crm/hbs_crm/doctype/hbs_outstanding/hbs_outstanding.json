@@ -46,14 +46,16 @@
    "in_standard_filter": 1,
    "label": "Bill No",
    "reqd": 1,
-   "unique": 1
+   "unique": 1,
+   "columns": 1
   },
   {
    "fieldname": "bill_date",
    "fieldtype": "Date",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Bill Date"
+   "label": "Bill Date",
+   "columns": 1
   },
   {
    "fieldname": "party_name",
@@ -63,7 +65,8 @@
    "in_standard_filter": 1,
    "label": "Party Name",
    "reqd": 1,
-   "search_index": 1
+   "search_index": 1,
+   "columns": 2
   },
   {
    "fieldname": "company_name",
@@ -73,7 +76,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Company Name",
-   "search_index": 1
+   "search_index": 1,
+   "columns": 1
   },
   {
    "default": "Pending",
@@ -83,7 +87,8 @@
    "in_standard_filter": 1,
    "label": "Status",
    "options": "Pending\nPartially Paid\nCleared",
-   "read_only": 1
+   "read_only": 1,
+   "columns": 1
   },
   {
    "default": "",
@@ -93,7 +98,8 @@
    "in_standard_filter": 1,
    "label": "Payment Status",
    "options": "\nPayment Received",
-   "read_only": 1
+   "read_only": 1,
+   "columns": 1
   },
   {
    "fieldname": "column_break_amounts",
@@ -103,26 +109,30 @@
    "fieldname": "bill_amt",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Bill Amount"
+   "label": "Bill Amount",
+   "columns": 1
   },
   {
    "fieldname": "pending_amt",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Pending Amount"
+   "label": "Pending Amount",
+   "columns": 1
   },
   {
    "fieldname": "due_date",
    "fieldtype": "Date",
    "in_list_view": 1,
-   "label": "Due Date"
+   "label": "Due Date",
+   "columns": 1
   },
   {
    "fieldname": "overdue_days",
    "fieldtype": "Int",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Over Due Days"
+   "label": "Over Due Days",
+   "columns": 1
   },
   {
    "default": "No",
@@ -142,7 +152,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Executive 1",
-   "options": "User"
+   "options": "User",
+   "columns": 1
   },
   {
    "fieldname": "executive_2",
@@ -150,7 +161,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Executive 2",
-   "options": "User"
+   "options": "User",
+   "columns": 1
   },
   {
    "fieldname": "last_sync_date",
@@ -175,7 +187,8 @@
    "in_list_view": 1,
    "label": "Last Remark",
    "read_only": 1,
-   "hidden": 1
+   "hidden": 1,
+   "columns": 2
   },
   {
    "fieldname": "last_remarks_date",
@@ -184,7 +197,8 @@
    "in_standard_filter": 1,
    "label": "Last Remarks Date",
    "read_only": 1,
-   "hidden": 1
+   "hidden": 1,
+   "columns": 1
   },
   {
    "fieldname": "custom_activities",
