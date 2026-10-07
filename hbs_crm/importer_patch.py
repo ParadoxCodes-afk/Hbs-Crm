@@ -107,87 +107,95 @@ def apply_data_import_patch():
 			return res
 
 		# 4. Patch Row.link_exists & Row.parse_value
-		orig_row_link_exists = imp_mod.Row.link_exists
-		def patched_row_link_exists(self, value, df):
-			if df.options == "User" and value:
-				value = resolve_user_link(value)
-			return orig_row_link_exists(self, value, df)
-		imp_mod.Row.link_exists = patched_row_link_exists
+		if hasattr(imp_mod, "Row") and hasattr(imp_mod.Row, "link_exists"):
+			orig_row_link_exists = imp_mod.Row.link_exists
+			def patched_row_link_exists(self, value, df):
+				if df.options == "User" and value:
+					value = resolve_user_link(value)
+				return orig_row_link_exists(self, value, df)
+			imp_mod.Row.link_exists = patched_row_link_exists
 
-		orig_row_parse_value = imp_mod.Row.parse_value
-		def patched_row_parse_value(self, value, col):
-			val = orig_row_parse_value(self, value, col)
-			if col and col.df and col.df.fieldtype == "Link" and col.df.options == "User" and val:
-				val = resolve_user_link(val)
-			return val
-		imp_mod.Row.parse_value = patched_row_parse_value
+		if hasattr(imp_mod, "Row") and hasattr(imp_mod.Row, "parse_value"):
+			orig_row_parse_value = imp_mod.Row.parse_value
+			def patched_row_parse_value(self, value, col):
+				val = orig_row_parse_value(self, value, col)
+				if col and col.df and col.df.fieldtype == "Link" and col.df.options == "User" and val:
+					val = resolve_user_link(val)
+				return val
+			imp_mod.Row.parse_value = patched_row_parse_value
 
 		# 5. Patch Column.validate_values for User link validation
-		orig_col_validate_values = imp_mod.Column.validate_values
-		def patched_col_validate_values(self):
-			if self.df and self.df.fieldtype == "Link" and self.df.options == "User":
-				if not any(self.column_values):
+		if hasattr(imp_mod, "Column") and hasattr(imp_mod.Column, "validate_values"):
+			orig_col_validate_values = imp_mod.Column.validate_values
+			def patched_col_validate_values(self):
+				if self.df and self.df.fieldtype == "Link" and self.df.options == "User":
+					if not any(self.column_values):
+						return
+					transform = (lambda v: cstr(v).lower()) if frappe.db.db_type == "mariadb" else cstr
+					original_values = {transform(v): cstr(v) for v in self.column_values if v}
+					values = list(original_values.keys())
+					exists = [
+						transform(d.name) for d in frappe.get_all("User", filters={"name": ("in", values)})
+					]
+					for val in list(values):
+						if val not in exists:
+							resolved = resolve_user_link(original_values[val])
+							if resolved and frappe.db.exists("User", resolved, cache=True):
+								exists.append(val)
+					not_exists = list(set(values) - set(exists))
+					if not_exists:
+						missing_values = ", ".join(escape_html(cstr(original_values[v])) for v in not_exists)
+						self.warnings.append(
+							{
+								"col": self.column_number,
+								"message": _("The following values do not exist for {0}: {1}").format(
+									self.df.options, missing_values
+								),
+								"type": "warning",
+							}
+						)
 					return
-				transform = (lambda v: cstr(v).lower()) if frappe.db.db_type == "mariadb" else cstr
-				original_values = {transform(v): cstr(v) for v in self.column_values if v}
-				values = list(original_values.keys())
-				exists = [
-					transform(d.name) for d in frappe.get_all("User", filters={"name": ("in", values)})
-				]
-				for val in list(values):
-					if val not in exists:
-						resolved = resolve_user_link(original_values[val])
-						if resolved and frappe.db.exists("User", resolved, cache=True):
-							exists.append(val)
-				not_exists = list(set(values) - set(exists))
-				if not_exists:
-					missing_values = ", ".join(escape_html(cstr(original_values[v])) for v in not_exists)
-					self.warnings.append(
-						{
-							"col": self.column_number,
-							"message": _("The following values do not exist for {0}: {1}").format(
-								self.df.options, missing_values
-							),
-							"type": "warning",
-						}
-					)
-				return
-			return orig_col_validate_values(self)
-		imp_mod.Column.validate_values = patched_col_validate_values
+				return orig_col_validate_values(self)
+			imp_mod.Column.validate_values = patched_col_validate_values
 
 		# 6. Patch Importer.update_record to support lookup by serial
-		orig_update_record = imp_mod.Importer.update_record
-		def patched_update_record(self, doc):
-			id_field = imp_mod.get_id_field(self.doctype)
-			doc_id = doc.get(id_field.fieldname) if id_field else None
+		if hasattr(imp_mod, "Importer") and hasattr(imp_mod.Importer, "update_record"):
+			orig_update_record = imp_mod.Importer.update_record
+			def patched_update_record(self, doc):
+				id_field = imp_mod.get_id_field(self.doctype)
+				doc_id = doc.get(id_field.fieldname) if id_field else None
 
-			if not doc_id:
-				serial = doc.get("tally_serial") or doc.get("tss_tally_serial")
-				if serial:
-					clean_serial = str(serial).strip()
-					if clean_serial.endswith(".0"):
-						clean_serial = clean_serial[:-2].strip()
-					doc_id = frappe.db.get_value(self.doctype, {"tally_serial": clean_serial}, "name")
+				if not doc_id:
+					serial = doc.get("tally_serial") or doc.get("tss_tally_serial")
+					if serial:
+						clean_serial = str(serial).strip()
+						if clean_serial.endswith(".0"):
+							clean_serial = clean_serial[:-2].strip()
+						doc_id = frappe.db.get_value(self.doctype, {"tally_serial": clean_serial}, "name")
 
-			if not doc_id or not frappe.db.exists(self.doctype, doc_id):
-				return self.insert_record(doc)
+				if not doc_id or not frappe.db.exists(self.doctype, doc_id):
+					return self.insert_record(doc)
 
-			existing_doc = frappe.get_doc(self.doctype, doc_id)
-			updated_doc = frappe.get_doc(self.doctype, doc_id)
-			updated_doc.update(doc)
+				existing_doc = frappe.get_doc(self.doctype, doc_id)
+				updated_doc = frappe.get_doc(self.doctype, doc_id)
+				updated_doc.update(doc)
 
-			if imp_mod.get_diff(existing_doc, updated_doc):
-				updated_doc.flags.updater_reference = {
-					"doctype": self.data_import.doctype,
-					"docname": self.data_import.name,
-					"label": _("via Data Import"),
-				}
-				updated_doc.save()
-				return updated_doc
-			else:
-				return existing_doc
+				if imp_mod.get_diff(existing_doc, updated_doc):
+					updated_doc.flags.updater_reference = {
+						"doctype": self.data_import.doctype,
+						"docname": self.data_import.name,
+						"label": _("via Data Import"),
+					}
+					updated_doc.save()
+					return updated_doc
+				else:
+					return existing_doc
 
-		imp_mod.Importer.update_record = patched_update_record
+			imp_mod.Importer.update_record = patched_update_record
 
 	except Exception as e:
-		frappe.log_error(f"Error applying Data Import patch: {str(e)}", "Data Import Patch Error")
+		if getattr(frappe, "db", None) and getattr(frappe.db, "is_connected", None) and frappe.db.is_connected:
+			try:
+				frappe.log_error(f"Error applying Data Import patch: {str(e)}", "Data Import Patch Error")
+			except Exception:
+				pass

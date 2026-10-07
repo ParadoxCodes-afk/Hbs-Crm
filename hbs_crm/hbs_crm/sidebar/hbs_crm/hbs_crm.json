@@ -2,7 +2,7 @@
  "app": "hbs_crm",
  "creation": "2026-08-19 13:51:07.385406",
  "docstatus": 0,
- "doctype": "Workspace Sidebar",
+ "doctype": "Sidebar",
  "header_icon": "users",
  "idx": 0,
  "items": [
@@ -137,7 +137,7 @@
   }
  ],
  "modified": "2026-10-06 13:05:26.236781",
- "modified_by": "jyoti@hbsmail.in",
+ "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm",
  "owner": "Administrator",

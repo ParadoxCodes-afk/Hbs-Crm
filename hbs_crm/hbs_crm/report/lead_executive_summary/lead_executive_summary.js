@@ -109,7 +109,7 @@ frappe.query_reports["Lead Executive Summary"] = {
 	onload: function(report) {
 		frappe.breadcrumbs.add("Hbs Crm", "Hbs Crm Lead");
 		if (frappe.app && frappe.app.sidebar) {
-			frappe.app.sidebar.setup("HBS CRM");
+			frappe.app.sidebar.setup("Hbs Crm");
 		}
 
 		// Restrict Group By options for supervisors to Executive 1 and Executive 2
