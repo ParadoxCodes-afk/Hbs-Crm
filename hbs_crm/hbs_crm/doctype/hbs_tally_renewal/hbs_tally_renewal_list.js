@@ -36,7 +36,9 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			}
 		}
 		attach_serial_remarks_and_preview(listview);
-		if (typeof listview.lock_expiry_filter_tag === "function") {
+		if (typeof listview.lock_followup_filter_tag === "function") {
+			listview.lock_followup_filter_tag();
+		} else if (typeof listview.lock_expiry_filter_tag === "function") {
 			listview.lock_expiry_filter_tag();
 		}
 	},
@@ -46,7 +48,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				display: none !important;
 				pointer-events: none !important;
 			}
-			.filter-box[data-fieldname="acc_expiry_date"] .remove-filter,
+			.filter-box[data-fieldname="follow_up_date"] .remove-filter,
 			.filter-box[data-locked-filter="true"] .remove-filter {
 				display: none !important;
 				visibility: hidden !important;
@@ -89,15 +91,15 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		let is_admin_or_manager = has_common(frappe.user_roles || [], [
 			"Administrator", "System Manager", "CRM Manager", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"
 		]) || frappe.session.user === "Administrator" || !!(window._hbs_user_hierarchy_info && window._hbs_user_hierarchy_info.is_manager);
+		let default_followup_date = frappe.datetime.get_today();
 		let default_cutoff_date = moment().endOf("month").format("YYYY-MM-DD");
 
-		// Render custom Date input in toolbar (NOT via page.add_field to avoid registering in page.fields_dict as an invalid query field)
+		// Render custom Date input in toolbar (used for follow-up on or before date)
 		listview.page.main.find(".tss-expiry-cutoff-wrapper").remove();
-		let max_attr = is_admin_or_manager ? "" : `max="${default_cutoff_date}"`;
 		let $date_wrapper = $(`
 			<div class="tss-expiry-cutoff-wrapper" style="display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; vertical-align: middle;">
 				<span style="font-size: 12px; font-weight: 600; color: var(--text-color);">📅 Date:</span>
-				<input type="date" class="form-control input-xs tss-cutoff-date-input" value="${default_cutoff_date}" ${max_attr} style="width: 130px; height: 28px; font-size: 12px; display: inline-block; cursor: pointer; border-radius: 4px;">
+				<input type="date" class="form-control input-xs tss-cutoff-date-input" value="${default_followup_date}" style="width: 130px; height: 28px; font-size: 12px; display: inline-block; cursor: pointer; border-radius: 4px;">
 			</div>
 		`);
 
@@ -110,59 +112,47 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		check_if_owner_or_admin(function (is_owner_admin, is_mgr) {
 			if (is_owner_admin || is_mgr) {
 				is_admin_or_manager = true;
-				listview.page.main.find(".tss-cutoff-date-input").removeAttr("max");
 			}
 		});
 
 		$date_wrapper.find(".tss-cutoff-date-input").on("change", function () {
 			let val = $(this).val();
-			if (!is_admin_or_manager && val > default_cutoff_date) {
-				val = default_cutoff_date;
-				$(this).val(default_cutoff_date);
-				frappe.show_alert({
-					message: __("Date cannot be after current month end ({0}).", [default_cutoff_date]),
-					indicator: "orange"
-				});
-			}
 			if (val) {
-				apply_locked_expiry_filter(val);
+				apply_locked_followup_filter(val);
 			}
 		});
 
-		function get_current_cutoff_date() {
+		function get_current_followup_date() {
 			let val = listview.page.main.find(".tss-cutoff-date-input").val();
-			if (!is_admin_or_manager && val && val > default_cutoff_date) {
-				return default_cutoff_date;
-			}
-			return val || default_cutoff_date;
+			return val || default_followup_date;
 		}
 
-		function apply_locked_expiry_filter(date_val) {
+		function apply_locked_followup_filter(date_val) {
 			if (!listview.filter_area) return;
-			if (!is_admin_or_manager && date_val > default_cutoff_date) date_val = default_cutoff_date;
-			let existing_filter = (listview.filter_area.filter_list?.filters || []).find(f => f.fieldname === "acc_expiry_date");
+			let existing_filter = (listview.filter_area.filter_list?.filters || []).find(f => f.fieldname === "follow_up_date");
 			if (existing_filter && typeof existing_filter.set_values === "function") {
-				let p = existing_filter.set_values(existing_filter.doctype, "acc_expiry_date", "<=", date_val);
+				let p = existing_filter.set_values(existing_filter.doctype, "follow_up_date", "<=", date_val);
 				if (p && p.then) {
 					p.then(() => {
 						listview.filter_area.filter_list?.apply();
 					});
 				} else {
 					listview.filter_area.filter_list?.apply();
+					lock_followup_filter_tag();
 				}
 			} else {
 				let existing = listview.filter_area.get() || [];
-				let filtered = existing.filter(f => f[1] !== "acc_expiry_date");
-				filtered.push(["Hbs Tally Renewal", "acc_expiry_date", "<=", date_val]);
+				let filtered = existing.filter(f => f[1] !== "follow_up_date");
+				filtered.push(["Hbs Tally Renewal", "follow_up_date", "<=", date_val]);
 				listview.filter_area.filter_list.filters = [];
 				listview.filter_area.add(filtered);
 			}
-			lock_expiry_filter_tag();
+			lock_followup_filter_tag();
 		}
 
 		function apply_filter_box_lock($box) {
 			if (!$box || !$box.length || is_admin_or_manager) return;
-			$box.attr("data-fieldname", "acc_expiry_date");
+			$box.attr("data-fieldname", "follow_up_date");
 			$box.attr("data-locked-filter", "true");
 			$box.find(".remove-filter").remove();
 			$box.find(".fieldname-select-area").css({
@@ -173,24 +163,23 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				"background-color": "var(--control-bg, #f4f5f6)",
 				"cursor": "not-allowed"
 			});
-			$box.find(".filter-field input").attr("max", default_cutoff_date);
 		}
 
-		function lock_popover_expiry_filter() {
+		function lock_popover_followup_filter() {
 			if (is_admin_or_manager) return;
 			if (!listview.filter_area || !listview.filter_area.filter_list) return;
 
 			let fl = listview.filter_area.filter_list;
 			(fl.filters || []).forEach(f => {
 				let fname = f.fieldname || (f.field && f.field.df && f.field.df.fieldname);
-				if (fname === "acc_expiry_date") {
+				if (fname === "follow_up_date") {
 					if (!f._hbs_locked) {
 						f._hbs_locked = true;
 						let orig_f_remove = f.remove ? f.remove.bind(f) : null;
 						f.remove = function (force) {
 							if (!force && !is_admin_or_manager) {
 								frappe.show_alert({
-									message: __("TSS Expiry Date filter cannot be removed."),
+									message: __("Follow-up Date filter cannot be removed."),
 									indicator: "orange"
 								});
 								return;
@@ -216,46 +205,57 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			$(".filter-popover .filter-box").each(function () {
 				let $box = $(this);
 				let val = ($box.find(".fieldname-select-area input").val() || "").trim();
-				if (val === "TSS Expiry Date" || val === "acc_expiry_date" || $box.attr("data-fieldname") === "acc_expiry_date") {
+				if (val === "Follow-up Date" || val === "Follow Up Date" || val === "follow_up_date" || $box.attr("data-fieldname") === "follow_up_date") {
 					apply_filter_box_lock($box);
 				}
 			});
 		}
 
-		function lock_expiry_filter_tag() {
-			if (is_admin_or_manager) return;
-			setTimeout(() => {
-				let $wrapper = $(listview.page.wrapper);
-				$wrapper.find(".filter-tag").each(function () {
-					let $tag = $(this);
-					let text = ($tag.find(".toggle-filter").text() || "").trim();
-					if (text.includes("TSS Expiry Date") || text.includes("acc_expiry_date")) {
-						$tag.attr("data-locked", "true");
-						$tag.find(".remove-filter").remove();
-						$tag.find(".toggle-filter").css({
-							"border-top-right-radius": "var(--border-radius)",
-							"border-bottom-right-radius": "var(--border-radius)"
-						});
-					}
-				});
-				lock_popover_expiry_filter();
-			}, 30);
+		function lock_followup_filter_tag() {
+			if (!is_admin_or_manager) {
+				setTimeout(() => {
+					let $wrapper = $(listview.page.wrapper);
+					$wrapper.find(".filter-tag").each(function () {
+						let $tag = $(this);
+						let text = ($tag.find(".toggle-filter").text() || "").trim();
+						if (text.includes("Follow-up Date") || text.includes("Follow Up Date") || text.includes("follow_up_date")) {
+							$tag.attr("data-locked", "true");
+							$tag.find(".remove-filter").remove();
+							$tag.find(".toggle-filter").css({
+								"border-top-right-radius": "var(--border-radius)",
+								"border-bottom-right-radius": "var(--border-radius)"
+							});
+						}
+					});
+					lock_popover_followup_filter();
+				}, 30);
+			}
+
+			// Keep toolbar date input synced with filter_area value if present
+			if (listview.filter_area) {
+				let filters = listview.filter_area.get() || [];
+				let fu = filters.find(f => f[1] === "follow_up_date" && f[2] === "<=");
+				if (fu && fu[3]) {
+					listview.page.main.find(".tss-cutoff-date-input").val(fu[3]);
+				}
+			}
 		}
 
-		listview.lock_expiry_filter_tag = lock_expiry_filter_tag;
+		listview.lock_followup_filter_tag = lock_followup_filter_tag;
+		listview.lock_expiry_filter_tag = lock_followup_filter_tag;
 
 		$(document).on("shown.bs.popover", function () {
 			let route = frappe.get_route ? frappe.get_route() : null;
 			if (route && route[1] === "Hbs Tally Renewal") {
-				setTimeout(lock_popover_expiry_filter, 10);
-				setTimeout(lock_popover_expiry_filter, 50);
-				setTimeout(lock_popover_expiry_filter, 150);
+				setTimeout(lock_popover_followup_filter, 10);
+				setTimeout(lock_popover_followup_filter, 50);
+				setTimeout(lock_popover_followup_filter, 150);
 			}
 		});
 
 		listview.page.wrapper.on("click", ".filter-button, .toggle-filter", function () {
-			setTimeout(lock_popover_expiry_filter, 30);
-			setTimeout(lock_popover_expiry_filter, 100);
+			setTimeout(lock_popover_followup_filter, 30);
+			setTimeout(lock_popover_followup_filter, 100);
 		});
 
 		if (!window._hbs_renewal_capture_listener_attached) {
@@ -263,29 +263,37 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			document.addEventListener("click", function (e) {
 				let route = frappe.get_route ? frappe.get_route() : null;
 				if (!route || route[1] !== "Hbs Tally Renewal") return;
-				if (has_common(frappe.user_roles || [], ["Administrator", "System Manager", "CRM Manager"])) return;
+				if (has_common(frappe.user_roles || [], [
+					"Administrator", "System Manager", "CRM Manager", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"
+				]) || frappe.session.user === "Administrator") return;
 
 				let removeBtn = e.target.closest ? e.target.closest(".remove-filter") : null;
 				if (!removeBtn) return;
 
 				let box = removeBtn.closest ? removeBtn.closest(".filter-box") : null;
+				let tag = removeBtn.closest ? removeBtn.closest(".filter-tag") : null;
+				let isLocked = false;
+
 				if (box) {
 					let inputVal = (box.querySelector(".fieldname-select-area input")?.value || "").trim();
-					let isLocked = box.getAttribute("data-locked-filter") === "true" ||
-						box.getAttribute("data-fieldname") === "acc_expiry_date" ||
-						inputVal === "TSS Expiry Date" ||
-						inputVal === "acc_expiry_date";
+					isLocked = box.getAttribute("data-locked-filter") === "true" ||
+						box.getAttribute("data-fieldname") === "follow_up_date" ||
+						inputVal.toLowerCase().includes("follow");
+				} else if (tag) {
+					let tagText = (tag.querySelector(".toggle-filter")?.textContent || "").trim();
+					isLocked = tag.getAttribute("data-locked") === "true" ||
+						tagText.toLowerCase().includes("follow");
+				}
 
-					if (isLocked) {
-						e.preventDefault();
-						e.stopPropagation();
-						e.stopImmediatePropagation();
-						frappe.show_alert({
-							message: __("TSS Expiry Date filter cannot be removed."),
-							indicator: "orange"
-						});
-						return false;
-					}
+				if (isLocked) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					frappe.show_alert({
+						message: __("Follow-up Date filter cannot be removed."),
+						indicator: "orange"
+					});
+					return false;
 				}
 			}, true);
 		}
@@ -295,52 +303,52 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				let fl = listview.filter_area.filter_list;
 				let orig_fl_clear = fl.clear_filters.bind(fl);
 				fl.clear_filters = function () {
-					let current_date = get_current_cutoff_date();
-					let expiry_filter = this.filters.find(f => (f.fieldname === "acc_expiry_date" || f.field?.df?.fieldname === "acc_expiry_date"));
+					let current_date = get_current_followup_date();
+					let followup_filter = this.filters.find(f => (f.fieldname === "follow_up_date" || f.field?.df?.fieldname === "follow_up_date"));
 					this.filters.forEach(f => {
-						if (f !== expiry_filter) {
+						if (f !== followup_filter) {
 							f.remove(true);
 						}
 					});
-					if (expiry_filter) {
-						this.filters = [expiry_filter];
+					if (followup_filter) {
+						this.filters = [followup_filter];
 					} else {
 						this.filters = [];
-						this.add_filter("Hbs Tally Renewal", "acc_expiry_date", "<=", current_date);
+						this.add_filter("Hbs Tally Renewal", "follow_up_date", "<=", current_date);
 					}
 				};
 			}
 
 			let orig_remove = listview.filter_area.remove.bind(listview.filter_area);
 			listview.filter_area.remove = function (fieldname) {
-				if (fieldname === "acc_expiry_date") {
+				if (fieldname === "follow_up_date") {
 					frappe.show_alert({
-						message: __("TSS Expiry Date filter cannot be removed."),
+						message: __("Follow-up Date filter cannot be removed."),
 						indicator: "orange"
 					});
 					return Promise.resolve();
 				}
 				let res = orig_remove(fieldname);
-				lock_expiry_filter_tag();
+				lock_followup_filter_tag();
 				return res;
 			};
 
 			let orig_clear = listview.filter_area.clear.bind(listview.filter_area);
 			listview.filter_area.clear = function (refresh = true) {
-				let current_date = get_current_cutoff_date();
+				let current_date = get_current_followup_date();
 				return orig_clear(refresh).then(() => {
 					let current_filters = listview.filter_area.get() || [];
-					let has_expiry = current_filters.some(f => f[1] === "acc_expiry_date");
-					if (!has_expiry) {
-						return listview.filter_area.add([["Hbs Tally Renewal", "acc_expiry_date", "<=", current_date]], refresh);
+					let has_follow_up = current_filters.some(f => f[1] === "follow_up_date");
+					if (!has_follow_up) {
+						return listview.filter_area.add([["Hbs Tally Renewal", "follow_up_date", "<=", current_date]], refresh);
 					}
 				}).then(() => {
-					lock_expiry_filter_tag();
+					lock_followup_filter_tag();
 				});
 			};
 		}
 
-		// Ensure default filters (Pending, Follow Up <= Today, TSS Expiry Date <= Date) are applied
+		// Ensure default filters (Pending, Follow Up <= Date, TSS Expiry Date <= current month end) are applied
 		function setup_default_renewal_filters() {
 			if (!listview.filter_area) return;
 			let current_filters = listview.filter_area.get() || [];
@@ -353,7 +361,8 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				to_add.push(["Hbs Tally Renewal", "crm_status", "=", "PENDING"]);
 			}
 			if (!has_follow_up) {
-				to_add.push(["Hbs Tally Renewal", "follow_up_date", "<=", frappe.datetime.get_today()]);
+				let current_date = get_current_followup_date();
+				to_add.push(["Hbs Tally Renewal", "follow_up_date", "<=", current_date]);
 			}
 			if (!has_expiry) {
 				to_add.push(["Hbs Tally Renewal", "acc_expiry_date", "<=", default_cutoff_date]);
@@ -362,7 +371,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			if (to_add.length) {
 				listview.filter_area.add(to_add);
 			}
-			lock_expiry_filter_tag();
+			lock_followup_filter_tag();
 		}
 
 		setTimeout(() => {
@@ -395,21 +404,21 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 						let clear_promise = listview.filter_area.clear(false);
 						let p = (clear_promise && clear_promise.then) ? clear_promise : Promise.resolve();
 						p.then(() => {
-							let current_date = get_current_cutoff_date();
+							let current_date = get_current_followup_date();
 							let current_filters = listview.filter_area.get() || [];
 							let filters = [
 								["Hbs Tally Renewal", "crm_status", "=", "PENDING"],
 								["Hbs Tally Renewal", "last_remarks_date", "<=", r.message.cutoff_date]
 							];
-							if (!current_filters.some(f => f[1] === "acc_expiry_date")) {
-								filters.push(["Hbs Tally Renewal", "acc_expiry_date", "<=", current_date]);
+							if (!current_filters.some(f => f[1] === "follow_up_date")) {
+								filters.push(["Hbs Tally Renewal", "follow_up_date", "<=", current_date]);
 							}
 							if (!r.message.is_admin_or_manager) {
 								filters.push(["Hbs Tally Renewal", "crm_ex_1", "=", frappe.session.user]);
 							}
 							return listview.filter_area.add(filters);
 						}).then(() => {
-							lock_expiry_filter_tag();
+							lock_followup_filter_tag();
 						});
 					});
 				}
@@ -438,7 +447,6 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		check_if_owner_or_admin(function (is_owner_admin) {
 			if (is_owner_admin) {
 				is_admin_or_manager = true;
-				listview.page.main.find(".tss-cutoff-date-input").removeAttr("max");
 			}
 			if (!is_owner_admin) return;
 
