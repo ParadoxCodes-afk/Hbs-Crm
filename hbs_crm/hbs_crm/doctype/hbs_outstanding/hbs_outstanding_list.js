@@ -74,20 +74,20 @@ frappe.listview_settings["Hbs Outstanding"] = {
 	},
 	refresh(listview) {
 		if (listview.column_max_widths) {
-			listview.column_max_widths["bill_no"] = 85;
-			listview.column_max_widths["bill_date"] = 75;
-			listview.column_max_widths["party_name"] = 135;
-			listview.column_max_widths["company_name"] = 85;
-			listview.column_max_widths["status"] = 75;
-			listview.column_max_widths["payment_status"] = 80;
-			listview.column_max_widths["bill_amt"] = 80;
-			listview.column_max_widths["pending_amt"] = 80;
-			listview.column_max_widths["due_date"] = 75;
-			listview.column_max_widths["overdue_days"] = 55;
-			listview.column_max_widths["executive_1"] = 75;
-			listview.column_max_widths["executive_2"] = 75;
-			listview.column_max_widths["last_remark"] = 130;
-			listview.column_max_widths["last_remarks_date"] = 75;
+			listview.column_max_widths["bill_no"] = 110;
+			listview.column_max_widths["bill_date"] = 100;
+			listview.column_max_widths["party_name"] = 170;
+			listview.column_max_widths["company_name"] = 115;
+			listview.column_max_widths["status"] = 90;
+			listview.column_max_widths["payment_status"] = 100;
+			listview.column_max_widths["bill_amt"] = 100;
+			listview.column_max_widths["pending_amt"] = 100;
+			listview.column_max_widths["due_date"] = 100;
+			listview.column_max_widths["overdue_days"] = 75;
+			listview.column_max_widths["executive_1"] = 95;
+			listview.column_max_widths["executive_2"] = 95;
+			listview.column_max_widths["last_remark"] = 165;
+			listview.column_max_widths["last_remarks_date"] = 100;
 			if (typeof listview.apply_column_widths === "function") {
 				listview.apply_column_widths();
 			}
@@ -107,88 +107,87 @@ frappe.listview_settings["Hbs Outstanding"] = {
 			.list-view[data-doctype="Hbs Outstanding"] .list-row,
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-head,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-head {
-				padding-left: 8px !important;
-				padding-right: 8px !important;
+				padding-left: 10px !important;
+				padding-right: 10px !important;
 				font-size: 12px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col {
+				margin-right: 16px !important;
 				padding-right: 4px !important;
 				padding-left: 4px !important;
-				min-width: 0 !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.bill_no,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.bill_no {
-				max-width: 95px !important;
-				width: 85px !important;
-				flex: 0 0 85px !important;
+				min-width: 95px !important;
+				width: 110px !important;
+				flex: 0 0 110px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.bill_date,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.bill_date {
-				max-width: 85px !important;
-				width: 75px !important;
-				flex: 0 0 75px !important;
+				min-width: 90px !important;
+				width: 100px !important;
+				flex: 0 0 100px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.party_name,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.party_name {
-				max-width: 155px !important;
-				min-width: 110px !important;
-				flex: 1 1 135px !important;
+				min-width: 140px !important;
+				flex: 1 1 170px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.company_name,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.company_name {
-				max-width: 95px !important;
-				width: 85px !important;
-				flex: 0 0 85px !important;
+				min-width: 100px !important;
+				width: 115px !important;
+				flex: 0 0 115px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.status,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.status {
-				max-width: 85px !important;
-				width: 75px !important;
-				flex: 0 0 75px !important;
+				min-width: 80px !important;
+				width: 90px !important;
+				flex: 0 0 90px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.payment_status,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.payment_status {
-				max-width: 90px !important;
-				width: 80px !important;
-				flex: 0 0 80px !important;
+				min-width: 90px !important;
+				width: 100px !important;
+				flex: 0 0 100px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.bill_amt,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.bill_amt {
-				max-width: 90px !important;
-				width: 80px !important;
-				flex: 0 0 80px !important;
+				min-width: 90px !important;
+				width: 100px !important;
+				flex: 0 0 100px !important;
 				text-align: right !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.pending_amt,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.pending_amt {
-				max-width: 90px !important;
-				width: 80px !important;
-				flex: 0 0 80px !important;
+				min-width: 90px !important;
+				width: 100px !important;
+				flex: 0 0 100px !important;
 				text-align: right !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.due_date,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.due_date {
-				max-width: 85px !important;
-				width: 75px !important;
-				flex: 0 0 75px !important;
+				min-width: 90px !important;
+				width: 100px !important;
+				flex: 0 0 100px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.overdue_days,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.overdue_days {
-				max-width: 60px !important;
-				width: 55px !important;
-				flex: 0 0 55px !important;
+				min-width: 65px !important;
+				width: 75px !important;
+				flex: 0 0 75px !important;
 				text-align: center !important;
 			}
 
@@ -196,23 +195,22 @@ frappe.listview_settings["Hbs Outstanding"] = {
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.executive_1,
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.executive_2,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.executive_2 {
-				max-width: 85px !important;
-				width: 75px !important;
-				flex: 0 0 75px !important;
+				min-width: 85px !important;
+				width: 95px !important;
+				flex: 0 0 95px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.last_remark,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.last_remark {
-				max-width: 145px !important;
-				min-width: 90px !important;
-				flex: 1 1 125px !important;
+				min-width: 120px !important;
+				flex: 1 1 165px !important;
 			}
 
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.last_remarks_date,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.last_remarks_date {
-				max-width: 85px !important;
-				width: 75px !important;
-				flex: 0 0 75px !important;
+				min-width: 90px !important;
+				width: 100px !important;
+				flex: 0 0 100px !important;
 			}
 		`);
 	}

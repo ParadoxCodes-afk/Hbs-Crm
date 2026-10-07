@@ -51,19 +51,73 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 			return `<span>${frappe.datetime.str_to_user(val)}</span>`;
 		}
 	},
+	refresh(listview) {
+		if (listview.column_max_widths) {
+			listview.column_max_widths["contact_name"] = 175;
+			listview.column_max_widths["company_name"] = 185;
+			listview.column_max_widths["lead_type"] = 120;
+			listview.column_max_widths["executive_1"] = 110;
+			listview.column_max_widths["executive_2"] = 110;
+			listview.column_max_widths["executive_3"] = 110;
+			listview.column_max_widths["tally_serial"] = 120;
+			listview.column_max_widths["referred_by"] = 130;
+			listview.column_max_widths["follow_up_date"] = 120;
+			if (typeof listview.apply_column_widths === "function") {
+				listview.apply_column_widths();
+			}
+		}
+	},
 	onload(listview) {
 		frappe.dom.set_style(`
-			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col:nth-child(3),
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col,
+			.list-view[data-doctype="Hbs Crm Lead"] .list-row-col {
+				margin-right: 20px !important;
+				padding-right: 6px !important;
+				padding-left: 4px !important;
+			}
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col.contact_name,
+			.list-view[data-doctype="Hbs Crm Lead"] .list-row-col.contact_name,
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="contact_name"],
+			.list-view[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="contact_name"],
 			.frappe-list[data-doctype="Hbs Crm Lead"] .list-subject {
-				min-width: 260px !important;
+				min-width: 170px !important;
+				flex: 1 1 175px !important;
+			}
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col.company_name,
+			.list-view[data-doctype="Hbs Crm Lead"] .list-row-col.company_name,
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="company_name"],
+			.list-view[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="company_name"] {
+				min-width: 175px !important;
+				flex: 1 1 185px !important;
+			}
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col.lead_type,
+			.list-view[data-doctype="Hbs Crm Lead"] .list-row-col.lead_type,
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="lead_type"],
+			.list-view[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="lead_type"] {
+				min-width: 115px !important;
+				flex: 0 0 120px !important;
 			}
 			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-sort-by="executive_1"],
 			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-sort-by="executive_2"],
 			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-sort-by="executive_3"],
-			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-sort-by="tally_serial"] {
-				max-width: 105px !important;
-				min-width: 75px !important;
-				flex-grow: 0 !important;
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="executive_1"],
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="executive_2"],
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="executive_3"] {
+				min-width: 100px !important;
+				flex: 0 0 110px !important;
+			}
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-sort-by="tally_serial"],
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="tally_serial"] {
+				min-width: 115px !important;
+				flex: 0 0 120px !important;
+			}
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="referred_by"] {
+				min-width: 125px !important;
+				flex: 0 0 130px !important;
+			}
+			.frappe-list[data-doctype="Hbs Crm Lead"] .list-row-col[data-fieldname="follow_up_date"] {
+				min-width: 115px !important;
+				flex: 0 0 120px !important;
 			}
 		`);
 
