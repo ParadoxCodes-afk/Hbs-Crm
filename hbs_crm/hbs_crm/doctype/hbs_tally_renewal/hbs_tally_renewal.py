@@ -1543,21 +1543,23 @@ from hbs_crm.hbs_crm.utils import (
 
 @frappe.whitelist()
 def get_overdue_renewal_summary():
-	"""Return count and cutoff date of active renewals with no follow-up for >= 10 days scoped by user role."""
+	"""Return count and cutoff date of active renewals with no follow-up for >= 10 days and expiry on/before current month end."""
 
 	user = frappe.session.user
 	cutoff_date = frappe.utils.add_days(frappe.utils.nowdate(), -10)
+	month_end = frappe.utils.get_last_day(frappe.utils.nowdate())
 	is_admin_mgr = is_admin_owner_or_manager(user)
 
 	if is_admin_mgr:
 		count = frappe.db.sql("""
 			SELECT COUNT(*) FROM `tabHbs Tally Renewal`
 			WHERE UPPER(TRIM(COALESCE(crm_status, ''))) = 'PENDING'
+			  AND acc_expiry_date IS NOT NULL AND acc_expiry_date <= %s
 			  AND (
 				(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
 				OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
 			  )
-		""", (cutoff_date, cutoff_date))[0][0]
+		""", (month_end, cutoff_date, cutoff_date))[0][0]
 	else:
 		subordinates = get_subordinates_from_hierarchy(user)
 		team = list(set([user] + subordinates))
@@ -1566,15 +1568,17 @@ def get_overdue_renewal_summary():
 			SELECT COUNT(*) FROM `tabHbs Tally Renewal`
 			WHERE UPPER(TRIM(COALESCE(crm_status, ''))) = 'PENDING'
 			  AND (crm_ex_1 IN ({escaped_team}) OR owner IN ({escaped_team}))
+			  AND acc_expiry_date IS NOT NULL AND acc_expiry_date <= %s
 			  AND (
 				(last_remarks_date IS NOT NULL AND last_remarks_date <= %s)
 				OR (last_remarks_date IS NULL AND DATE(creation) <= %s)
 			  )
-		""", (cutoff_date, cutoff_date))[0][0]
+		""", (month_end, cutoff_date, cutoff_date))[0][0]
 
 	return {
 		"count": count or 0,
 		"cutoff_date": cutoff_date,
+		"month_end": str(month_end),
 		"is_admin_or_manager": is_admin_mgr
 	}
 
