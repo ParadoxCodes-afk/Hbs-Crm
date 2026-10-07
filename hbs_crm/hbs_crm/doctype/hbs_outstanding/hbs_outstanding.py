@@ -400,11 +400,7 @@ def send_daily_payment_received_digest():
 	# Mark records as notified if column exists
 	if has_col:
 		doc_names = [r.name for r in records]
-		frappe.db.sql("""
-			UPDATE `tabHbs Outstanding`
-			SET `billing_notified` = 1
-			WHERE `name` IN %s
-		""", [tuple(doc_names)])
+		frappe.db.set_value("Hbs Outstanding", {"name": ["in", doc_names]}, "billing_notified", 1, update_modified=False)
 		frappe.db.commit()
 
 	return {"status": "success", "sent_count": len(records), "recipients": recipients}
