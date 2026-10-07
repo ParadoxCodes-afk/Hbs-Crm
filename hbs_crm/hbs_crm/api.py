@@ -182,8 +182,16 @@ def sync_outstanding(data=None, **kwargs):
 		# Executives
 		ex1_raw = _normalize_key(raw, "Executive1", "executive_1", "Executive 1", "executive1")
 		ex2_raw = _normalize_key(raw, "Executive2", "executive_2", "Executive 2", "executive2")
-		ex1_user = user_map.get(str(ex1_raw).strip().lower()) if ex1_raw else None
-		ex2_user = user_map.get(str(ex2_raw).strip().lower()) if ex2_raw else None
+		ex1_code = str(ex1_raw or "").strip().upper().replace(".", "").replace(" ", "")
+		if ex1_code == "JS":
+			ex1_user = user_map.get("jyoti@hbsmail.in", "jyoti@hbsmail.in")
+			ex2_user = user_map.get("saniya@hbsmail.in", "saniya@hbsmail.in")
+		elif ex1_code == "AA":
+			ex1_user = user_map.get("amrit@hbsmail.in", "amrit@hbsmail.in")
+			ex2_user = user_map.get("aarti@hbsmail.in", "aarti@hbsmail.in")
+		else:
+			ex1_user = user_map.get(str(ex1_raw).strip().lower(), ex1_raw) if ex1_raw else None
+			ex2_user = user_map.get(str(ex2_raw).strip().lower(), ex2_raw) if ex2_raw else None
 
 		# Status: all active records in incoming outstanding sync are Pending
 		status = "Pending"

@@ -50,6 +50,13 @@ class HbsOutstanding(Document):
 		self.record_remark_activity()
 		self.render_activity_html()
 
+	def on_update(self):
+		# Notify billing executive if payment_status changed directly via Desk form save
+		if not getattr(self.flags, "in_log_remark", False) and self.payment_status == "Payment Received":
+			before_doc = self.get_doc_before_save()
+			if not before_doc or before_doc.get("payment_status") != "Payment Received":
+				send_payment_received_notification(self, remark=self.last_remark, user=frappe.session.user)
+
 	def record_remark_activity(self):
 		"""Record new remark in Hbs Lead Activity child table."""
 		if self.remarks and self.remarks.strip():
@@ -118,6 +125,32 @@ class HbsOutstanding(Document):
 				local_dt = dt_obj.astimezone(ZoneInfo(user_tz))
 				formatted_datetime = frappe.utils.format_datetime(local_dt, "dd/MM/yyyy, HH:mm")
 
+			# Render attachment preview if present
+			attachment_preview = ""
+			clean_remark_display = remark_text
+			if "Attachment: " in remark_text:
+				parts = remark_text.split("Attachment: ")
+				clean_remark_display = parts[0].strip()
+				att_link = parts[1].strip().split("\n")[0].strip()
+				file_ext = att_link.lower().split(".")[-1] if "." in att_link else ""
+				if file_ext in ("png", "jpg", "jpeg", "webp", "gif"):
+					attachment_preview = f'''
+						<div style="margin-top: 8px;">
+							<a href="{att_link}" target="_blank" style="display: inline-block;">
+								<img src="{att_link}" alt="Screenshot" style="max-width: 260px; max-height: 200px; border-radius: 6px; border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: block;" />
+							</a>
+						</div>
+					'''
+				elif att_link:
+					file_name = att_link.split("/")[-1]
+					attachment_preview = f'''
+						<div style="margin-top: 8px;">
+							<a href="{att_link}" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 4px 10px; border-radius: 6px; font-size: 12px; text-decoration: none;">
+								📎 <b>Attached Document:</b> {file_name}
+							</a>
+						</div>
+					'''
+
 			html.append(f'''
 				<div class="timeline-item" style="margin-bottom: 14px; position: relative;">
 					<div style="position: absolute; left: -35px; top: 1px; background: #ffffff; padding: 2px;">
@@ -128,7 +161,7 @@ class HbsOutstanding(Document):
 					<div style="font-size: 12.5px; color: #505a62; margin-bottom: 3px;">
 						<b style="color: #1c2126; font-weight: 600;">{user_email}</b> <span style="color: #8d99a6;">commented • {formatted_datetime}</span>
 					</div>
-					<div style="background: #fcfcfc; border: 1px solid #d1d8dd; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #1c2126; white-space: pre-wrap; line-height: 1.35; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">{frappe.utils.escape_html(remark_text.strip())}</div>
+					<div style="background: #fcfcfc; border: 1px solid #d1d8dd; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #1c2126; white-space: pre-wrap; line-height: 1.35; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">{frappe.utils.escape_html(clean_remark_display.strip())}{attachment_preview}</div>
 				</div>
 			''')
 
@@ -194,8 +227,8 @@ def get_outstanding_statuses():
 
 
 @frappe.whitelist()
-def log_remark(name, remark, payment_status=None, status=None):
-	"""Log remark for Hbs Outstanding record and update activity timeline and payment_status."""
+def log_remark(name, remark, payment_status=None, status=None, attachment=None):
+	"""Log remark for Hbs Outstanding record and update activity timeline, payment_status, and attachments."""
 	if not name:
 		frappe.throw(_("Record name is required."))
 	if not remark or not str(remark).strip():
@@ -211,6 +244,16 @@ def log_remark(name, remark, payment_status=None, status=None):
 	clean_rem = str(remark).strip()
 	now_dt = frappe.utils.now_datetime()
 	now_d = frappe.utils.nowdate()
+
+	if attachment and str(attachment).strip():
+		clean_att = str(attachment).strip()
+		file_name = frappe.db.get_value("File", {"file_url": clean_att}, "name")
+		if file_name:
+			frappe.db.set_value("File", file_name, {
+				"attached_to_doctype": "Hbs Outstanding",
+				"attached_to_name": doc.name
+			}, update_modified=False)
+		clean_rem = f"{clean_rem}\n\nAttachment: {clean_att}"
 
 	doc.append("custom_activities", {
 		"user": user_email,
@@ -231,6 +274,9 @@ def log_remark(name, remark, payment_status=None, status=None):
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 
+	if doc.payment_status == "Payment Received":
+		send_payment_received_notification(doc, remark=str(remark).strip(), attachment=attachment, user=user)
+
 	return {
 		"status": "success",
 		"message": _("Follow-up remark logged successfully!"),
@@ -238,6 +284,109 @@ def log_remark(name, remark, payment_status=None, status=None):
 		"payment_status": doc.payment_status,
 		"status": doc.status
 	}
+
+
+def send_payment_received_notification(doc, remark=None, attachment=None, user=None):
+	"""Send email to billing executive when payment status becomes Payment Received."""
+	try:
+		settings = frappe.get_single("Hbs CRM Settings")
+		billing_email = getattr(settings, "billing_executive_email", None)
+		if not billing_email or not str(billing_email).strip():
+			return
+
+		billing_email = str(billing_email).strip()
+		recipients = [e.strip() for e in billing_email.replace(";", ",").split(",") if e.strip()]
+		if not recipients:
+			return
+
+		subject = f"Payment Received: {doc.bill_no} - {doc.party_name} (₹{frappe.utils.fmt_money(doc.pending_amt or doc.bill_amt)})"
+		site_url = frappe.utils.get_url()
+		doc_link = f"{site_url}/app/hbs-outstanding/{doc.name}"
+		updated_by = user or (frappe.session.user if frappe.session else "System")
+
+		attachment_html = ""
+		attachments = []
+		if attachment and str(attachment).strip():
+			att_url = str(attachment).strip()
+			full_att_url = att_url if att_url.startswith("http") else f"{site_url}{att_url}"
+			file_name = att_url.split("/")[-1]
+			attachment_html = f'''
+				<div style="margin-top: 10px; padding: 8px 12px; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 6px;">
+					<b>Client Screenshot / Attachment:</b><br/>
+					<a href="{full_att_url}" target="_blank" style="color: #0284c7; text-decoration: underline; font-weight: 500;">
+						📎 {frappe.utils.escape_html(file_name)}
+					</a>
+				</div>
+			'''
+			attachments.append({"file_url": att_url})
+
+		message = f'''
+		<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1f2937; line-height: 1.5; font-size: 14px;">
+			<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
+				<h3 style="margin: 0 0 4px 0; color: #166534; font-size: 16px;">Payment Received Notification</h3>
+				<p style="margin: 0; color: #15803d; font-size: 13px;">Follow-up updated payment status to <b>Payment Received</b> for bill <b>{frappe.utils.escape_html(doc.bill_no or "")}</b>.</p>
+			</div>
+
+			<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px;">
+				<tr style="border-bottom: 1px solid #e5e7eb;">
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563; width: 35%;">Party Name:</td>
+					<td style="padding: 8px 4px; color: #111827; font-weight: 600;">{frappe.utils.escape_html(doc.party_name or "-")}</td>
+				</tr>
+				<tr style="border-bottom: 1px solid #e5e7eb;">
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Bill No:</td>
+					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.bill_no or "-")}</td>
+				</tr>
+				<tr style="border-bottom: 1px solid #e5e7eb;">
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Company:</td>
+					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.company_name or "-")}</td>
+				</tr>
+				<tr style="border-bottom: 1px solid #e5e7eb;">
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Bill Date / Due Date:</td>
+					<td style="padding: 8px 4px; color: #111827;">{doc.bill_date or "-"} / {doc.due_date or "-"} ({doc.overdue_days or 0} days overdue)</td>
+				</tr>
+				<tr style="border-bottom: 1px solid #e5e7eb;">
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Bill Amount:</td>
+					<td style="padding: 8px 4px; color: #111827;">₹{frappe.utils.fmt_money(doc.bill_amt)}</td>
+				</tr>
+				<tr style="border-bottom: 1px solid #e5e7eb;">
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Pending Amount:</td>
+					<td style="padding: 8px 4px; color: #166534; font-weight: 600;">₹{frappe.utils.fmt_money(doc.pending_amt)}</td>
+				</tr>
+				<tr style="border-bottom: 1px solid #e5e7eb;">
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Assigned Executives:</td>
+					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.executive_1 or "-")}, {frappe.utils.escape_html(doc.executive_2 or "-")}</td>
+				</tr>
+				<tr style="border-bottom: 1px solid #e5e7eb;">
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Updated By:</td>
+					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(updated_by)}</td>
+				</tr>
+			</table>
+
+			<div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+				<div style="font-weight: 600; margin-bottom: 4px; color: #374151;">Follow-up Remark:</div>
+				<div style="white-space: pre-wrap; color: #111827;">{frappe.utils.escape_html(str(remark or "").strip())}</div>
+				{attachment_html}
+			</div>
+
+			<div style="margin-top: 18px;">
+				<a href="{doc_link}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 500;">
+					Open Outstanding Record in CRM →
+				</a>
+			</div>
+		</div>
+		'''
+
+		frappe.sendmail(
+			recipients=recipients,
+			subject=subject,
+			message=message,
+			attachments=attachments if attachments else None,
+			reference_doctype="Hbs Outstanding",
+			reference_name=doc.name,
+			delayed=False
+		)
+	except Exception as e:
+		frappe.log_error(f"Failed to send billing executive email: {e}", "Billing Notification Error")
 
 
 @frappe.whitelist()
@@ -248,5 +397,3 @@ def get_activity_html(name):
 	doc = frappe.get_doc("Hbs Outstanding", name)
 	doc.render_activity_html()
 	return doc.activity
-
-

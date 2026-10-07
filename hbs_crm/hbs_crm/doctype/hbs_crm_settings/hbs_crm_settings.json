@@ -22,7 +22,9 @@
   "renewal_pi_number_order",
   "last_generated_renewal_pi_number",
   "outstanding_settings_section",
-  "outstanding_statuses"
+  "outstanding_statuses",
+  "billing_settings_section",
+  "billing_executive_email"
  ],
  "fields": [
   {
@@ -139,6 +141,17 @@
    "fieldtype": "Table",
    "label": "Outstanding Statuses",
    "options": "Hbs Outstanding Status"
+  },
+  {
+   "fieldname": "billing_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Billing Settings"
+  },
+  {
+   "description": "Email ID of billing executive to notify when an outstanding payment status becomes Payment Received",
+   "fieldname": "billing_executive_email",
+   "fieldtype": "Data",
+   "label": "Billing Executive Mail ID"
   }
  ],
  "issingle": 1,

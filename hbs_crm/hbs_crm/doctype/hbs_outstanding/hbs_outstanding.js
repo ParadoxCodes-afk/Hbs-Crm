@@ -129,6 +129,12 @@ function open_follow_up_dialog(frm) {
 				fieldtype: "Small Text",
 				reqd: 1,
 				description: __("Enter details of discussion, customer feedback, or payment commitment.")
+			},
+			{
+				label: __("Attach Doc"),
+				fieldname: "attachment",
+				fieldtype: "Attach",
+				description: __("Attach payment screenshot or document shared by client.")
 			}
 		],
 		primary_action_label: __("Save Follow-up"),
@@ -146,7 +152,8 @@ function open_follow_up_dialog(frm) {
 				args: {
 					name: frm.doc.name,
 					remark: values.remarks,
-					payment_status: values.payment_status || ""
+					payment_status: values.payment_status || "",
+					attachment: values.attachment || ""
 				},
 				freeze: true,
 				freeze_message: __("Saving follow-up remark..."),
