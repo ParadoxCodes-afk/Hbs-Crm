@@ -287,7 +287,10 @@ def log_remark(name, remark, payment_status=None, status=None, attachment=None):
 
 
 def send_payment_received_notification(doc, remark=None, attachment=None, user=None):
-	"""Send email to billing executive when payment status becomes Payment Received."""
+	"""Send email to billing executive only when payment status is Payment Received."""
+	if doc.payment_status != "Payment Received":
+		return
+
 	try:
 		settings = frappe.get_single("Hbs CRM Settings")
 		billing_email = getattr(settings, "billing_executive_email", None)
@@ -299,10 +302,9 @@ def send_payment_received_notification(doc, remark=None, attachment=None, user=N
 		if not recipients:
 			return
 
-		subject = f"Payment Received: {doc.bill_no} - {doc.party_name} (₹{frappe.utils.fmt_money(doc.pending_amt or doc.bill_amt)})"
+		subject = f"Payment Received: {doc.bill_no} - {doc.party_name}"
 		site_url = frappe.utils.get_url()
 		doc_link = f"{site_url}/app/hbs-outstanding/{doc.name}"
-		updated_by = user or (frappe.session.user if frappe.session else "System")
 
 		attachment_html = ""
 		attachments = []
@@ -311,7 +313,7 @@ def send_payment_received_notification(doc, remark=None, attachment=None, user=N
 			full_att_url = att_url if att_url.startswith("http") else f"{site_url}{att_url}"
 			file_name = att_url.split("/")[-1]
 			attachment_html = f'''
-				<div style="margin-top: 10px; padding: 8px 12px; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 6px;">
+				<div style="margin-top: 12px; padding: 8px 12px; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 6px;">
 					<b>Client Screenshot / Attachment:</b><br/>
 					<a href="{full_att_url}" target="_blank" style="color: #0284c7; text-decoration: underline; font-weight: 500;">
 						📎 {frappe.utils.escape_html(file_name)}
@@ -324,49 +326,33 @@ def send_payment_received_notification(doc, remark=None, attachment=None, user=N
 		<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1f2937; line-height: 1.5; font-size: 14px;">
 			<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
 				<h3 style="margin: 0 0 4px 0; color: #166534; font-size: 16px;">Payment Received Notification</h3>
-				<p style="margin: 0; color: #15803d; font-size: 13px;">Follow-up updated payment status to <b>Payment Received</b> for bill <b>{frappe.utils.escape_html(doc.bill_no or "")}</b>.</p>
+				<p style="margin: 0; color: #15803d; font-size: 13px;">Payment status updated to <b>Payment Received</b> for bill <b>{frappe.utils.escape_html(doc.bill_no or "")}</b>.</p>
 			</div>
 
 			<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px;">
 				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563; width: 35%;">Party Name:</td>
-					<td style="padding: 8px 4px; color: #111827; font-weight: 600;">{frappe.utils.escape_html(doc.party_name or "-")}</td>
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563; width: 35%;">Bill Number:</td>
+					<td style="padding: 8px 4px; color: #111827; font-weight: 600;">{frappe.utils.escape_html(doc.bill_no or "-")}</td>
 				</tr>
 				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Bill No:</td>
-					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.bill_no or "-")}</td>
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Bill Date:</td>
+					<td style="padding: 8px 4px; color: #111827;">{doc.bill_date or "-"}</td>
 				</tr>
 				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Company:</td>
-					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.company_name or "-")}</td>
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Party Name:</td>
+					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.party_name or "-")}</td>
 				</tr>
 				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Bill Date / Due Date:</td>
-					<td style="padding: 8px 4px; color: #111827;">{doc.bill_date or "-"} / {doc.due_date or "-"} ({doc.overdue_days or 0} days overdue)</td>
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Executive 1:</td>
+					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.executive_1 or "-")}</td>
 				</tr>
 				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Bill Amount:</td>
-					<td style="padding: 8px 4px; color: #111827;">₹{frappe.utils.fmt_money(doc.bill_amt)}</td>
-				</tr>
-				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Pending Amount:</td>
-					<td style="padding: 8px 4px; color: #166534; font-weight: 600;">₹{frappe.utils.fmt_money(doc.pending_amt)}</td>
-				</tr>
-				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Assigned Executives:</td>
-					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.executive_1 or "-")}, {frappe.utils.escape_html(doc.executive_2 or "-")}</td>
-				</tr>
-				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Updated By:</td>
-					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(updated_by)}</td>
+					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Payment Status:</td>
+					<td style="padding: 8px 4px; color: #166534; font-weight: 600;">{frappe.utils.escape_html(doc.payment_status or "Payment Received")}</td>
 				</tr>
 			</table>
 
-			<div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
-				<div style="font-weight: 600; margin-bottom: 4px; color: #374151;">Follow-up Remark:</div>
-				<div style="white-space: pre-wrap; color: #111827;">{frappe.utils.escape_html(str(remark or "").strip())}</div>
-				{attachment_html}
-			</div>
+			{attachment_html}
 
 			<div style="margin-top: 18px;">
 				<a href="{doc_link}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 500;">
