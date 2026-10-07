@@ -140,7 +140,10 @@
    "fieldname": "is_tds",
    "fieldtype": "Select",
    "label": "Is TDS",
-   "options": "No\nYes"
+   "options": "No\nYes",
+   "in_filter": 1,
+   "in_standard_filter": 1,
+   "in_list_view": 1
   },
   {
    "fieldname": "assignment_section",
