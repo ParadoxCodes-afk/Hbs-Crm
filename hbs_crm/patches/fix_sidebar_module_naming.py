@@ -26,3 +26,14 @@ def execute():
 			SET module = 'Hbs Crm'
 			WHERE name = 'Hbs Tally Renewal' AND module = 'hbs_crm'
 		""")
+
+	if frappe.db.table_exists("Kanban Board Field"):
+		frappe.db.sql("""
+			DELETE FROM `tabKanban Board Field`
+			WHERE name = '2qjupsj5er'
+		""")
+		if frappe.db.table_exists("Kanban Board"):
+			frappe.db.sql("""
+				DELETE FROM `tabKanban Board Field`
+				WHERE parent NOT IN (SELECT name FROM `tabKanban Board`)
+			""")
