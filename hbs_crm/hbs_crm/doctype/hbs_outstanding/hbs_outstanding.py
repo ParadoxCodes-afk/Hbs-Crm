@@ -47,15 +47,15 @@ class HbsOutstanding(Document):
 							title=_("Read-Only Restricted")
 						)
 
+		# Reset billing_notified if payment status changed away from Payment Received
+		if hasattr(self, "billing_notified"):
+			if self.payment_status != "Payment Received":
+				self.billing_notified = 0
+			elif self.is_new() or (self.get_doc_before_save() and self.get_doc_before_save().get("payment_status") != "Payment Received"):
+				self.billing_notified = 0
+
 		self.record_remark_activity()
 		self.render_activity_html()
-
-	def on_update(self):
-		# Notify billing executive if payment_status changed directly via Desk form save
-		if not getattr(self.flags, "in_log_remark", False) and self.payment_status == "Payment Received":
-			before_doc = self.get_doc_before_save()
-			if not before_doc or before_doc.get("payment_status") != "Payment Received":
-				send_payment_received_notification(self, remark=self.last_remark, user=frappe.session.user)
 
 	def record_remark_activity(self):
 		"""Record new remark in Hbs Lead Activity child table."""
@@ -267,15 +267,14 @@ def log_remark(name, remark, payment_status=None, status=None, attachment=None):
 	chosen_ps = payment_status if payment_status is not None else status
 	if chosen_ps is not None:
 		doc.payment_status = chosen_ps.strip()
+		if doc.payment_status != "Payment Received" and hasattr(doc, "billing_notified"):
+			doc.billing_notified = 0
 
 	doc.render_activity_html()
 
 	doc.flags.in_log_remark = True
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
-
-	if doc.payment_status == "Payment Received":
-		send_payment_received_notification(doc, remark=str(remark).strip(), attachment=attachment, user=user)
 
 	return {
 		"status": "success",
@@ -286,93 +285,129 @@ def log_remark(name, remark, payment_status=None, status=None, attachment=None):
 	}
 
 
-def send_payment_received_notification(doc, remark=None, attachment=None, user=None):
-	"""Send email to billing executive only when payment status is Payment Received."""
-	if doc.payment_status != "Payment Received":
-		return
+@frappe.whitelist()
+def send_daily_payment_received_digest():
+	"""Send 12:00 AM daily digest email to billing executive for outstanding bills where payment status is Payment Received."""
+	settings = frappe.get_single("Hbs CRM Settings")
+	billing_email = getattr(settings, "billing_executive_email", None)
+	if not billing_email or not str(billing_email).strip():
+		return {"status": "skipped", "reason": "No billing executive email configured"}
 
-	try:
-		settings = frappe.get_single("Hbs CRM Settings")
-		billing_email = getattr(settings, "billing_executive_email", None)
-		if not billing_email or not str(billing_email).strip():
-			return
+	billing_email = str(billing_email).strip()
+	recipients = [e.strip() for e in billing_email.replace(";", ",").split(",") if e.strip()]
+	if not recipients:
+		return {"status": "skipped", "reason": "No valid recipients"}
 
-		billing_email = str(billing_email).strip()
-		recipients = [e.strip() for e in billing_email.replace(";", ",").split(",") if e.strip()]
-		if not recipients:
-			return
+	# Fetch un-notified records with Payment Status == 'Payment Received'
+	has_col = frappe.db.has_column("Hbs Outstanding", "billing_notified")
+	if has_col:
+		records = frappe.db.sql("""
+			SELECT `name`, `bill_no`, `bill_date`, `party_name`, `executive_1`, `payment_status`, `last_remark`
+			FROM `tabHbs Outstanding`
+			WHERE `payment_status` = 'Payment Received'
+			  AND (`billing_notified` = 0 OR `billing_notified` IS NULL)
+			ORDER BY `bill_date` DESC, `name` ASC
+		""", as_dict=True)
+	else:
+		records = frappe.db.sql("""
+			SELECT `name`, `bill_no`, `bill_date`, `party_name`, `executive_1`, `payment_status`, `last_remark`
+			FROM `tabHbs Outstanding`
+			WHERE `payment_status` = 'Payment Received'
+			  AND `modified` >= DATE_SUB(NOW(), INTERVAL 1 DAY)
+			ORDER BY `bill_date` DESC, `name` ASC
+		""", as_dict=True)
 
-		subject = f"Payment Received: {doc.bill_no} - {doc.party_name}"
-		site_url = frappe.utils.get_url()
-		doc_link = f"{site_url}/app/hbs-outstanding/{doc.name}"
+	if not records:
+		return {"status": "skipped", "reason": "No pending Payment Received records found"}
 
-		attachment_html = ""
-		attachments = []
-		if attachment and str(attachment).strip():
-			att_url = str(attachment).strip()
-			full_att_url = att_url if att_url.startswith("http") else f"{site_url}{att_url}"
-			file_name = att_url.split("/")[-1]
-			attachment_html = f'''
-				<div style="margin-top: 12px; padding: 8px 12px; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 6px;">
-					<b>Client Screenshot / Attachment:</b><br/>
-					<a href="{full_att_url}" target="_blank" style="color: #0284c7; text-decoration: underline; font-weight: 500;">
-						📎 {frappe.utils.escape_html(file_name)}
-					</a>
-				</div>
-			'''
-			attachments.append({"file_url": att_url})
+	site_url = frappe.utils.get_url()
+	today_str = frappe.utils.format_date(frappe.utils.nowdate(), "dd/MM/yyyy")
 
-		message = f'''
-		<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1f2937; line-height: 1.5; font-size: 14px;">
-			<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
-				<h3 style="margin: 0 0 4px 0; color: #166534; font-size: 16px;">Payment Received Notification</h3>
-				<p style="margin: 0; color: #15803d; font-size: 13px;">Payment status updated to <b>Payment Received</b> for bill <b>{frappe.utils.escape_html(doc.bill_no or "")}</b>.</p>
-			</div>
+	# Build rows matching strictly: Bill Number, Bill Date, Party Name, Executive 1, Payment Status
+	rows_html = []
+	attachments = []
+	for r in records:
+		doc_link = f"{site_url}/app/hbs-outstanding/{r.name}"
+		b_no = frappe.utils.escape_html(r.bill_no or r.name or "-")
+		b_date = frappe.utils.format_date(r.bill_date, "dd/MM/yyyy") if r.bill_date else "-"
+		p_name = frappe.utils.escape_html(r.party_name or "-")
+		ex1 = frappe.utils.escape_html(r.executive_1 or "-")
+		p_status = frappe.utils.escape_html(r.payment_status or "Payment Received")
 
-			<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px;">
-				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563; width: 35%;">Bill Number:</td>
-					<td style="padding: 8px 4px; color: #111827; font-weight: 600;">{frappe.utils.escape_html(doc.bill_no or "-")}</td>
-				</tr>
-				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Bill Date:</td>
-					<td style="padding: 8px 4px; color: #111827;">{doc.bill_date or "-"}</td>
-				</tr>
-				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Party Name:</td>
-					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.party_name or "-")}</td>
-				</tr>
-				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Executive 1:</td>
-					<td style="padding: 8px 4px; color: #111827;">{frappe.utils.escape_html(doc.executive_1 or "-")}</td>
-				</tr>
-				<tr style="border-bottom: 1px solid #e5e7eb;">
-					<td style="padding: 8px 4px; font-weight: 600; color: #4b5563;">Payment Status:</td>
-					<td style="padding: 8px 4px; color: #166534; font-weight: 600;">{frappe.utils.escape_html(doc.payment_status or "Payment Received")}</td>
-				</tr>
-			</table>
+		att_note = ""
+		if r.last_remark and "Attachment: " in r.last_remark:
+			att_url = r.last_remark.split("Attachment: ")[1].strip().split("\n")[0].strip()
+			if att_url:
+				full_att = att_url if att_url.startswith("http") else f"{site_url}{att_url}"
+				att_name = att_url.split("/")[-1]
+				att_note = f'<br/><a href="{full_att}" target="_blank" style="font-size: 11px; color: #0284c7;">📎 {frappe.utils.escape_html(att_name)}</a>'
+				attachments.append({"file_url": att_url})
 
-			{attachment_html}
+		rows_html.append(f'''
+			<tr style="border-bottom: 1px solid #e5e7eb;">
+				<td style="padding: 10px 8px; font-weight: 500;">
+					<a href="{doc_link}" target="_blank" style="color: #2563eb; text-decoration: underline;">
+						{b_no}
+					</a>{att_note}
+				</td>
+				<td style="padding: 10px 8px; color: #4b5563;">{b_date}</td>
+				<td style="padding: 10px 8px; color: #111827; font-weight: 500;">{p_name}</td>
+				<td style="padding: 10px 8px; color: #4b5563;">{ex1}</td>
+				<td style="padding: 10px 8px; color: #166534; font-weight: 600;">{p_status}</td>
+			</tr>
+		''')
 
-			<div style="margin-top: 18px;">
-				<a href="{doc_link}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 500;">
-					Open Outstanding Record in CRM →
-				</a>
-			</div>
+	tbody_content = "".join(rows_html)
+	subject = f"Payment Received Report ({len(records)} Bills) - {today_str}"
+	message = f'''
+	<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1f2937; line-height: 1.5; font-size: 14px;">
+		<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
+			<h3 style="margin: 0 0 4px 0; color: #166534; font-size: 16px;">Daily Payment Received Summary</h3>
+			<p style="margin: 0; color: #15803d; font-size: 13px;">The following <b>{len(records)}</b> bill(s) have payment status marked as <b>Payment Received</b> as of {today_str}.</p>
 		</div>
-		'''
 
-		frappe.sendmail(
-			recipients=recipients,
-			subject=subject,
-			message=message,
-			attachments=attachments if attachments else None,
-			reference_doctype="Hbs Outstanding",
-			reference_name=doc.name,
-			delayed=False
-		)
-	except Exception as e:
-		frappe.log_error(f"Failed to send billing executive email: {e}", "Billing Notification Error")
+		<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px;">
+			<thead>
+				<tr style="background-color: #f9fafb; border-bottom: 2px solid #e5e7eb; text-align: left;">
+					<th style="padding: 10px 8px; font-weight: 600; color: #374151;">Bill Number</th>
+					<th style="padding: 10px 8px; font-weight: 600; color: #374151;">Bill Date</th>
+					<th style="padding: 10px 8px; font-weight: 600; color: #374151;">Party Name</th>
+					<th style="padding: 10px 8px; font-weight: 600; color: #374151;">Executive 1</th>
+					<th style="padding: 10px 8px; font-weight: 600; color: #374151;">Payment Status</th>
+				</tr>
+			</thead>
+			<tbody>
+				{tbody_content}
+			</tbody>
+		</table>
+
+		<div style="margin-top: 18px;">
+			<a href="{site_url}/app/hbs-outstanding" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 500;">
+				View Outstanding in CRM →
+			</a>
+		</div>
+	</div>
+	'''
+
+	frappe.sendmail(
+		recipients=recipients,
+		subject=subject,
+		message=message,
+		attachments=attachments if attachments else None,
+		delayed=False
+	)
+
+	# Mark records as notified if column exists
+	if has_col:
+		doc_names = [r.name for r in records]
+		frappe.db.sql("""
+			UPDATE `tabHbs Outstanding`
+			SET `billing_notified` = 1
+			WHERE `name` IN %s
+		""", [tuple(doc_names)])
+		frappe.db.commit()
+
+	return {"status": "success", "sent_count": len(records), "recipients": recipients}
 
 
 @frappe.whitelist()

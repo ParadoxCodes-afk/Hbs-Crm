@@ -161,6 +161,11 @@ after_migrate = "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.backfill_last
 # ---------------
 
 scheduler_events = {
+	"cron": {
+		"0 0 * * *": [
+			"hbs_crm.hbs_crm.doctype.hbs_outstanding.hbs_outstanding.send_daily_payment_received_digest"
+		]
+	},
 	"daily": [
 		"hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.send_daily_pending_followup_digest"
 	]

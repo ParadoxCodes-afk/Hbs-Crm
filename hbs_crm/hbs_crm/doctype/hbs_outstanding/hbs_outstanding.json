@@ -25,6 +25,7 @@
   "executive_1",
   "executive_2",
   "last_sync_date",
+  "billing_notified",
   "activity_section",
   "remarks",
   "last_remark",
@@ -211,6 +212,14 @@
    "fieldname": "activity",
    "fieldtype": "HTML",
    "label": "All Activities"
+  },
+  {
+   "default": "0",
+   "fieldname": "billing_notified",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Billing Notified",
+   "no_copy": 1
   }
  ],
  "grid_page_length": 50,
