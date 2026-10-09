@@ -404,3 +404,294 @@ def sync_outstanding(data=None, **kwargs):
 		"deleted": 0,
 		"companies": list(incoming_companies)
 	}
+
+
+@frappe.whitelist(methods=["POST"])
+def sync_incentives(data=None, **kwargs):
+	"""Ingest Sales, Credit Notes & Incentives from billing system.
+	- Schema matches 'Hbs Incentive Sheet' flat DocType.
+	- Expands each executive in 'incentive' list into an individual record.
+	- Ignores 'Serial Numbers' loop.
+	- Links 'executive' field to User account.
+	- Idempotent upsert by master_id.
+	"""
+	import json
+	from frappe.utils import flt, now_datetime
+
+	if data is None:
+		for k in ("Incentive", "incentive", "incentives", "data", "records", "sales", "items"):
+			if k in kwargs and kwargs[k]:
+				data = kwargs[k]
+				break
+
+	if data is None and hasattr(frappe, "request") and frappe.request:
+		try:
+			raw_body = frappe.request.get_data(as_text=True)
+			if raw_body:
+				parsed = json.loads(raw_body)
+				if isinstance(parsed, dict):
+					data = parsed.get("data") or parsed.get("records") or parsed.get("incentives") or [parsed]
+				elif isinstance(parsed, list):
+					data = parsed
+		except Exception:
+			pass
+
+	if data is None and hasattr(frappe, "form_dict") and frappe.form_dict:
+		for k in ("data", "records", "incentives", "sales", "items"):
+			if k in frappe.form_dict and frappe.form_dict[k]:
+				val = frappe.form_dict[k]
+				if isinstance(val, str):
+					try:
+						data = json.loads(val)
+					except Exception:
+						pass
+				else:
+					data = val
+				break
+
+	if isinstance(data, str):
+		try:
+			data = json.loads(data)
+		except Exception:
+			frappe.throw(_("Invalid JSON payload passed to sync_incentives."), title=_("Invalid Data"))
+
+	if isinstance(data, dict):
+		data = data.get("data") or data.get("records") or [data]
+
+	if not data or not isinstance(data, list):
+		frappe.throw(_("Payload must be a list of records or {'data': [...]}."), title=_("Invalid Data"))
+
+	# Build active user lookup map
+	users = frappe.db.sql(
+		"SELECT name, email, first_name, last_name, full_name FROM `tabUser` WHERE enabled = 1",
+		as_dict=True
+	)
+	user_map = {}
+	for u in users:
+		if u.name:
+			user_map[u.name.strip().lower()] = u.name
+		if u.email:
+			user_map[u.email.strip().lower()] = u.name
+		if u.first_name:
+			user_map[u.first_name.strip().lower()] = u.name
+		if u.full_name:
+			user_map[u.full_name.strip().lower()] = u.name
+
+	def _clean_amt(val):
+		if val is None:
+			return 0.0
+		s = str(val).strip().replace(",", "")
+		return flt(s)
+
+	now_dt = now_datetime()
+	parsed_rows = []
+	incoming_master_ids = set()
+
+	for voucher in data:
+		if not isinstance(voucher, dict):
+			continue
+
+		master_id = _normalize_key(voucher, "Master Id", "Master ID", "master_id", "Master_Id", "id")
+		company_name = _normalize_key(voucher, "COMPANY NAME", "Company Name", "company_name", "Company")
+		voucher_date = _safe_date(_normalize_key(voucher, "DATE", "Date", "voucher_date", "date"))
+		voucher_type = _normalize_key(voucher, "VCH TYPE", "Voucher Type", "vch_type", "voucher_type", "type")
+		vch_no = _normalize_key(voucher, "VCHNO", "vch no", "vch_no", "voucher_no", "Vch No")
+		party_name = _normalize_key(voucher, "PARTY NAME", "Party Name", "party_name", "Party") or company_name
+		mobile_no = _normalize_key(voucher, "MOBILE", "Mobile No", "Mobile", "mobile_no", "mobile", "phone")
+		email = _normalize_key(voucher, "EMAIL", "Email", "email", "email_id")
+		state = _normalize_key(voucher, "State", "state")
+		pincode = _normalize_key(voucher, "Pincode", "pincode", "Pin Code")
+
+		if master_id is not None:
+			incoming_master_ids.add(str(master_id).strip())
+
+		v_header = {
+			"master_id": str(master_id).strip() if master_id is not None else None,
+			"company_name": str(company_name).strip() if company_name else None,
+			"voucher_date": voucher_date,
+			"voucher_type": str(voucher_type).strip() if voucher_type else None,
+			"vch_no": str(vch_no).strip() if vch_no is not None else None,
+			"party_name": str(party_name).strip() if party_name else None,
+			"mobile_no": str(mobile_no).strip() if mobile_no else None,
+			"email": str(email).strip() if email else None,
+			"state": str(state).strip() if state else None,
+			"pincode": str(pincode).strip() if pincode else None,
+		}
+
+		items = voucher.get("Items") or voucher.get("items")
+		if not items or not isinstance(items, list):
+			# If voucher itself has flat item/incentive keys (e.g. from single row)
+			item_name = _normalize_key(voucher, "Item Name", "item_name")
+			serial_no = _normalize_key(voucher, "Serial No", "serial_no")
+			qty = flt(_normalize_key(voucher, "Qty", "qty") or 0)
+			rate = _clean_amt(_normalize_key(voucher, "Rate", "rate"))
+			amount = _clean_amt(_normalize_key(voucher, "Amount", "amount"))
+			period = _normalize_key(voucher, "period", "Period")
+			from_date = _safe_date(_normalize_key(voucher, "from date", "from_date", "From Date"))
+			to_date = _safe_date(_normalize_key(voucher, "To Date", "to_date", "To Date"))
+			roll_type = _normalize_key(voucher, "Roll Type", "roll_type")
+			exec_raw = _normalize_key(voucher, "Executive", "executive")
+			exec_user = user_map.get(str(exec_raw).strip().lower()) if exec_raw else None
+			actual_amt = _clean_amt(_normalize_key(voucher, "Actual Amt", "actual_amt"))
+			incentive = _clean_amt(_normalize_key(voucher, "Incentive", "incentive"))
+
+			parsed_rows.append({
+				**v_header,
+				"item_name": str(item_name).strip() if item_name else None,
+				"serial_no": str(serial_no).strip() if serial_no else None,
+				"qty": qty,
+				"rate": rate,
+				"amount": amount,
+				"period": str(period).strip() if period else None,
+				"from_date": from_date,
+				"to_date": to_date,
+				"roll_type": str(roll_type).strip() if roll_type else None,
+				"executive": exec_user,
+				"executive_name": str(exec_raw).strip() if exec_raw else None,
+				"actual_amt": actual_amt,
+				"incentive": incentive,
+				"last_sync_date": now_dt
+			})
+			continue
+
+		for it in items:
+			if not isinstance(it, dict):
+				continue
+
+			it_name = _normalize_key(it, "item_name", "Item Name")
+			it_serial = _normalize_key(it, "serial_no", "Serial No")
+			it_qty = flt(_normalize_key(it, "qty", "Qty") or 0)
+			it_rate = _clean_amt(_normalize_key(it, "rate", "Rate"))
+			it_amount = _clean_amt(_normalize_key(it, "amount", "Amount"))
+			it_period = _normalize_key(it, "Period", "period")
+			it_from = _safe_date(_normalize_key(it, "from_date", "from date", "From Date"))
+			it_to = _safe_date(_normalize_key(it, "to_date", "To Date", "to_date"))
+
+			it_base = {
+				**v_header,
+				"item_name": str(it_name).strip() if it_name else None,
+				"serial_no": str(it_serial).strip() if it_serial else None,
+				"qty": it_qty,
+				"rate": it_rate,
+				"amount": it_amount,
+				"period": str(it_period).strip() if it_period else None,
+				"from_date": it_from,
+				"to_date": it_to,
+			}
+
+			incentives = it.get("incentive") or it.get("Incentive")
+			if incentives and isinstance(incentives, list):
+				for inc in incentives:
+					if not isinstance(inc, dict):
+						continue
+					roll_type = _normalize_key(inc, "roll_type", "Roll Type")
+					exec_raw = _normalize_key(inc, "executive", "Executive")
+					exec_user = user_map.get(str(exec_raw).strip().lower()) if exec_raw else None
+					actual_amt = _clean_amt(_normalize_key(inc, "actual_amt", "Actual Amt"))
+					inc_val = _clean_amt(_normalize_key(inc, "incentive", "Incentive"))
+
+					parsed_rows.append({
+						**it_base,
+						"roll_type": str(roll_type).strip() if roll_type else None,
+						"executive": exec_user,
+						"executive_name": str(exec_raw).strip() if exec_raw else None,
+						"actual_amt": actual_amt,
+						"incentive": inc_val,
+						"last_sync_date": now_dt
+					})
+			else:
+				# 1 row even if no incentive list
+				parsed_rows.append({
+					**it_base,
+					"roll_type": None,
+					"executive": None,
+					"executive_name": None,
+					"actual_amt": 0.0,
+					"incentive": 0.0,
+					"last_sync_date": now_dt
+				})
+
+	if not parsed_rows:
+		frappe.throw(_("No valid records found in payload."), title=_("Invalid Data"))
+
+	# Delete existing records for the incoming master_ids to ensure clean, idempotent snapshot
+	if incoming_master_ids:
+		master_id_list = list(incoming_master_ids)
+		for i in range(0, len(master_id_list), 500):
+			chunk = master_id_list[i:i + 500]
+			frappe.db.sql(
+				"DELETE FROM `tabHbs Incentive Sheet` WHERE `master_id` IN %s",
+				[tuple(chunk)]
+			)
+		frappe.db.commit()
+
+	# Batch insert into tabHbs Incentive Sheet
+	BATCH_SIZE = 50
+	inserted_count = 0
+	for i in range(0, len(parsed_rows), BATCH_SIZE):
+		batch = parsed_rows[i:i + BATCH_SIZE]
+		val_tuples = []
+		for r in batch:
+			seq_val = frappe.db.get_next_sequence_val("Hbs Incentive Sheet")
+			val_tuples.append((
+				seq_val,
+				r["master_id"],
+				r["company_name"],
+				r["voucher_date"],
+				r["voucher_type"],
+				r["vch_no"],
+				r["party_name"],
+				r["mobile_no"],
+				r["email"],
+				r["state"],
+				r["pincode"],
+				r["item_name"],
+				r["serial_no"],
+				r["qty"],
+				r["rate"],
+				r["amount"],
+				r["period"],
+				r["from_date"],
+				r["to_date"],
+				r["roll_type"],
+				r["executive"],
+				r["executive_name"],
+				r["actual_amt"],
+				r["incentive"],
+				r["last_sync_date"],
+				now_dt,
+				now_dt,
+				"Administrator",
+				"Administrator",
+				0
+			))
+
+		if val_tuples:
+			placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"] * len(val_tuples))
+			flat_vals = [item for sub in val_tuples for item in sub]
+			frappe.db.sql(f"""
+				INSERT INTO `tabHbs Incentive Sheet` (
+					`name`, `master_id`, `company_name`, `voucher_date`, `voucher_type`, `vch_no`,
+					`party_name`, `mobile_no`, `email`, `state`, `pincode`,
+					`item_name`, `serial_no`, `qty`, `rate`, `amount`, `period`,
+					`from_date`, `to_date`, `roll_type`, `executive`, `executive_name`,
+					`actual_amt`, `incentive`, `last_sync_date`, `creation`, `modified`,
+					`owner`, `modified_by`, `docstatus`
+				) VALUES {placeholders}
+			""", flat_vals)
+		inserted_count += len(batch)
+		frappe.db.commit()
+
+	return {
+		"status": "success",
+		"message": f"Synced {len(parsed_rows)} incentive lines successfully.",
+		"total_vouchers": len(data),
+		"inserted_records": inserted_count,
+		"master_ids": list(incoming_master_ids)
+	}
+
+
+# Alias for sync_sales_cr
+@frappe.whitelist(methods=["POST"])
+def sync_sales_cr(data=None, **kwargs):
+	return sync_incentives(data=data, **kwargs)
