@@ -21,7 +21,10 @@
   "email_body",
   "renewal_email_template_section",
   "renewal_email_subject",
-  "renewal_email_body"
+  "renewal_email_body",
+  "outstanding_email_template_section",
+  "outstanding_email_subject",
+  "outstanding_email_body"
  ],
  "fields": [
   {
@@ -121,6 +124,23 @@
    "fieldname": "renewal_email_body",
    "fieldtype": "Text Editor",
    "label": "Renewal Email Body Template"
+  },
+  {
+   "fieldname": "outstanding_email_template_section",
+   "fieldtype": "Section Break",
+   "label": "Outstanding"
+  },
+  {
+   "default": "Outstanding Payment Reminder - Bill No: {{ doc.bill_no or '' }} ({{ doc.party_name or 'Valued Client' }})",
+   "fieldname": "outstanding_email_subject",
+   "fieldtype": "Data",
+   "label": "Subject"
+  },
+  {
+   "default": "<p>Dear Sir/Madam,</p>\n<p>This is a gentle reminder regarding the outstanding payment details mentioned below:</p>\n<p>\n<b>Company Name :</b> {{ doc.company_name or '' }}<br>\n<b>Party Name:</b> {{ doc.party_name or '' }}<br>\n<b>Invoice Number:</b> {{ doc.bill_no or '' }}<br>\n<b>Pending Since:</b> {{ frappe.utils.format_date(doc.bill_date, \"dd/MM/yyyy\") if doc.bill_date else '' }}<br>\n<b>Outstanding Amount:</b> \u20b9{{ frappe.utils.fmt_money(doc.pending_amt) if doc.pending_amt else '0.00' }}\n</p>\n<p>Kindly arrange to clear the outstanding payment at the earliest.</p>\n<p>\nRegards,<br>\n<b>{{ doc.company_name or '' }}</b><br>\n{{ frappe.db.get_value(\"User\", doc.executive_1, \"full_name\") or doc.executive_1 or logged_in_user.full_name or \"\" }}<br>\n{{ logged_in_user.mobile_no or logged_in_user.phone or \"\" }}\n</p>",
+   "fieldname": "outstanding_email_body",
+   "fieldtype": "Text Editor",
+   "label": "Matter"
   }
  ],
  "issingle": 1,

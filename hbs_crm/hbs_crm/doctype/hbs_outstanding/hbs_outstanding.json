@@ -94,11 +94,10 @@
   {
    "default": "",
    "fieldname": "payment_status",
-   "fieldtype": "Select",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Payment Status",
-   "options": "\nPayment Received",
    "read_only": 1,
    "columns": 1
   },
@@ -262,6 +261,14 @@
    "read": 1,
    "report": 1,
    "role": "All"
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Outstanding Viewer"
   }
  ],
  "row_format": "Dynamic",

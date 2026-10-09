@@ -1,12 +1,12 @@
 {
  "actions": [],
  "allow_import": 1,
- "allow_rename": 0,
  "autoname": "autoincrement",
- "creation": "2026-10-09 13:30:00.000000",
+ "creation": "2026-10-09 13:30:00",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
+ "title_field": "vch_no",
  "field_order": [
   "voucher_details_section",
   "master_id",
@@ -49,8 +49,6 @@
    "fieldname": "master_id",
    "fieldtype": "Data",
    "in_filter": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1,
    "label": "Master ID",
    "search_index": 1
   },
@@ -76,7 +74,7 @@
    "fieldtype": "Date",
    "in_filter": 1,
    "in_list_view": 1,
-   "in_standard_filter": 1,
+   "in_standard_filter": 0,
    "label": "Date",
    "search_index": 1
   },
@@ -111,6 +109,7 @@
   {
    "fieldname": "email",
    "fieldtype": "Data",
+   "in_filter": 1,
    "label": "Email"
   },
   {
@@ -123,6 +122,7 @@
   {
    "fieldname": "pincode",
    "fieldtype": "Data",
+   "in_filter": 1,
    "label": "Pincode"
   },
   {
@@ -230,6 +230,7 @@
   {
    "fieldname": "incentive",
    "fieldtype": "Currency",
+   "in_filter": 1,
    "in_list_view": 1,
    "label": "Incentive Amount"
   },
@@ -241,9 +242,8 @@
   }
  ],
  "grid_page_length": 50,
- "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-09 13:30:00.000000",
+ "modified": "2026-10-09 16:57:49.341529",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Incentive Sheet",

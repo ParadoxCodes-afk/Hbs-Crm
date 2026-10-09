@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import get_datetime
-from hbs_crm.hbs_crm.utils import is_owner_or_admin
+from hbs_crm.hbs_crm.utils import is_owner_or_admin, get_logged_in_user_context
 
 
 class HbsOutstanding(Document):
@@ -14,15 +14,14 @@ class HbsOutstanding(Document):
 		self.render_activity_html()
 
 	def validate(self):
-		# Auto-derive status from pending_amt
-		bill_val = frappe.utils.flt(self.bill_amt)
-		pending_val = frappe.utils.flt(self.pending_amt)
-		if pending_val == 0:
-			self.status = "Cleared"
-		elif bill_val and abs(pending_val) < abs(bill_val):
-			self.status = "Partially Paid"
-		else:
-			self.status = "Pending"
+		# Auto-derive status from pending_amt if not explicitly set
+		if not self.status:
+			bill_val = frappe.utils.flt(self.bill_amt)
+			pending_val = frappe.utils.flt(self.pending_amt)
+			if pending_val == 0:
+				self.status = "Complete"
+			else:
+				self.status = "Pending"
 
 		# Auto-calculate overdue days from current date - due_date
 		if self.due_date:
@@ -171,13 +170,13 @@ class HbsOutstanding(Document):
 
 def get_permission_query_conditions(user=None):
 	"""Permission hook for Hbs Outstanding.
-	- Admin / Owner: Full visibility to all records.
+	- Admin / Owner / Outstanding Viewer: Full visibility to all records.
 	- Sales Executive: Strictly scoped to records where executive_1 or executive_2 matches user.
 	"""
 	if not user:
 		user = frappe.session.user
 
-	if is_owner_or_admin(user):
+	if is_owner_or_admin(user) or "Outstanding Viewer" in frappe.get_roles(user):
 		return ""
 
 	user_escaped = frappe.db.escape(user)
@@ -187,8 +186,8 @@ def get_permission_query_conditions(user=None):
 def has_permission(doc, ptype="read", user=None):
 	"""Permission hook for Hbs Outstanding.
 	- Admin / Owner: Full access (read, write, create, delete).
-	- Sales Executive: Strictly READ-ONLY. No alteration, creation, or deletion.
-	  Can only read if assigned to executive_1 or executive_2.
+	- Outstanding Viewer: Strictly READ-ONLY across all records.
+	- Sales Executive: Strictly READ-ONLY for assigned records (executive_1 or executive_2).
 	"""
 	if not user:
 		user = frappe.session.user
@@ -199,6 +198,9 @@ def has_permission(doc, ptype="read", user=None):
 	# Non-admin users are strictly blocked from alteration, creation, deletion
 	if ptype != "read":
 		return False
+
+	if "Outstanding Viewer" in frappe.get_roles(user):
+		return True
 
 	if not doc:
 		return True
@@ -227,8 +229,10 @@ def get_outstanding_statuses():
 
 
 @frappe.whitelist()
-def log_remark(name, remark, payment_status=None, status=None, attachment=None):
-	"""Log remark for Hbs Outstanding record and update activity timeline, payment_status, and attachments."""
+def log_remark(name, remark, payment_status=None, attachment=None, **kwargs):
+	"""Log remark for Hbs Outstanding record and update activity timeline, payment_status, and attachments.
+	Strictly updates payment_status only — leaves bill status untouched.
+	"""
 	if not name:
 		frappe.throw(_("Record name is required."))
 	if not remark or not str(remark).strip():
@@ -264,9 +268,8 @@ def log_remark(name, remark, payment_status=None, status=None, attachment=None):
 	doc.last_remarks_date = now_d
 	doc.remarks = ""
 
-	chosen_ps = payment_status if payment_status is not None else status
-	if chosen_ps is not None:
-		doc.payment_status = chosen_ps.strip()
+	if payment_status is not None:
+		doc.payment_status = str(payment_status).strip()
 		if doc.payment_status != "Payment Received" and hasattr(doc, "billing_notified"):
 			doc.billing_notified = 0
 
@@ -280,8 +283,7 @@ def log_remark(name, remark, payment_status=None, status=None, attachment=None):
 		"status": "success",
 		"message": _("Follow-up remark logged successfully!"),
 		"activity_html": doc.activity,
-		"payment_status": doc.payment_status,
-		"status": doc.status
+		"payment_status": doc.payment_status
 	}
 
 
@@ -414,3 +416,156 @@ def get_activity_html(name):
 	doc = frappe.get_doc("Hbs Outstanding", name)
 	doc.render_activity_html()
 	return doc.activity
+
+
+@frappe.whitelist()
+def get_rendered_outstanding_email_template(outstanding_name):
+	"""Render email subject and body template from Hbs CRM Email Settings for the given outstanding bill."""
+	doc = frappe.get_doc("Hbs Outstanding", outstanding_name)
+	settings = frappe.get_doc("Hbs CRM Email Settings", ignore_permissions=True)
+
+	logged_in_user_dict = get_logged_in_user_context()
+
+	subject_template = getattr(settings, "outstanding_email_subject", None) or "Outstanding Payment Reminder - Bill No: {{ doc.bill_no or '' }} ({{ doc.party_name or 'Valued Client' }})"
+	subject = frappe.render_template(subject_template, {"doc": doc, "logged_in_user": logged_in_user_dict})
+
+	fallback_body = (
+		"<p>Dear Sir/Madam,</p>"
+		"<p>This is a gentle reminder regarding the outstanding payment details mentioned below:</p>"
+		"<p>"
+		"<b>Company Name :</b> {{ doc.company_name or '' }}<br>"
+		"<b>Party Name:</b> {{ doc.party_name or '' }}<br>"
+		"<b>Invoice Number:</b> {{ doc.bill_no or '' }}<br>"
+		"<b>Pending Since:</b> {{ frappe.utils.format_date(doc.bill_date, 'dd/MM/yyyy') if doc.bill_date else '' }}<br>"
+		"<b>Outstanding Amount:</b> ₹{{ frappe.utils.fmt_money(doc.pending_amt) if doc.pending_amt else '0.00' }}"
+		"</p>"
+		"<p>Kindly arrange to clear the outstanding payment at the earliest.</p>"
+		"<p>"
+		"Regards,<br>"
+		"<b>{{ doc.company_name or '' }}</b><br>"
+		"{{ frappe.db.get_value('User', doc.executive_1, 'full_name') or doc.executive_1 or logged_in_user.full_name or '' }}<br>"
+		"{{ logged_in_user.mobile_no or logged_in_user.phone or '' }}"
+		"</p>"
+	)
+	body_template = getattr(settings, "outstanding_email_body", None) or fallback_body
+	message = frappe.render_template(body_template, {"doc": doc, "logged_in_user": logged_in_user_dict})
+
+	# Discover client contact email if available
+	client_email = ""
+	if doc.party_name:
+		try:
+			contacts = frappe.db.sql("""
+				SELECT c.email_id FROM `tabContact` c
+				INNER JOIN `tabDynamic Link` dl ON dl.parent = c.name
+				WHERE dl.link_name = %s AND c.email_id IS NOT NULL AND c.email_id != ''
+				LIMIT 1
+			""", (doc.party_name,), as_dict=True)
+			if contacts:
+				client_email = contacts[0].email_id
+		except Exception:
+			pass
+
+		if not client_email:
+			try:
+				lead_email = frappe.db.get_value("Hbs Crm Lead", {"company_name": doc.party_name}, "contact_email") or \
+							 frappe.db.get_value("Hbs Crm Lead", {"contact_name": doc.party_name}, "contact_email")
+				if lead_email:
+					client_email = lead_email
+			except Exception:
+				pass
+
+	user_email = logged_in_user_dict.get("email") or frappe.db.get_value("User", frappe.session.user, "email") or (frappe.session.user if frappe.session and "@" in str(frappe.session.user) else "")
+
+	return {
+		"subject": subject,
+		"message": message,
+		"from_email": settings.email_id or "tally@hbsmail.in",
+		"sender_name": settings.sender_name or "HBS Accounts Team",
+		"cc_email": user_email,
+		"to_email": client_email
+	}
+
+
+@frappe.whitelist()
+def send_manual_outstanding_email(outstanding_name, to_email, subject, message, cc_email=None, from_email=None, sender_name=None, extra_attachments=None):
+	"""Backend endpoint for the interactive 'Send email to client' dialog for Hbs Outstanding."""
+	import json
+	doc = frappe.get_doc("Hbs Outstanding", outstanding_name)
+	if not to_email:
+		frappe.throw(_("Recipient 'To' Email is required."))
+
+	if not cc_email:
+		user_dict = get_logged_in_user_context()
+		cc_email = user_dict.get("email") or frappe.db.get_value("User", frappe.session.user, "email") or (frappe.session.user if frappe.session and "@" in str(frappe.session.user) else None)
+
+	display_name = sender_name or "HBS Accounts Team"
+	email_addr = from_email or "tally@hbsmail.in"
+
+	if frappe.db.exists("Hbs CRM Email Settings"):
+		settings = frappe.get_doc("Hbs CRM Email Settings")
+		if not from_email and settings.email_id:
+			email_addr = settings.email_id
+		if not sender_name and settings.sender_name:
+			display_name = settings.sender_name
+
+	sender = f"{display_name} <{email_addr}>"
+	attachments = []
+
+	# Process extra uploaded attachments (Excel, PDF, Word, Images, etc.)
+	if extra_attachments:
+		if isinstance(extra_attachments, str):
+			try:
+				extra_attachments = json.loads(extra_attachments)
+			except Exception:
+				extra_attachments = [extra_attachments]
+
+		for file_url in extra_attachments:
+			if not file_url or not isinstance(file_url, str):
+				continue
+			file_url = file_url.strip()
+			if not file_url:
+				continue
+			try:
+				file_names = frappe.get_all("File", filters={"file_url": file_url}, fields=["name", "file_name"])
+				if file_names:
+					file_doc = frappe.get_doc("File", file_names[0].name)
+					attachments.append({
+						"fname": file_doc.file_name,
+						"fcontent": file_doc.get_content()
+					})
+			except Exception as e:
+				frappe.log_error(f"Failed to attach file {file_url}: {str(e)}", "Outstanding Email Attachment Error")
+
+	frappe.sendmail(
+		recipients=[e.strip() for e in to_email.split(",") if e.strip()],
+		cc=[e.strip() for e in cc_email.split(",") if e.strip()] if cc_email else None,
+		sender=sender,
+		reply_to=email_addr,
+		subject=subject,
+		message=message,
+		attachments=attachments if attachments else None,
+		reference_doctype=doc.doctype,
+		reference_name=doc.name,
+		expose_recipients="header",
+		now=True
+	)
+
+	# Record email activity in custom_activities
+	user_email = frappe.session.user or "System"
+	now_dt = frappe.utils.now_datetime()
+	now_d = frappe.utils.nowdate()
+	remark_text = f"Email sent to client ({to_email})\nSubject: {subject}"
+	doc.append("custom_activities", {
+		"user": user_email,
+		"date_time": now_dt,
+		"remark": remark_text
+	})
+	doc.last_remark = remark_text
+	doc.last_remarks_date = now_d
+	doc.render_activity_html()
+	doc.flags.in_log_remark = True
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	return True
+

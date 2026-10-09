@@ -73,6 +73,9 @@ frappe.listview_settings["Hbs Outstanding"] = {
 		}
 	},
 	refresh(listview) {
+		if (listview.columns) {
+			listview.columns = listview.columns.filter(col => !(col.df && (col.df.fieldname === "name" || col.df.label === "ID")));
+		}
 		if (listview.column_max_widths) {
 			listview.column_max_widths["bill_no"] = 110;
 			listview.column_max_widths["bill_date"] = 100;
@@ -94,6 +97,17 @@ frappe.listview_settings["Hbs Outstanding"] = {
 		}
 	},
 	onload(listview) {
+		if (listview.setup_columns) {
+			let orig_setup_columns = listview.setup_columns.bind(listview);
+			listview.setup_columns = function () {
+				orig_setup_columns();
+				this.columns = (this.columns || []).filter(col => !(col.df && (col.df.fieldname === "name" || col.df.label === "ID")));
+			};
+		}
+		if (listview.columns) {
+			listview.columns = listview.columns.filter(col => !(col.df && (col.df.fieldname === "name" || col.df.label === "ID")));
+		}
+
 		if (!frappe.route_options) {
 			const current_filters = listview.filter_area ? listview.filter_area.get() : [];
 			const has_status_filter = current_filters.some(f => f[1] === "status");
@@ -103,6 +117,20 @@ frappe.listview_settings["Hbs Outstanding"] = {
 		}
 
 		frappe.dom.set_style(`
+			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.name,
+			.list-view[data-doctype="Hbs Outstanding"] .list-row-col.name,
+			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col[data-fieldname="name"],
+			.list-view[data-doctype="Hbs Outstanding"] .list-row-col[data-fieldname="name"],
+			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-head .name,
+			.list-view[data-doctype="Hbs Outstanding"] .list-row-head .name,
+			.frappe-list[data-doctype="Hbs Outstanding"] [data-sort-by="name"] {
+				display: none !important;
+				visibility: hidden !important;
+				width: 0 !important;
+				min-width: 0 !important;
+				padding: 0 !important;
+				margin: 0 !important;
+			}
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row,
 			.list-view[data-doctype="Hbs Outstanding"] .list-row,
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-head,

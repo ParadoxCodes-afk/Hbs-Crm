@@ -134,10 +134,22 @@
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "indian-rupee",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Incentive Sheet",
+   "link_to": "Hbs Incentive Sheet",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-10-06 13:05:26.236781",
- "modified_by": "jyoti@hbsmail.in",
+ "modified": "2026-10-09 13:48:07.645774",
+ "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm",
  "owner": "Administrator",
