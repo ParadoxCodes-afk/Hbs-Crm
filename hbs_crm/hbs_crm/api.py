@@ -183,10 +183,10 @@ def sync_outstanding(data=None, **kwargs):
 		ex1_raw = _normalize_key(raw, "Executive1", "executive_1", "Executive 1", "executive1")
 		ex2_raw = _normalize_key(raw, "Executive2", "executive_2", "Executive 2", "executive2")
 		ex1_code = str(ex1_raw or "").strip().upper().replace(".", "").replace(" ", "")
-		if ex1_code == "JS":
+		if ex1_code == "JS" or ex1_code == "js":
 			ex1_user = user_map.get("jyoti@hbsmail.in", "jyoti@hbsmail.in")
 			ex2_user = user_map.get("saniya@hbsmail.in", "saniya@hbsmail.in")
-		elif ex1_code == "AA":
+		elif ex1_code == "AA" or ex1_code == "aa":
 			ex1_user = user_map.get("amrit@hbsmail.in", "amrit@hbsmail.in")
 			ex2_user = user_map.get("aarti@hbsmail.in", "aarti@hbsmail.in")
 		else:
