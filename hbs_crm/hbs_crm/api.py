@@ -6,20 +6,26 @@ from frappe import _
 
 
 def _safe_date(val):
-	"""Parse date safely from string, datetime, or date."""
+	"""Parse date safely from string, datetime, or date, prioritizing Indian DD/MM/YY and DD/MM/YYYY formats."""
 	if not val:
 		return None
+	val_str = str(val).strip()
+	for fmt in (
+		"%d/%m/%y", "%d/%m/%Y",
+		"%d-%m-%y", "%d-%m-%Y",
+		"%Y-%m-%d", "%Y/%m/%d",
+		"%d-%b-%y", "%d-%b-%Y",
+		"%d/%b/%y", "%d/%b/%Y"
+	):
+		try:
+			import datetime
+			return datetime.datetime.strptime(val_str, fmt).date()
+		except Exception:
+			continue
 	try:
 		return frappe.utils.getdate(val)
 	except Exception:
-		# Try DD-MM-YYYY or DD/MM/YYYY
-		val_str = str(val).strip()
-		for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%d-%b-%y", "%d-%b-%Y", "%d/%b/%y", "%d/%b/%Y"):
-			try:
-				import datetime
-				return datetime.datetime.strptime(val_str, fmt).date()
-			except Exception:
-				continue
+		pass
 	return None
 
 
@@ -483,9 +489,20 @@ def sync_incentives(data=None, **kwargs):
 		s = str(val).strip().replace(",", "")
 		return flt(s)
 
+	top_from_date = None
+	for k in ("DataF date", "dataf date", "DataF_date", "dataf_date", "from_date", "From Date", "start_date"):
+		if k in kwargs and kwargs[k]:
+			top_from_date = _safe_date(kwargs[k])
+			break
+		if hasattr(frappe, "form_dict") and frappe.form_dict.get(k):
+			top_from_date = _safe_date(frappe.form_dict.get(k))
+			break
+
 	now_dt = now_datetime()
 	parsed_rows = []
 	incoming_master_ids = set()
+	incoming_from_dates = []
+	incoming_companies = set()
 
 	for voucher in data:
 		if not isinstance(voucher, dict):
@@ -501,6 +518,14 @@ def sync_incentives(data=None, **kwargs):
 		email = _normalize_key(voucher, "EMAIL", "Email", "email", "email_id")
 		state = _normalize_key(voucher, "State", "state")
 		pincode = _normalize_key(voucher, "Pincode", "pincode", "Pin Code")
+
+		# Check for voucher-level DataF date and DataT date
+		dataf_date = _safe_date(_normalize_key(voucher, "DataF date", "dataf date", "DataF_date", "dataf_date", "data_from_date", "from_date", "From Date"))
+		datat_date = _safe_date(_normalize_key(voucher, "DataT date", "datat date", "DataT_date", "datat_date", "data_to_date", "to_date", "To Date"))
+		if dataf_date:
+			incoming_from_dates.append(dataf_date)
+		if company_name:
+			incoming_companies.add(str(company_name).strip())
 
 		if master_id is not None:
 			incoming_master_ids.add(str(master_id).strip())
@@ -527,8 +552,8 @@ def sync_incentives(data=None, **kwargs):
 			rate = _clean_amt(_normalize_key(voucher, "Rate", "rate"))
 			amount = _clean_amt(_normalize_key(voucher, "Amount", "amount"))
 			period = _normalize_key(voucher, "period", "Period")
-			from_date = _safe_date(_normalize_key(voucher, "from date", "from_date", "From Date"))
-			to_date = _safe_date(_normalize_key(voucher, "To Date", "to_date", "To Date"))
+			from_date = _safe_date(_normalize_key(voucher, "from date", "from_date", "From Date")) or dataf_date
+			to_date = _safe_date(_normalize_key(voucher, "To Date", "to_date", "To Date")) or datat_date
 			roll_type = _normalize_key(voucher, "Roll Type", "roll_type")
 			exec_raw = _normalize_key(voucher, "Executive", "executive")
 			exec_user = user_map.get(str(exec_raw).strip().lower()) if exec_raw else None
@@ -564,8 +589,8 @@ def sync_incentives(data=None, **kwargs):
 			it_rate = _clean_amt(_normalize_key(it, "rate", "Rate"))
 			it_amount = _clean_amt(_normalize_key(it, "amount", "Amount"))
 			it_period = _normalize_key(it, "Period", "period")
-			it_from = _safe_date(_normalize_key(it, "from_date", "from date", "From Date"))
-			it_to = _safe_date(_normalize_key(it, "to_date", "To Date", "to_date"))
+			it_from = _safe_date(_normalize_key(it, "from_date", "from date", "From Date")) or dataf_date
+			it_to = _safe_date(_normalize_key(it, "to_date", "To Date", "to_date")) or datat_date
 
 			it_base = {
 				**v_header,
@@ -613,6 +638,37 @@ def sync_incentives(data=None, **kwargs):
 
 	if not parsed_rows:
 		frappe.throw(_("No valid records found in payload."), title=_("Invalid Data"))
+
+	# Determine active period start date (DataF date)
+	period_from = top_from_date or (min(incoming_from_dates) if incoming_from_dates else None)
+
+	# Purge records older than the active period start date (scoped to incoming companies if provided)
+	purged_before_period_count = 0
+	if period_from:
+		if incoming_companies:
+			count_res = frappe.db.sql(
+				"SELECT COUNT(*) FROM `tabHbs Incentive Sheet` WHERE `company_name` IN %s AND `voucher_date` < %s",
+				(tuple(incoming_companies), period_from)
+			)
+			purged_before_period_count = count_res[0][0] if count_res else 0
+			if purged_before_period_count > 0:
+				frappe.db.sql(
+					"DELETE FROM `tabHbs Incentive Sheet` WHERE `company_name` IN %s AND `voucher_date` < %s",
+					(tuple(incoming_companies), period_from)
+				)
+				frappe.db.commit()
+		else:
+			count_res = frappe.db.sql(
+				"SELECT COUNT(*) FROM `tabHbs Incentive Sheet` WHERE `voucher_date` < %s",
+				(period_from,)
+			)
+			purged_before_period_count = count_res[0][0] if count_res else 0
+			if purged_before_period_count > 0:
+				frappe.db.sql(
+					"DELETE FROM `tabHbs Incentive Sheet` WHERE `voucher_date` < %s",
+					(period_from,)
+				)
+				frappe.db.commit()
 
 	# Delete existing records for the incoming master_ids to ensure clean, idempotent snapshot
 	if incoming_master_ids:
@@ -685,6 +741,8 @@ def sync_incentives(data=None, **kwargs):
 	return {
 		"status": "success",
 		"message": f"Synced {len(parsed_rows)} incentive lines successfully.",
+		"period_from": str(period_from) if period_from else None,
+		"purged_before_period": purged_before_period_count,
 		"total_vouchers": len(data),
 		"inserted_records": inserted_count,
 		"master_ids": list(incoming_master_ids)
@@ -695,3 +753,4 @@ def sync_incentives(data=None, **kwargs):
 @frappe.whitelist(methods=["POST"])
 def sync_sales_cr(data=None, **kwargs):
 	return sync_incentives(data=data, **kwargs)
+

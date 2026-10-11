@@ -58,7 +58,8 @@
    "in_filter": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Voucher Type"
+   "label": "Voucher Type",
+   "columns": 1
   },
   {
    "fieldname": "vch_no",
@@ -67,7 +68,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Voucher No",
-   "search_index": 1
+   "search_index": 1,
+   "columns": 1
   },
   {
    "fieldname": "voucher_date",
@@ -76,7 +78,8 @@
    "in_list_view": 1,
    "in_standard_filter": 0,
    "label": "Date",
-   "search_index": 1
+   "search_index": 1,
+   "columns": 1
   },
   {
    "fieldname": "column_break_party",
@@ -88,7 +91,8 @@
    "in_filter": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Company Name"
+   "label": "Company Name",
+   "columns": 1
   },
   {
    "fieldname": "party_name",
@@ -97,7 +101,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Party Name",
-   "search_index": 1
+   "search_index": 1,
+   "columns": 2
   },
   {
    "fieldname": "mobile_no",
@@ -137,7 +142,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Item Name",
-   "search_index": 1
+   "search_index": 1,
+   "columns": 2
   },
   {
    "fieldname": "serial_no",
@@ -146,25 +152,29 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Serial No",
-   "search_index": 1
+   "search_index": 1,
+   "columns": 1
   },
   {
    "fieldname": "qty",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Qty"
+   "label": "Qty",
+   "columns": 1
   },
   {
    "fieldname": "rate",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Rate"
+   "label": "Rate",
+   "columns": 1
   },
   {
    "fieldname": "amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Amount"
+   "label": "Amount",
+   "columns": 1
   },
   {
    "fieldname": "column_break_period",
@@ -200,13 +210,14 @@
    "in_standard_filter": 1,
    "label": "Executive",
    "options": "User",
-   "search_index": 1
+   "search_index": 1,
+   "columns": 1
   },
   {
    "fieldname": "executive_name",
    "fieldtype": "Data",
    "in_filter": 1,
-   "in_list_view": 1,
+   "in_list_view": 0,
    "label": "Executive (Billing)"
   },
   {
@@ -215,7 +226,8 @@
    "in_filter": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "Roll Type"
+   "label": "Roll Type",
+   "columns": 1
   },
   {
    "fieldname": "column_break_incentive",
@@ -225,14 +237,16 @@
    "fieldname": "actual_amt",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Actual Amount"
+   "label": "Actual Amount",
+   "columns": 1
   },
   {
    "fieldname": "incentive",
    "fieldtype": "Currency",
    "in_filter": 1,
    "in_list_view": 1,
-   "label": "Incentive Amount"
+   "label": "Incentive Amount",
+   "columns": 1
   },
   {
    "fieldname": "last_sync_date",
