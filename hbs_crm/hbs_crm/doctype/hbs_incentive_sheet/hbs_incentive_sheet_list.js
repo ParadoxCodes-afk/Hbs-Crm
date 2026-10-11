@@ -230,6 +230,10 @@ frappe.listview_settings["Hbs Incentive Sheet"] = {
 			listview.page.page_actions.prepend($date_wrapper);
 		}
 
+		listview.page.add_inner_button(__("Incentive Summary"), function () {
+			frappe.set_route("query-report", "Incentive Summary");
+		});
+
 		check_if_owner_or_admin(function (is_owner_admin) {
 			if (is_owner_admin) {
 				is_admin_or_owner = true;

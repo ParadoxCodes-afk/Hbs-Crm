@@ -95,6 +95,21 @@ frappe.listview_settings["Hbs Outstanding"] = {
 				listview.apply_column_widths();
 			}
 		}
+
+		// Ensure standard filter reflects latest options if updated
+		let meta = frappe.get_meta("Hbs Outstanding");
+		let df = meta && meta.fields && meta.fields.find(f => f.fieldname === "payment_status");
+		let field = listview.page && listview.page.fields_dict && listview.page.fields_dict["payment_status"];
+		if (field && df && df.options && field.df && field.df.options !== df.options) {
+			let cur = field.get_value();
+			if (field.set_options) {
+				field.set_options(df.options);
+			} else {
+				field.df.options = df.options;
+				field.refresh && field.refresh();
+			}
+			if (cur) field.set_value(cur);
+		}
 	},
 	onload(listview) {
 		if (listview.setup_columns) {
@@ -115,6 +130,35 @@ frappe.listview_settings["Hbs Outstanding"] = {
 				listview.filter_area.add([[listview.doctype, "status", "=", "Pending"]]);
 			}
 		}
+
+		// Dynamically sync payment_status filter options from Hbs CRM Settings
+		frappe.call({
+			method: "hbs_crm.hbs_crm.doctype.hbs_outstanding.hbs_outstanding.get_outstanding_statuses",
+			callback: function (r) {
+				if (r.message && r.message.length) {
+					let opts_str = r.message.join("\n");
+					let meta = frappe.get_meta("Hbs Outstanding");
+					let df = meta && meta.fields && meta.fields.find(f => f.fieldname === "payment_status");
+					if (df) {
+						df.options = opts_str;
+					}
+
+					let field = listview.page && listview.page.fields_dict && listview.page.fields_dict["payment_status"];
+					if (field) {
+						let cur = field.get_value();
+						field.df.options = opts_str;
+						if (field.set_options) {
+							field.set_options(opts_str);
+						} else {
+							field.refresh && field.refresh();
+						}
+						if (cur) {
+							field.set_value(cur);
+						}
+					}
+				}
+			}
+		});
 
 		frappe.dom.set_style(`
 			.frappe-list[data-doctype="Hbs Outstanding"] .list-row-col.name,

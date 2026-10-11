@@ -146,6 +146,18 @@
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "file-text",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Incentive Summary",
+   "link_to": "Incentive Summary",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
   }
  ],
  "modified": "2026-10-09 13:48:07.645774",
