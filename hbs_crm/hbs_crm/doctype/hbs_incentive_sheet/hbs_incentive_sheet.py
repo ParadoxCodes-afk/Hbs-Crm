@@ -16,13 +16,13 @@ def is_owner_or_admin(user=None):
 
 def get_permission_query_conditions(user=None):
 	"""Permission hook for Hbs Incentive Sheet.
-	- Admin / Manager / Owner: Full access to all incentive records.
+	- Admin / Manager / Owner / Incentive Viewer: Full access to all incentive records.
 	- Sales Executive: Strictly scoped to their own records where executive == user.
 	"""
 	if not user:
 		user = frappe.session.user
 
-	if is_owner_or_admin(user):
+	if is_owner_or_admin(user) or "Incentive Viewer" in frappe.get_roles(user):
 		return ""
 
 	user_escaped = frappe.db.escape(user)
@@ -32,6 +32,7 @@ def get_permission_query_conditions(user=None):
 def has_permission(doc, ptype="read", user=None):
 	"""Permission hook for Hbs Incentive Sheet.
 	- Admin / Owner: Full access (read, write, create, delete).
+	- Incentive Viewer: Strictly READ-ONLY across all records.
 	- Sales Executive: Strictly READ-ONLY for their own records.
 	"""
 	if not user:
@@ -43,6 +44,9 @@ def has_permission(doc, ptype="read", user=None):
 	if ptype != "read":
 		return False
 
+	if "Incentive Viewer" in frappe.get_roles(user):
+		return True
+
 	if not doc:
 		return True
 
@@ -52,3 +56,39 @@ def has_permission(doc, ptype="read", user=None):
 
 class HbsIncentiveSheet(Document):
 	pass
+
+def ensure_incentive_viewer_role_and_profile():
+	"""Ensure Role 'Incentive Viewer' and Role Profile 'Incentive Viewer' exist with desk access."""
+	try:
+		if not frappe.db.exists("Role", "Incentive Viewer"):
+			role_doc = frappe.get_doc({
+				"doctype": "Role",
+				"role_name": "Incentive Viewer",
+				"desk_access": 1
+			})
+			role_doc.insert(ignore_permissions=True)
+		else:
+			frappe.db.set_value("Role", "Incentive Viewer", "desk_access", 1)
+
+		if not frappe.db.exists("Role Profile", "Incentive Viewer"):
+			rp = frappe.get_doc({
+				"doctype": "Role Profile",
+				"role_profile": "Incentive Viewer",
+				"roles": [
+					{"role": "Incentive Viewer"},
+					{"role": "Desk User"},
+					{"role": "All"}
+				]
+			})
+			rp.insert(ignore_permissions=True)
+		else:
+			rp = frappe.get_doc("Role Profile", "Incentive Viewer")
+			existing_roles = {r.role for r in rp.roles}
+			for r_name in ("Incentive Viewer", "Desk User", "All"):
+				if r_name not in existing_roles:
+					rp.append("roles", {"role": r_name})
+			rp.save(ignore_permissions=True)
+
+		frappe.db.commit()
+	except Exception:
+		pass

@@ -12,6 +12,9 @@
   "company_name",
   "bill_date",
   "party_name",
+  "contact_person",
+  "contact_number",
+  "email_id",
   "status",
   "payment_status",
   "column_break_amounts",
@@ -67,6 +70,21 @@
    "label": "Party Name",
    "reqd": 1,
    "search_index": 1
+  },
+  {
+   "fieldname": "contact_person",
+   "fieldtype": "Data",
+   "label": "Contact Person"
+  },
+  {
+   "fieldname": "contact_number",
+   "fieldtype": "Data",
+   "label": "Contact Number"
+  },
+  {
+   "fieldname": "email_id",
+   "fieldtype": "Data",
+   "label": "Email id"
   },
   {
    "columns": 1,

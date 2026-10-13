@@ -97,7 +97,10 @@ add_to_apps_screen = [
 
 # before_install = "hbs_crm.install.before_install"
 # after_install = "hbs_crm.install.after_install"
-after_migrate = "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.backfill_last_remarks"
+after_migrate = [
+	"hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.backfill_last_remarks",
+	"hbs_crm.hbs_crm.doctype.hbs_incentive_sheet.hbs_incentive_sheet.ensure_incentive_viewer_role_and_profile"
+]
 
 # Uninstallation
 # ------------

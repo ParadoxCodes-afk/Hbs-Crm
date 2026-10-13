@@ -452,7 +452,9 @@ def get_rendered_outstanding_email_template(outstanding_name):
 
 	# Discover client contact email if available
 	client_email = ""
-	if doc.party_name:
+	if getattr(doc, "email_id", None) and str(doc.email_id).strip():
+		client_email = str(doc.email_id).strip()
+	elif doc.party_name:
 		try:
 			contacts = frappe.db.sql("""
 				SELECT c.email_id FROM `tabContact` c

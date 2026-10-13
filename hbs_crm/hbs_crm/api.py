@@ -166,6 +166,15 @@ def sync_outstanding(data=None, **kwargs):
 		party_name = _normalize_key(raw, "party Name", "party_name", "Party Name", "PartyName", "Party", "party", "customer_name", "Customer Name", "Customer", "customer", "Particulars", "particulars", "Ledger Name", "ledger_name") or "Unknown Party"
 		party_name_clean = str(party_name).strip() or "Unknown Party"
 
+		contact_person = _normalize_key(raw, "Contact Person", "contact_person", "ContactPerson", "contact_name", "Contact Name", "person", "Person", "contact", "Contact")
+		contact_person_clean = str(contact_person).strip() if contact_person else None
+
+		contact_number = _normalize_key(raw, "Contact Number", "contact_number", "ContactNo", "contact_no", "Contact No", "mobile", "Mobile", "mobile_no", "Mobile No", "phone", "Phone", "contact_phone")
+		contact_number_clean = str(contact_number).strip() if contact_number else None
+
+		email_id = _normalize_key(raw, "Email id", "email_id", "Email Id", "Email ID", "Email", "email", "email_address", "Email Address", "mail", "Mail")
+		email_id_clean = str(email_id).strip() if email_id else None
+
 		company_name = _normalize_key(raw, "Company Name", "company_name", "Company", "company", "Company_Name", "comp_name")
 		company_name_clean = str(company_name or "").strip()
 
@@ -206,6 +215,9 @@ def sync_outstanding(data=None, **kwargs):
 			"bill_no": bill_no_clean,
 			"bill_date": bill_date,
 			"party_name": party_name_clean,
+			"contact_person": contact_person_clean,
+			"contact_number": contact_number_clean,
+			"email_id": email_id_clean,
 			"company_name": company_name_clean,
 			"bill_amt": bill_amt,
 			"pending_amt": pending_amt,
@@ -339,6 +351,9 @@ def sync_outstanding(data=None, **kwargs):
 				UPDATE `tabHbs Outstanding`
 				SET `bill_date` = %(bill_date)s,
 					`party_name` = %(party_name)s,
+					`contact_person` = %(contact_person)s,
+					`contact_number` = %(contact_number)s,
+					`email_id` = %(email_id)s,
 					`company_name` = %(company_name)s,
 					`bill_amt` = %(bill_amt)s,
 					`pending_amt` = %(pending_amt)s,
@@ -369,6 +384,9 @@ def sync_outstanding(data=None, **kwargs):
 				seq_val,
 				r["bill_no"],
 				r["party_name"],
+				r["contact_person"],
+				r["contact_number"],
+				r["email_id"],
 				r["company_name"],
 				r["bill_date"],
 				r["due_date"],
@@ -387,11 +405,12 @@ def sync_outstanding(data=None, **kwargs):
 				0
 			))
 		if val_tuples:
-			placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"] * len(val_tuples))
+			placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"] * len(val_tuples))
 			flat_vals = [item for sub in val_tuples for item in sub]
 			frappe.db.sql(f"""
 				INSERT INTO `tabHbs Outstanding` (
-					`name`, `bill_no`, `party_name`, `company_name`, `bill_date`, `due_date`,
+					`name`, `bill_no`, `party_name`, `contact_person`, `contact_number`, `email_id`,
+					`company_name`, `bill_date`, `due_date`,
 					`bill_amt`, `pending_amt`, `overdue_days`, `is_tds`, `executive_1`,
 					`executive_2`, `status`, `last_sync_date`, `creation`, `modified`,
 					`owner`, `modified_by`, `docstatus`

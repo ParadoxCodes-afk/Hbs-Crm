@@ -7,6 +7,7 @@ let default_to_date = moment().endOf("month").format("YYYY-MM-DD");
 frappe.listview_settings["Hbs Incentive Sheet"] = {
 	hide_name_column: true,
 	hide_name_filter: true,
+	add_fields: ["incentive"],
 	filters: [["voucher_date", "Between", [default_from_date, default_to_date]]],
 	refresh(listview) {
 		if (listview.columns) {
@@ -34,8 +35,16 @@ frappe.listview_settings["Hbs Incentive Sheet"] = {
 		if (typeof listview.lock_date_filter_tag === "function") {
 			listview.lock_date_filter_tag();
 		}
+		update_incentive_total_badge(listview);
 	},
 	onload(listview) {
+		if (listview.render) {
+			let orig_render = listview.render.bind(listview);
+			listview.render = function () {
+				orig_render();
+				update_incentive_total_badge(this);
+			};
+		}
 		if (listview.setup_columns) {
 			let orig_setup_columns = listview.setup_columns.bind(listview);
 			listview.setup_columns = function () {
@@ -221,6 +230,10 @@ frappe.listview_settings["Hbs Incentive Sheet"] = {
 				<input type="date" class="form-control input-xs hbs-from-date-input" value="${default_from_date}" style="width: 125px; height: 28px; font-size: 12px; display: inline-block; cursor: pointer; border-radius: 4px;">
 				<span style="font-size: 12px; font-weight: 600; color: var(--text-color);">To:</span>
 				<input type="date" class="form-control input-xs hbs-to-date-input" value="${default_to_date}" style="width: 125px; height: 28px; font-size: 12px; display: inline-block; cursor: pointer; border-radius: 4px;">
+				<div class="hbs-incentive-total-badge" style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; border-radius: 6px; font-size: 12px; font-weight: 600; margin-left: 6px; vertical-align: middle;">
+					<span>Total Incentive:</span>
+					<span class="hbs-total-incentive-amount">₹ 0.00</span>
+				</div>
 			</div>
 		`);
 
@@ -229,6 +242,7 @@ frappe.listview_settings["Hbs Incentive Sheet"] = {
 		} else if (listview.page.page_actions) {
 			listview.page.page_actions.prepend($date_wrapper);
 		}
+		update_incentive_total_badge(listview);
 
 		listview.page.add_inner_button(__("Incentive Summary"), function () {
 			frappe.set_route("query-report", "Incentive Summary");
@@ -554,4 +568,32 @@ function check_if_owner_or_admin(callback) {
 			callback(is_allowed);
 		}
 	});
+}
+
+function update_incentive_total_badge(listview) {
+	if (!listview || !listview.page) return;
+	let total = 0;
+	if (listview.data && Array.isArray(listview.data) && listview.data.length > 0) {
+		for (let i = 0; i < listview.data.length; i++) {
+			let val = flt(listview.data[i].incentive);
+			if (!isNaN(val)) {
+				total += val;
+			}
+		}
+	} else {
+		let $wrapper = $(listview.page.wrapper || document);
+		$wrapper.find(".list-row-col[data-fieldname='incentive'], .list-row-col.incentive").each(function () {
+			let txt = ($(this).text() || "").replace(/[^0-9.-]/g, "");
+			let val = flt(txt);
+			if (!isNaN(val)) {
+				total += val;
+			}
+		});
+	}
+	let currency = (frappe.boot && frappe.boot.sysdefaults && frappe.boot.sysdefaults.currency) || "INR";
+	let formatted = typeof format_currency === "function" ? format_currency(total, currency) : "₹ " + total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	let $amount_span = $(listview.page.wrapper || document).find(".hbs-total-incentive-amount");
+	if ($amount_span.length) {
+		$amount_span.text(formatted);
+	}
 }

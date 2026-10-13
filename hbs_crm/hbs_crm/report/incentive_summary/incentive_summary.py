@@ -12,7 +12,7 @@ def execute(filters=None):
 	filters = frappe._dict(filters or {})
 
 	# Strict permission isolation: Sales executives can ONLY see their own records
-	if not is_admin_owner_or_manager(user):
+	if not is_admin_owner_or_manager(user) and "Incentive Viewer" not in frappe.get_roles(user):
 		filters.executive = user
 
 	columns = get_columns()
