@@ -121,28 +121,41 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 			}
 		`);
 
-		if (!frappe.route_options) {
-			frappe.route_options = {};
-		}
-
-		// Default filters for standard user level only (NOT Admin/Owner/System Manager)
+		// Default filters for non-admin/owner users only
 		let user = frappe.session.user || "";
 		let roles = frappe.user_roles || [];
-		let is_admin = user === "Administrator" || user.startsWith("admin@") || user === "admin@hbsmail.in" ||
+		let is_admin_or_owner = user === "Administrator" || user.startsWith("admin@") || user === "admin@hbsmail.in" ||
 			roles.some(r => ["System Manager", "Administrator", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"].includes(r));
 
-		if (!is_admin) {
-			frappe.route_options["status"] = "pending";
-			frappe.route_options["follow_up_date"] = ["<=", frappe.datetime.get_today()];
+		function apply_default_lead_filters() {
+			if (!listview.filter_area) return;
+			const current_filters = listview.filter_area.get() || [];
+			const has_status = current_filters.some(f => f[1] === "status");
+			const has_followup = current_filters.some(f => f[1] === "follow_up_date");
+
+			let default_filters = [];
+			if (!has_status) {
+				default_filters.push(["Hbs Crm Lead", "status", "=", "pending"]);
+			}
+			if (!has_followup) {
+				default_filters.push(["Hbs Crm Lead", "follow_up_date", "<=", frappe.datetime.get_today()]);
+			}
+
+			if (default_filters.length) {
+				listview.filter_area.add(default_filters);
+			}
 		}
 
-		// Clear route_options after load so it does not persist in memory and interfere when user changes filter
-		setTimeout(() => {
-			if (frappe.route_options) {
-				delete frappe.route_options.status;
-				delete frappe.route_options.follow_up_date;
-			}
-		}, 100);
+		if (!is_admin_or_owner && (!frappe.route_options || !Object.keys(frappe.route_options).length)) {
+			frappe.call({
+				method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.check_is_admin_or_owner",
+				callback: function (r) {
+					if (!r.message) {
+						apply_default_lead_filters();
+					}
+				}
+			});
+		}
 
 		// Overdue follow-up alert banner (>= 10 days inactive)
 		frappe.call({
