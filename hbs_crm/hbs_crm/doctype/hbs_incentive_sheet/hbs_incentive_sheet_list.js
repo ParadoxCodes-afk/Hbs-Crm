@@ -71,6 +71,9 @@ frappe.listview_settings["Hbs Incentive Sheet"] = {
 				padding: 0 !important;
 				margin: 0 !important;
 			}
+			.frappe-list[data-doctype="Hbs Incentive Sheet"] .result {
+				overflow-x: auto !important;
+			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-head,
@@ -78,6 +81,7 @@ frappe.listview_settings["Hbs Incentive Sheet"] = {
 				padding-left: 6px !important;
 				padding-right: 6px !important;
 				font-size: 11.5px !important;
+				min-width: max-content !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col {
@@ -92,116 +96,116 @@ frappe.listview_settings["Hbs Incentive Sheet"] = {
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.voucher_date,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="voucher_date"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="voucher_date"] {
-				width: 78px !important;
-				min-width: 72px !important;
-				flex: 0 0 78px !important;
+				width: 90px !important;
+				min-width: 85px !important;
+				flex: 0 0 90px !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.voucher_type,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.voucher_type,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="voucher_type"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="voucher_type"] {
-				width: 70px !important;
-				min-width: 65px !important;
-				flex: 0 0 70px !important;
+				width: 82px !important;
+				min-width: 75px !important;
+				flex: 0 0 82px !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.vch_no,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.vch_no,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="vch_no"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="vch_no"] {
-				width: 95px !important;
-				min-width: 85px !important;
-				flex: 0 0 95px !important;
+				width: 110px !important;
+				min-width: 100px !important;
+				flex: 0 0 110px !important;
 				font-weight: 500 !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.company_name,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.company_name,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="company_name"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="company_name"] {
-				width: 100px !important;
-				min-width: 90px !important;
-				flex: 0 0 100px !important;
+				width: 120px !important;
+				min-width: 110px !important;
+				flex: 0 0 120px !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.party_name,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.party_name,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="party_name"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="party_name"] {
-				min-width: 110px !important;
-				flex: 1 1 125px !important;
+				min-width: 140px !important;
+				flex: 1 1 160px !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.item_name,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.item_name,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="item_name"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="item_name"] {
-				min-width: 110px !important;
-				flex: 1 1 125px !important;
+				min-width: 140px !important;
+				flex: 1 1 160px !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.serial_no,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.serial_no,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="serial_no"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="serial_no"] {
-				width: 80px !important;
-				min-width: 70px !important;
-				flex: 0 0 80px !important;
+				width: 95px !important;
+				min-width: 88px !important;
+				flex: 0 0 95px !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.qty,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.qty,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="qty"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="qty"] {
-				width: 38px !important;
-				min-width: 35px !important;
-				flex: 0 0 38px !important;
+				width: 48px !important;
+				min-width: 42px !important;
+				flex: 0 0 48px !important;
 				text-align: right !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.rate,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.rate,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="rate"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="rate"] {
-				width: 65px !important;
-				min-width: 60px !important;
-				flex: 0 0 65px !important;
+				width: 80px !important;
+				min-width: 72px !important;
+				flex: 0 0 80px !important;
 				text-align: right !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.amount,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.amount,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="amount"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="amount"] {
-				width: 72px !important;
-				min-width: 68px !important;
-				flex: 0 0 72px !important;
+				width: 88px !important;
+				min-width: 80px !important;
+				flex: 0 0 88px !important;
 				text-align: right !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.roll_type,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.roll_type,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="roll_type"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="roll_type"] {
-				width: 78px !important;
-				min-width: 72px !important;
-				flex: 0 0 78px !important;
+				width: 92px !important;
+				min-width: 85px !important;
+				flex: 0 0 92px !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.executive,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.executive,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="executive"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="executive"] {
-				width: 80px !important;
-				min-width: 75px !important;
-				flex: 0 0 80px !important;
+				width: 100px !important;
+				min-width: 90px !important;
+				flex: 0 0 100px !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.actual_amt,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.actual_amt,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="actual_amt"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="actual_amt"] {
-				width: 72px !important;
-				min-width: 68px !important;
-				flex: 0 0 72px !important;
+				width: 88px !important;
+				min-width: 80px !important;
+				flex: 0 0 88px !important;
 				text-align: right !important;
 			}
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col.incentive,
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col.incentive,
 			.frappe-list[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="incentive"],
 			.list-view[data-doctype="Hbs Incentive Sheet"] .list-row-col[data-fieldname="incentive"] {
-				width: 75px !important;
-				min-width: 70px !important;
-				flex: 0 0 75px !important;
+				width: 90px !important;
+				min-width: 82px !important;
+				flex: 0 0 90px !important;
 				text-align: right !important;
 				font-weight: 600 !important;
 				color: #166534 !important;
@@ -257,14 +261,21 @@ frappe.listview_settings["Hbs Incentive Sheet"] = {
 		let $from_input = $date_wrapper.find(".hbs-from-date-input");
 		let $to_input = $date_wrapper.find(".hbs-to-date-input");
 
-		function on_date_change() {
+		function on_from_date_change() {
+			let from_val = $from_input.val() || default_from_date;
+			let to_val = moment(from_val).endOf("month").format("YYYY-MM-DD");
+			$to_input.val(to_val);
+			apply_locked_date_filter(from_val, to_val);
+		}
+
+		function on_to_date_change() {
 			let from_val = $from_input.val() || default_from_date;
 			let to_val = $to_input.val() || default_to_date;
 			apply_locked_date_filter(from_val, to_val);
 		}
 
-		$from_input.on("change", on_date_change);
-		$to_input.on("change", on_date_change);
+		$from_input.on("change", on_from_date_change);
+		$to_input.on("change", on_to_date_change);
 
 		function apply_locked_date_filter(from_val, to_val) {
 			if (!listview.filter_area) return;

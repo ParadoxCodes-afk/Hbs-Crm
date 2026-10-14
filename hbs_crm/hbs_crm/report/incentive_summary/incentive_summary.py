@@ -59,6 +59,14 @@ def get_columns():
 			"fieldtype": "Currency",
 			"width": 120,
 		},
+		{
+			"fieldname": "action",
+			"label": _("Action"),
+			"fieldtype": "Data",
+			"width": 140,
+			"sortable": False,
+			"filterable": False,
+		},
 	]
 
 
@@ -90,16 +98,17 @@ def get_data(filters):
 
 	query = f"""
 		SELECT 
-			COALESCE(NULLIF(executive_name, ''), executive, 'Unknown') AS exec_display_name,
-			executive,
-			COALESCE(NULLIF(roll_type, ''), '-') AS roll_type,
-			COALESCE(NULLIF(item_name, ''), '-') AS item_name,
-			SUM(COALESCE(qty, 0)) AS total_qty,
-			SUM(COALESCE(actual_amt, 0)) AS total_item_value,
-			SUM(COALESCE(incentive, 0)) AS total_amount
-		FROM `tabHbs Incentive Sheet`
+			COALESCE(NULLIF(u.full_name, ''), NULLIF(u.first_name, ''), NULLIF(his.executive_name, ''), his.executive, 'Unknown') AS exec_display_name,
+			his.executive,
+			COALESCE(NULLIF(his.roll_type, ''), '-') AS roll_type,
+			COALESCE(NULLIF(his.item_name, ''), '-') AS item_name,
+			SUM(COALESCE(his.qty, 0)) AS total_qty,
+			SUM(COALESCE(his.actual_amt, 0)) AS total_item_value,
+			SUM(COALESCE(his.incentive, 0)) AS total_amount
+		FROM `tabHbs Incentive Sheet` his
+		LEFT JOIN `tabUser` u ON u.name = his.executive
 		WHERE 1=1 {cond_str}
-		GROUP BY executive, executive_name, roll_type, item_name
+		GROUP BY his.executive, exec_display_name, his.roll_type, his.item_name
 		ORDER BY exec_display_name ASC, roll_type ASC, item_name ASC
 	"""
 	raw_records = frappe.db.sql(query, values, as_dict=True)
@@ -122,6 +131,16 @@ def get_data(filters):
 		exec_total_amount = sum(flt(i.total_amount) for i in items)
 
 		# Level 0: Executive Parent Summary Row (highlighted/bold)
+		data_attr = f'data-exec="{frappe.utils.escape_html(exec_user or "")}" data-exec-name="{frappe.utils.escape_html(exec_name or "")}"'
+		action_btn = (
+			f'<button class="btn btn-default btn-xs btn-drilldown-incentive" {data_attr} '
+			'onclick="frappe.query_reports[\'Incentive Summary\'].open_incentives(this, event)" '
+			'style="border: 1px solid var(--border-color, #cbd5e1); border-radius: 4px; padding: 2px 10px; '
+			'font-size: 11px; font-weight: 500; background: #ffffff; color: #1e293b; box-shadow: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; pointer-events: auto;">'
+			'<svg class="icon icon-xs" style="width: 11px; height: 11px; pointer-events: none;"><use href="#icon-list"></use></svg>'
+			'<span style="pointer-events: none;">View Incentives</span>'
+			'</button>'
+		)
 		data.append({
 			"executive_name": exec_name,
 			"roll_type": "",
@@ -129,6 +148,7 @@ def get_data(filters):
 			"qty": exec_total_qty,
 			"item_value": exec_total_item_value,
 			"amount": exec_total_amount,
+			"action": action_btn,
 			"indent": 0,
 			"is_group": 1,
 			"has_value": True,
@@ -143,6 +163,7 @@ def get_data(filters):
 				"qty": flt(it.total_qty),
 				"item_value": flt(it.total_item_value),
 				"amount": flt(it.total_amount),
+				"action": "",
 				"indent": 1,
 				"is_group": 0,
 			})
@@ -180,3 +201,59 @@ def get_report_summary(data):
 			"indicator": "Green",
 		},
 	]
+
+
+@frappe.whitelist()
+def get_executive_incentive_details(
+	executive=None,
+	from_date=None,
+	to_date=None,
+	company_name=None,
+):
+	"""Fetch individual Hbs Incentive Sheet records for drilldown dialog."""
+	user = frappe.session.user if frappe.session else "Administrator"
+
+	# Security check: Non-admin/non-Incentive-Viewer can strictly only query their own records
+	if not is_admin_owner_or_manager(user) and "Incentive Viewer" not in frappe.get_roles(user):
+		executive = user
+
+	conditions = []
+	values = {}
+
+	if from_date:
+		conditions.append("voucher_date >= %(from_date)s")
+		values["from_date"] = from_date
+	if to_date:
+		conditions.append("voucher_date <= %(to_date)s")
+		values["to_date"] = to_date
+	if executive:
+		conditions.append("executive = %(executive)s")
+		values["executive"] = executive
+	if company_name:
+		conditions.append("company_name = %(company_name)s")
+		values["company_name"] = company_name
+
+	where_clause = (" AND " + " AND ".join(conditions)) if conditions else ""
+
+	records = frappe.db.sql(f"""
+		SELECT 
+			name,
+			vch_no,
+			voucher_date,
+			party_name,
+			company_name,
+			item_name,
+			serial_no,
+			roll_type,
+			qty,
+			actual_amt,
+			incentive,
+			executive,
+			executive_name
+		FROM `tabHbs Incentive Sheet`
+		WHERE 1=1 {where_clause}
+		ORDER BY voucher_date DESC, name DESC
+		LIMIT 1000
+	""", values, as_dict=True)
+
+	return records

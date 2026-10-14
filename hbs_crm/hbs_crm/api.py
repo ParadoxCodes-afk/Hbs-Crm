@@ -502,6 +502,17 @@ def sync_incentives(data=None, **kwargs):
 		if u.full_name:
 			user_map[u.full_name.strip().lower()] = u.name
 
+	SPLIT_EXECUTIVES = {
+		"js": [
+			{"email": "jyoti@hbsmail.in", "name": "Jyoti"},
+			{"email": "saniya@hbsmail.in", "name": "Saniya"},
+		],
+		"aa": [
+			{"email": "amrit@hbsmail.in", "name": "Amrit"},
+			{"email": "aarti@hbsmail.in", "name": "Aarti"},
+		],
+	}
+
 	def _clean_amt(val):
 		if val is None:
 			return 0.0
@@ -575,27 +586,50 @@ def sync_incentives(data=None, **kwargs):
 			to_date = _safe_date(_normalize_key(voucher, "To Date", "to_date", "To Date")) or datat_date
 			roll_type = _normalize_key(voucher, "Roll Type", "roll_type")
 			exec_raw = _normalize_key(voucher, "Executive", "executive")
-			exec_user = user_map.get(str(exec_raw).strip().lower()) if exec_raw else None
 			actual_amt = _clean_amt(_normalize_key(voucher, "Actual Amt", "actual_amt"))
 			incentive = _clean_amt(_normalize_key(voucher, "Incentive", "incentive"))
 
-			parsed_rows.append({
-				**v_header,
-				"item_name": str(item_name).strip() if item_name else None,
-				"serial_no": str(serial_no).strip() if serial_no else None,
-				"qty": qty,
-				"rate": rate,
-				"amount": amount,
-				"period": str(period).strip() if period else None,
-				"from_date": from_date,
-				"to_date": to_date,
-				"roll_type": str(roll_type).strip() if roll_type else None,
-				"executive": exec_user,
-				"executive_name": str(exec_raw).strip() if exec_raw else None,
-				"actual_amt": actual_amt,
-				"incentive": incentive,
-				"last_sync_date": now_dt
-			})
+			clean_code = str(exec_raw).strip().lower() if exec_raw else ""
+			if clean_code in SPLIT_EXECUTIVES:
+				assigned_execs = SPLIT_EXECUTIVES[clean_code]
+				split_inc = incentive / len(assigned_execs)
+				for target in assigned_execs:
+					parsed_rows.append({
+						**v_header,
+						"item_name": str(item_name).strip() if item_name else None,
+						"serial_no": str(serial_no).strip() if serial_no else None,
+						"qty": qty,
+						"rate": rate,
+						"amount": amount,
+						"period": str(period).strip() if period else None,
+						"from_date": from_date,
+						"to_date": to_date,
+						"roll_type": str(roll_type).strip() if roll_type else None,
+						"executive": target["email"],
+						"executive_name": target["name"],
+						"actual_amt": actual_amt,
+						"incentive": split_inc,
+						"last_sync_date": now_dt
+					})
+			else:
+				exec_user = user_map.get(clean_code) if clean_code else None
+				parsed_rows.append({
+					**v_header,
+					"item_name": str(item_name).strip() if item_name else None,
+					"serial_no": str(serial_no).strip() if serial_no else None,
+					"qty": qty,
+					"rate": rate,
+					"amount": amount,
+					"period": str(period).strip() if period else None,
+					"from_date": from_date,
+					"to_date": to_date,
+					"roll_type": str(roll_type).strip() if roll_type else None,
+					"executive": exec_user,
+					"executive_name": str(exec_raw).strip() if exec_raw else None,
+					"actual_amt": actual_amt,
+					"incentive": incentive,
+					"last_sync_date": now_dt
+				})
 			continue
 
 		for it in items:
@@ -623,26 +657,41 @@ def sync_incentives(data=None, **kwargs):
 				"to_date": it_to,
 			}
 
-			incentives = it.get("incentive") or it.get("Incentive")
+			incentives = it.get("incentive") or it.get("Incentive") or it.get("incentives") or it.get("Incentives")
 			if incentives and isinstance(incentives, list):
 				for inc in incentives:
 					if not isinstance(inc, dict):
 						continue
 					roll_type = _normalize_key(inc, "roll_type", "Roll Type")
 					exec_raw = _normalize_key(inc, "executive", "Executive")
-					exec_user = user_map.get(str(exec_raw).strip().lower()) if exec_raw else None
 					actual_amt = _clean_amt(_normalize_key(inc, "actual_amt", "Actual Amt"))
 					inc_val = _clean_amt(_normalize_key(inc, "incentive", "Incentive"))
 
-					parsed_rows.append({
-						**it_base,
-						"roll_type": str(roll_type).strip() if roll_type else None,
-						"executive": exec_user,
-						"executive_name": str(exec_raw).strip() if exec_raw else None,
-						"actual_amt": actual_amt,
-						"incentive": inc_val,
-						"last_sync_date": now_dt
-					})
+					clean_code = str(exec_raw).strip().lower() if exec_raw else ""
+					if clean_code in SPLIT_EXECUTIVES:
+						assigned_execs = SPLIT_EXECUTIVES[clean_code]
+						split_inc = inc_val / len(assigned_execs)
+						for target in assigned_execs:
+							parsed_rows.append({
+								**it_base,
+								"roll_type": str(roll_type).strip() if roll_type else None,
+								"executive": target["email"],
+								"executive_name": target["name"],
+								"actual_amt": actual_amt,
+								"incentive": split_inc,
+								"last_sync_date": now_dt
+							})
+					else:
+						exec_user = user_map.get(clean_code) if clean_code else None
+						parsed_rows.append({
+							**it_base,
+							"roll_type": str(roll_type).strip() if roll_type else None,
+							"executive": exec_user,
+							"executive_name": str(exec_raw).strip() if exec_raw else None,
+							"actual_amt": actual_amt,
+							"incentive": inc_val,
+							"last_sync_date": now_dt
+						})
 			else:
 				# 1 row even if no incentive list
 				parsed_rows.append({
