@@ -440,7 +440,7 @@ def sync_incentives(data=None, **kwargs):
 	- Links 'executive' field to User account.
 	- Idempotent upsert by master_id.
 	"""
-	import json
+	import json, math
 	from frappe.utils import flt, now_datetime
 
 	if data is None:
@@ -592,7 +592,7 @@ def sync_incentives(data=None, **kwargs):
 			clean_code = str(exec_raw).strip().lower() if exec_raw else ""
 			if clean_code in SPLIT_EXECUTIVES:
 				assigned_execs = SPLIT_EXECUTIVES[clean_code]
-				split_inc = incentive / len(assigned_execs)
+				split_inc = flt(math.ceil(incentive / len(assigned_execs)))
 				for target in assigned_execs:
 					parsed_rows.append({
 						**v_header,
@@ -670,7 +670,7 @@ def sync_incentives(data=None, **kwargs):
 					clean_code = str(exec_raw).strip().lower() if exec_raw else ""
 					if clean_code in SPLIT_EXECUTIVES:
 						assigned_execs = SPLIT_EXECUTIVES[clean_code]
-						split_inc = inc_val / len(assigned_execs)
+						split_inc = flt(math.ceil(inc_val / len(assigned_execs)))
 						for target in assigned_execs:
 							parsed_rows.append({
 								**it_base,

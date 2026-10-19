@@ -658,7 +658,7 @@ frappe.ui.form.on("hbs crm items", {
 		if (row.item_name) {
 			frappe.db.get_doc("Hbs Product", row.item_name).then((doc) => {
 				frappe.model.set_value(cdt, cdn, "rate", doc.rate || 0);
-				frappe.model.set_value(cdt, cdn, "description", "");
+				frappe.model.set_value(cdt, cdn, "description", doc.description || "");
 				frappe.model.set_value(cdt, cdn, "tax", doc.tax || 0);
 				frappe.model.set_value(cdt, cdn, "hsn", doc.hsn || "");
 				if (!row.qty) {

@@ -8,16 +8,19 @@
 
     <style>
         .print-format {
-            margin-top: 5mm;
-            margin-bottom: 5mm;
-            margin-left: 7mm;
-            margin-right: 7mm;
+            margin-top: 2mm !important;
+            margin-bottom: 2mm !important;
+            margin-left: 7mm !important;
+            margin-right: 7mm !important;
             padding: 0mm !important;
         }
 
         @page {
             size: A4 portrait;
-            margin: 5mm 7mm 5mm 7mm;
+            margin-top: 2mm;
+            margin-bottom: 2mm;
+            margin-left: 7mm;
+            margin-right: 7mm;
         }
 
         body {
@@ -190,13 +193,16 @@
 
         .page-wrapper {
             position: relative;
-            padding: 0 2px;
+            padding: 0 2px 24mm 2px;
+            box-sizing: border-box;
+            min-height: 285mm;
         }
 
         .page-footer {
-            margin-top: 5px;
+            position: absolute;
+            bottom: 0;
+            left: 0;
             width: 100%;
-            display: block;
             page-break-inside: avoid;
             break-inside: avoid;
         }
