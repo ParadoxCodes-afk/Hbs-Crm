@@ -292,5 +292,6 @@
  "sort_field": "overdue_days",
  "sort_order": "DESC",
  "states": [],
- "title_field": "bill_no"
+ "title_field": "bill_no",
+ "allow_rename": 1
 }

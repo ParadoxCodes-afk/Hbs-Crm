@@ -309,5 +309,6 @@
  "states": [],
  "track_changes": 1,
  "track_seen": 1,
- "track_views": 1
+ "track_views": 1,
+ "allow_rename": 1
 }
