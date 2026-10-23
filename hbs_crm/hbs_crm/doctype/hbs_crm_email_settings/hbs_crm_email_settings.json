@@ -6,6 +6,7 @@
  "field_order": [
   "general_section",
   "enable_auto_email",
+  "enable_auto_ticket_email",
   "column_break_general",
   "sender_name",
   "smtp_settings_section",
@@ -37,6 +38,12 @@
    "fieldname": "enable_auto_email",
    "fieldtype": "Check",
    "label": "Enable Auto Email on Lead Creation"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_auto_ticket_email",
+   "fieldtype": "Check",
+   "label": "Enable Auto Email on Ticket Creation"
   },
   {
    "fieldname": "column_break_general",
