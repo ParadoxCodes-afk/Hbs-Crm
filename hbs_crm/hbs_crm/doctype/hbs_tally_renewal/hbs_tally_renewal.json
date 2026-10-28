@@ -152,6 +152,9 @@
   "last_tss_renewal_date",
   "usage_type",
   "tepl",
+  "tickets_tab",
+  "tickets_section",
+  "tickets_html",
   "director_details_tab",
   "director_details_section",
   "director_contact_person",
@@ -969,6 +972,21 @@
    "fieldname": "docs_by_ira_quota",
    "fieldtype": "Data",
    "label": "Docs By Ira Quota Available"
+  },
+  {
+   "fieldname": "tickets_tab",
+   "fieldtype": "Tab Break",
+   "label": "Tickets"
+  },
+  {
+   "fieldname": "tickets_section",
+   "fieldtype": "Section Break",
+   "label": "Support Tickets & Call History"
+  },
+  {
+   "fieldname": "tickets_html",
+   "fieldtype": "HTML",
+   "label": "Tickets"
   },
   {
    "fieldname": "director_details_tab",

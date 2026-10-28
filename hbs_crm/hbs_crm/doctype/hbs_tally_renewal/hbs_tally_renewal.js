@@ -7,6 +7,7 @@ frappe.ui.form.on("Hbs Tally Renewal", {
 		setup_all_contacts_grid(frm);
 		render_activity_timeline(frm);
 		render_old_remarks_timeline(frm);
+		render_tickets_tab(frm);
 		frm.set_df_property("pi_number", "read_only", 1);
 		frm.set_df_property("quotation_date", "hidden", 1);
 		if (frm.doc.quotation_date !== frappe.datetime.get_today()) {
@@ -1592,5 +1593,263 @@ function open_quotation_preview_dialog(frm, doctype) {
 			d.show();
 		}
 	});
+}
+
+// ============================================================
+// TICKETS TAB / CALL HISTORY ACCORDING TO SERIAL NUMBER
+// ============================================================
+function render_tickets_tab(frm) {
+	const field = frm.fields_dict.tickets_html;
+	if (!field || !field.$wrapper) return;
+
+	const serialNo = (frm.doc.tally_serial || frm.doc.tss_tally_serial || "").trim();
+
+	if (!serialNo) {
+		field.$wrapper.html(
+			`<div style="color: #64748b; padding: 30px; text-align: center; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1; margin-top: 10px;">
+				<div style="font-size: 15px; font-weight: 500; margin-bottom: 6px;">No Serial Number Available</div>
+				<div style="font-size: 13px;">Please add or verify the Tally Serial Number to view related support tickets.</div>
+			</div>`
+		);
+		return;
+	}
+
+	field.$wrapper.html(
+		`<div style="color: #64748b; padding: 20px; text-align: center;">
+			<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+			<span style="margin-left: 8px;">Loading tickets for serial <b>${frappe.utils.escape_html(serialNo)}</b>...</span>
+		</div>`
+	);
+
+	frappe.call({
+		method: "hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_call_history",
+		args: {
+			serial_no: serialNo
+		},
+		callback: function (r) {
+			const rows = r.message || [];
+			const esc = value => frappe.utils.escape_html(String(value || ""));
+
+			let headerHtml = `
+				<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+					<div>
+						<span style="font-weight: 600; font-size: 14px; color: #1e293b;">Support Tickets &amp; Call History</span>
+						<span class="text-muted" style="margin-left: 8px; font-size: 12px;">Serial: <b style="color: #0f172a;">${esc(serialNo)}</b></span>
+						<span class="badge badge-secondary" style="margin-left: 6px; font-size: 11px;">${rows.length} ${rows.length === 1 ? 'ticket' : 'tickets'}</span>
+					</div>
+					<div>
+						<button type="button" class="btn btn-xs btn-primary btn-create-support-ticket" style="font-weight: 600; padding: 4px 10px;">
+							+ Create Support Ticket
+						</button>
+					</div>
+				</div>
+			`;
+
+			if (!rows.length) {
+				field.$wrapper.html(
+					headerHtml +
+					`<div style="color: #64748b; padding: 30px; text-align: center; background: #ffffff; border-radius: 8px; border: 1px dashed #e2e8f0;">
+						<div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">No support tickets found</div>
+						<div style="font-size: 12px; color: #94a3b8;">No tickets have been raised for serial number ${esc(serialNo)} yet.</div>
+					</div>`
+				);
+				bind_tickets_events(frm, field, serialNo);
+				return;
+			}
+
+			function get_status_pill(status) {
+				const s = String(status || "").toUpperCase();
+				let color = "gray";
+				if (s === "COMPLETED") color = "green";
+				else if (s === "FOLLOWUP") color = "orange";
+				else if (s === "NEW") color = "blue";
+				else if (s === "PENDING") color = "red";
+				return `<span class="indicator-pill ${color}" style="font-size: 11px; font-weight: 600;">${esc(status)}</span>`;
+			}
+
+			function format_dt(dt) {
+				if (!dt) return "-";
+				try {
+					const d = frappe.datetime.str_to_user(dt);
+					const timePart = dt.indexOf(" ") > -1 ? dt.split(" ")[1].substring(0, 5) : "";
+					return timePart ? `${d} ${timePart}` : d;
+				} catch (e) {
+					return dt;
+				}
+			}
+
+			let tableHtml = `
+				${headerHtml}
+				<div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+					<table class="table table-bordered table-hover" style="font-size: 13px; margin-bottom: 0;">
+						<thead>
+							<tr style="background: #f1f5f9; color: #334155; font-weight: 600;">
+								<th style="width: 140px;">Ticket No</th>
+								<th>Serial No</th>
+								<th>Call Source</th>
+								<th>Call Type</th>
+								<th>Executive 1</th>
+								<th>Executive 2</th>
+								<th>Status</th>
+								<th style="width: 130px;">Creation Date</th>
+								<th style="width: 100px; text-align: center;">Details</th>
+							</tr>
+						</thead>
+						<tbody>
+			`;
+
+			rows.forEach(row => {
+				const ticketName = esc(row.name);
+				const ticketUrl = `/app/support_ticket/${encodeURIComponent(row.name)}`;
+
+				tableHtml += `
+					<tr>
+						<td>
+							<a href="${ticketUrl}" target="_blank" style="font-weight: 600; text-decoration: underline; color: #2563eb;">
+								${ticketName}
+							</a>
+						</td>
+						<td><b>${esc(row.serial_no || "-")}</b></td>
+						<td>${esc(row.call_source || "-")}</td>
+						<td>${esc(row.call_type || "-")}</td>
+						<td>${esc(row.executive || "-")}</td>
+						<td>${esc(row.executive2 || "-")}</td>
+						<td>${get_status_pill(row.status)}</td>
+						<td>${esc(format_dt(row.creation))}</td>
+						<td style="text-align: center;">
+							<button type="button" class="btn btn-xs btn-default view-ticket-details" data-ticket="${ticketName}">
+								View Details
+							</button>
+						</td>
+					</tr>
+				`;
+			});
+
+			tableHtml += `
+						</tbody>
+					</table>
+				</div>
+			`;
+
+			field.$wrapper.html(tableHtml);
+			bind_tickets_events(frm, field, serialNo);
+		}
+	});
+}
+
+function bind_tickets_events(frm, field, serialNo) {
+	field.$wrapper
+		.off("click.createticket", ".btn-create-support-ticket")
+		.on("click.createticket", ".btn-create-support-ticket", function () {
+			frappe.new_doc("support_ticket", {
+				serial_no: serialNo,
+				party_name: frm.doc.portal_acc_name || frm.doc.cc_acc_name || "",
+				contact_name: frm.doc.portal_contact || frm.doc.cc_contact || frm.doc.director_contact_person || "",
+				contact_phone: frm.doc.portal_mobile || frm.doc.cc_mobile || frm.doc.portal_phone || frm.doc.cc_phone || frm.doc.director_mobile || "",
+				email: frm.doc.account_id || frm.doc.portal_email || frm.doc.cc_email || ""
+			});
+		});
+
+	field.$wrapper
+		.off("click.viewdetails", ".view-ticket-details")
+		.on("click.viewdetails", ".view-ticket-details", function () {
+			const ticketName = $(this).attr("data-ticket");
+			if (!ticketName) return;
+
+			frappe.call({
+				method: "hbs_ticket_system.hbs_support_system.doctype.support_ticket.support_ticket.get_ticket_followup_history",
+				args: { ticket_name: ticketName },
+				callback: function (r) {
+					const ticket = r.message;
+					if (!ticket) {
+						frappe.msgprint("No follow-up history returned for " + ticketName);
+						return;
+					}
+
+					const esc = value => frappe.utils.escape_html(String(value || ""));
+					const history = ticket.followup_history || [];
+
+					function format_dt(dt) {
+						if (!dt) return "";
+						try {
+							const d = frappe.datetime.str_to_user(dt);
+							const timePart = dt.indexOf(" ") > -1 ? dt.split(" ")[1].substring(0, 5) : "";
+							return timePart ? `${d} ${timePart}` : d;
+						} catch (e) {
+							return dt;
+						}
+					}
+
+					let timelineHtml = "";
+					if (!history.length) {
+						timelineHtml = '<div style="color: #94a3b8; font-style: italic; padding: 14px 16px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;">No follow-up history recorded yet.</div>';
+					} else {
+						history.sort((a, b) => {
+							const dtA = a.updated_on || a.creation || "";
+							const dtB = b.updated_on || b.creation || "";
+							return dtB.localeCompare(dtA);
+						});
+
+						timelineHtml = '<div class="activity-timeline" style="margin-top: 15px; margin-left: 12px; margin-bottom: 20px; border-left: 2px solid #e2e8f0; padding-left: 24px; position: relative;">';
+						history.forEach(row => {
+							const user = esc(row.updated_by || "System");
+							const dtStr = row.updated_on ? esc(format_dt(row.updated_on)) : "";
+							const statusBadge = `<span style="background: #e2e8f0; color: #334155; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">${esc(row.status || "-")}</span>`;
+							const callTypeBadge = row.call_type ? `<span style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">🏷️ ${esc(row.call_type)}</span>` : "";
+
+							timelineHtml += `
+								<div class="timeline-item" style="margin-bottom: 16px; position: relative;">
+									<div class="timeline-badge" style="position: absolute; left: -31px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #3b82f6; border: 2px solid #fff;"></div>
+									<div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+										<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+											<div>
+												<span style="font-weight: 600; color: #1e293b;">${user}</span>
+												<span style="color: #64748b; font-size: 12px; margin-left: 6px;">${dtStr}</span>
+											</div>
+											<div style="display: flex; gap: 6px;">
+												${statusBadge}
+												${callTypeBadge}
+											</div>
+										</div>
+										<div style="color: #334155; font-size: 13px; line-height: 1.5; white-space: pre-wrap;">${esc(row.remarks || "No remarks")}</div>
+									</div>
+								</div>
+							`;
+						});
+						timelineHtml += "</div>";
+					}
+
+					let modalContent = `
+						<div style="background: var(--bg-light-gray, #f8f9fa); padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; font-size: 13px; border: 1px solid var(--border-color, #e2e8f0);">
+							<div class="row">
+								<div class="col-sm-4"><b>Ticket No:</b> ${esc(ticket.name)}</div>
+								<div class="col-sm-4"><b>Company:</b> ${esc(ticket.party_name || "-")}</div>
+								<div class="col-sm-4"><b>Status:</b> ${esc(ticket.status || "-")}</div>
+							</div>
+							<div class="row" style="margin-top: 6px;">
+								<div class="col-sm-4"><b>Contact:</b> ${esc(ticket.contact_name || "-")} (${esc(ticket.contact_phone || "-")})</div>
+								<div class="col-sm-4"><b>Executive 1:</b> ${esc(ticket.executive || "-")}</div>
+								<div class="col-sm-4"><b>Executive 2:</b> ${esc(ticket.executive2 || "-")}</div>
+							</div>
+							${ticket.remarks ? `<div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-color, #cbd5e1);"><b>Initial Remarks:</b> ${esc(ticket.remarks)}</div>` : ""}
+						</div>
+						${timelineHtml}
+					`;
+
+					const dialog = new frappe.ui.Dialog({
+						title: __("Follow-up History - {0}", [ticket.name]),
+						size: "extra-large",
+						fields: [{ fieldtype: "HTML", fieldname: "history_html" }],
+						primary_action_label: __("Close"),
+						primary_action() {
+							dialog.hide();
+						}
+					});
+
+					dialog.fields_dict.history_html.$wrapper.html(modalContent);
+					dialog.show();
+				}
+			});
+		});
 }
 
