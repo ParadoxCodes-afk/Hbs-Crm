@@ -260,7 +260,7 @@ function preview_lead_quotation_from_list(name) {
 			let final_html = cleaned_html.indexOf("<head>") !== -1 ? cleaned_html.replace("<head>", "<head>" + security_tags) : security_tags + cleaned_html;
 
 			let d = new frappe.ui.Dialog({
-				title: __("📄 Quotation Preview (View Only) - {0}", [name]),
+				title: __("📄 Quotation Preview - {0}", [name]),
 				size: "extra-large",
 				fields: [
 					{
@@ -268,8 +268,28 @@ function preview_lead_quotation_from_list(name) {
 						fieldname: "preview_area",
 						options: `<div style="padding: 0; margin: 0; width: 100%; height: 87vh; overflow: auto; background: #ffffff; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"><iframe id="print-view-frame" style="width: 100%; height: 100%; border: none; min-height: 85vh;" srcdoc="${frappe.utils.escape_html(final_html)}"></iframe></div>`
 					}
-				]
+				],
+				primary_action_label: __("Close"),
+				primary_action() {
+					d.hide();
+				},
+				secondary_action_label: __("⬇️ Download PDF"),
+				secondary_action() {
+					let download_url = frappe.urllib.get_full_url(
+						`/api/method/hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.download_lead_quotation_pdf?name=${encodeURIComponent(name)}`
+					);
+					let a = document.createElement("a");
+					a.href = download_url;
+					a.download = "";
+					document.body.appendChild(a);
+					a.click();
+					document.body.removeChild(a);
+				}
 			});
+
+			if (d.get_secondary_btn) {
+				d.get_secondary_btn().addClass("btn-primary").removeClass("btn-default");
+			}
 			d.$wrapper.find(".modal-dialog").css({ "max-width": "1250px", "width": "96vw" });
 			d.show();
 		}

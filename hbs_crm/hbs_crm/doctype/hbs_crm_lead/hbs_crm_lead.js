@@ -1553,7 +1553,7 @@ function open_quotation_preview_dialog(frm, doctype) {
 				}
 
 				let d = new frappe.ui.Dialog({
-					title: __("📄 Quotation Preview (View Only) - {0}", [frm.doc.name]),
+					title: __("📄 Quotation Preview - {0}", [frm.doc.name]),
 					size: "extra-large",
 					fields: [
 						{
@@ -1564,8 +1564,24 @@ function open_quotation_preview_dialog(frm, doctype) {
 					primary_action_label: __("Close"),
 					primary_action() {
 						d.hide();
+					},
+					secondary_action_label: __("⬇️ Download PDF"),
+					secondary_action() {
+						let download_url = frappe.urllib.get_full_url(
+							`/api/method/hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.download_lead_quotation_pdf?name=${encodeURIComponent(frm.doc.name)}&print_format=${encodeURIComponent(frm.doc.quotation_format || "HBS Quotation")}`
+						);
+						let a = document.createElement("a");
+						a.href = download_url;
+						a.download = "";
+						document.body.appendChild(a);
+						a.click();
+						document.body.removeChild(a);
 					}
 				});
+
+				if (d.get_secondary_btn) {
+					d.get_secondary_btn().addClass("btn-primary").removeClass("btn-default");
+				}
 
 				d.$wrapper.addClass("quotation-preview-modal no-print-quotation-dialog");
 

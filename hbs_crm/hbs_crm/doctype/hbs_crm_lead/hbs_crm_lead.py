@@ -863,6 +863,34 @@ def get_lead_quotation_html(name, print_format=None):
 
 
 @frappe.whitelist()
+def download_lead_quotation_pdf(name, print_format=None):
+	"""Download the quotation as PDF with '{Company_Name}_Quotation.pdf' filename."""
+	doc = frappe.get_doc("Hbs Crm Lead", name)
+	user = frappe.session.user if frappe.session else "System"
+	if not is_owner_or_admin(user) and not has_permission(doc, "read", user):
+		frappe.throw(_("Permission Denied"), frappe.PermissionError)
+
+	assign_lead_pi_and_date(doc)
+	pformat = print_format or getattr(doc, "quotation_format", None) or "HBS Quotation"
+
+	pdf_content = frappe.get_print(
+		doctype="Hbs Crm Lead",
+		name=name,
+		print_format=pformat,
+		as_pdf=True
+	)
+
+	company = (doc.company_name or doc.name or "").strip()
+	import re
+	safe_company = re.sub(r'[\\/*?:"<>|]', '_', company).strip()
+	filename = f"{safe_company}_Quotation.pdf" if safe_company else f"{doc.name}_Quotation.pdf"
+
+	frappe.local.response.filename = filename
+	frappe.local.response.filecontent = pdf_content
+	frappe.local.response.type = "download"
+
+
+@frappe.whitelist()
 def assign_lead_pi_number(lead_name):
 	"""Explicitly assign PI number and quotation date to a Lead."""
 	doc = frappe.get_doc("Hbs Crm Lead", lead_name)
