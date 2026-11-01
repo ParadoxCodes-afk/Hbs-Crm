@@ -25,7 +25,10 @@
   "renewal_email_body",
   "outstanding_email_template_section",
   "outstanding_email_subject",
-  "outstanding_email_body"
+  "outstanding_email_body",
+  "contract_email_template_section",
+  "contract_email_subject",
+  "contract_email_body"
  ],
  "fields": [
   {
@@ -148,6 +151,25 @@
    "fieldname": "outstanding_email_body",
    "fieldtype": "Text Editor",
    "label": "Matter"
+  },
+  {
+   "fieldname": "contract_email_template_section",
+   "fieldtype": "Section Break",
+   "label": "Contract Renewal Email Template"
+  },
+  {
+   "default": "Quotation for {{ doc.category or 'Contract' }} Renewal \u2014 {{ doc.product or 'Services' }} \u2014 {{ doc.company_name }}",
+   "description": "Available tags: {{ doc.company_name }}, {{ doc.contact_name }}, {{ doc.product }}, {{ doc.category }}, {{ doc.serial_no }}, {{ doc.expiry_date }}, {{ doc.amount }}, {{ doc.pi_number }}",
+   "fieldname": "contract_email_subject",
+   "fieldtype": "Data",
+   "label": "Contract Email Subject Template"
+  },
+  {
+   "default": "<p>Dear {{ doc.contact_name or doc.company_name or 'Valued Client' }},</p>\n<p>Greetings from HBS Solutions!</p>\n<p>With reference to our discussion regarding the renewal of your <b>{{ doc.product or 'Contract Services' }}</b>, please find below the renewal details and the attached official quotation:</p>\n<table class=\"table table-bordered\" style=\"width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px;\">\n\t<tbody>\n\t\t<tr>\n\t\t\t<td style=\"padding: 8px; background: #f8fafc; font-weight: 600; width: 180px;\">Customer / Account:</td>\n\t\t\t<td style=\"padding: 8px;\"><b>{{ doc.company_name }}</b></td>\n\t\t</tr>\n\t\t<tr>\n\t\t\t<td style=\"padding: 8px; background: #f8fafc; font-weight: 600;\">Contract / Service:</td>\n\t\t\t<td style=\"padding: 8px;\">{{ doc.product }} ({{ doc.category }})</td>\n\t\t</tr>\n\t\t<tr>\n\t\t\t<td style=\"padding: 8px; background: #f8fafc; font-weight: 600;\">Serial Number(s):</td>\n\t\t\t<td style=\"padding: 8px; font-family: monospace;\">{{ doc.serial_no or '-' }}</td>\n\t\t</tr>\n\t\t<tr>\n\t\t\t<td style=\"padding: 8px; background: #f8fafc; font-weight: 600;\">Expiry Date:</td>\n\t\t\t<td style=\"padding: 8px; color: #dc2626; font-weight: 600;\">{{ doc.expiry_date or '-' }}</td>\n\t\t</tr>\n\t\t<tr>\n\t\t\t<td style=\"padding: 8px; background: #f8fafc; font-weight: 600;\">Renewal Amount:</td>\n\t\t\t<td style=\"padding: 8px; color: #059669; font-size: 15px; font-weight: 700;\">\u20b9 {{ doc.amount or '0.00' }}</td>\n\t\t</tr>\n\t</tbody>\n</table>\n<p>Please find attached your official quotation PDF for your review and approval.</p>\n<p>Do let us know if you require any modifications or have any queries.</p>\n<p>Warm regards,<br>\n<b>{{ executive.full_name or 'Support & Renewal Team' }}</b>\n{%- if executive.designation %}<br>{{ executive.designation }}{% endif -%}\n{%- if executive.mobile_no %}<br>Mobile: {{ executive.mobile_no }}{% endif -%}\n{%- if executive.email %}<br>Email: {{ executive.email }}{% endif -%}\n<br><b>HBS Solutions Pvt Ltd</b>\n</p>",
+   "description": "Available tags: {{ doc.company_name }}, {{ doc.contact_name }}, {{ doc.product }}, {{ doc.category }}, {{ doc.serial_no }}, {{ doc.expiry_date }}, {{ doc.period }}, {{ doc.amount }}, {{ doc.ip_address }}, {{ executive.full_name }}, {{ executive.designation }}, {{ executive.mobile_no }}, {{ executive.email }}",
+   "fieldname": "contract_email_body",
+   "fieldtype": "Text Editor",
+   "label": "Contract Email Body Template"
   }
  ],
  "issingle": 1,

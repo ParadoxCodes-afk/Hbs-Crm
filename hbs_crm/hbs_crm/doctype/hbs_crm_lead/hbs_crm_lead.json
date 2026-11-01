@@ -315,7 +315,7 @@
    "fieldname": "quotation_format",
    "fieldtype": "Select",
    "label": "Quotation Format",
-   "options": "HBS Quotation\nNew Age Quotation"
+   "options": "HBS Quotation\nNew Age Quotation\nHBS Services Quotation"
   },
   {
    "fieldname": "items_section",

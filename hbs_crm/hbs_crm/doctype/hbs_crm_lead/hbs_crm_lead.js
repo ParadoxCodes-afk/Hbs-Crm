@@ -139,7 +139,12 @@ frappe.ui.form.on("Hbs Crm Lead", {
 		apply_quotation_format_color(frm);
 		if (frm.doc.pi_number) {
 			let is_new_age = (frm.doc.quotation_format === "New Age Quotation");
-			if ((is_new_age && !frm.doc.pi_number.startsWith("NIPL/")) || (!is_new_age && !frm.doc.pi_number.startsWith("HBS/"))) {
+			let is_hbs_services = (frm.doc.quotation_format === "HBS Services Quotation");
+			if (is_hbs_services && !frm.doc.pi_number.startsWith("HB/")) {
+				frm.set_value("pi_number", "");
+			} else if (is_new_age && !frm.doc.pi_number.startsWith("NIPL/")) {
+				frm.set_value("pi_number", "");
+			} else if (!is_new_age && !is_hbs_services && !frm.doc.pi_number.startsWith("HBS/")) {
 				frm.set_value("pi_number", "");
 			}
 		}
@@ -288,8 +293,15 @@ function apply_quotation_format_color(frm) {
 	let field = frm.get_field("quotation_format");
 	if (!field || !field.$input) return;
 
-	let is_new_age = (frm.doc.quotation_format === "New Age Quotation");
-	if (is_new_age) {
+	let qf = frm.doc.quotation_format || "HBS Quotation";
+	if (qf === "HBS Services Quotation") {
+		field.$input.css({
+			"background-color": "#fefce8",
+			"color": "#854d0e",
+			"border": "1.5px solid #fde047",
+			"font-weight": "600"
+		});
+	} else if (qf === "New Age Quotation") {
 		field.$input.css({
 			"background-color": "#f0fdf4",
 			"color": "#15803d",

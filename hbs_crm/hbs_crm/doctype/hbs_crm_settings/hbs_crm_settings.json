@@ -16,6 +16,8 @@
   "last_generated_pi_number",
   "new_age_lead_pi_number",
   "last_generated_new_age_pi_number",
+  "hbs_services_lead_pi_number",
+  "last_generated_hbs_services_pi_number",
   "column_break_gen",
   "default_lead_owner",
   "untagged_renewal_user",
@@ -99,6 +101,20 @@
    "fieldname": "last_generated_new_age_pi_number",
    "fieldtype": "Data",
    "label": "Last Generated New Age PI Number",
+   "read_only": 1
+  },
+  {
+   "default": "HB/26-27/0001",
+   "description": "Write full number or base sequence for HBS Services (e.g. HB/26-27/0001 or HB/0001)",
+   "fieldname": "hbs_services_lead_pi_number",
+   "fieldtype": "Data",
+   "label": "HBS Services Lead PI Number"
+  },
+  {
+   "description": "Last HBS Services PI Number generated across quotations",
+   "fieldname": "last_generated_hbs_services_pi_number",
+   "fieldtype": "Data",
+   "label": "Last Generated HBS Services PI Number",
    "read_only": 1
   },
   {
