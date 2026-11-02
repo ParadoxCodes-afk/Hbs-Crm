@@ -710,33 +710,8 @@ def sync_incentives(data=None, **kwargs):
 	# Determine active period start date (DataF date)
 	period_from = top_from_date or (min(incoming_from_dates) if incoming_from_dates else None)
 
-	# Purge records older than the active period start date (scoped to incoming companies if provided)
+	# Retain historical records across all date ranges (do not purge older periods)
 	purged_before_period_count = 0
-	if period_from:
-		if incoming_companies:
-			count_res = frappe.db.sql(
-				"SELECT COUNT(*) FROM `tabHbs Incentive Sheet` WHERE `company_name` IN %s AND `voucher_date` < %s",
-				(tuple(incoming_companies), period_from)
-			)
-			purged_before_period_count = count_res[0][0] if count_res else 0
-			if purged_before_period_count > 0:
-				frappe.db.sql(
-					"DELETE FROM `tabHbs Incentive Sheet` WHERE `company_name` IN %s AND `voucher_date` < %s",
-					(tuple(incoming_companies), period_from)
-				)
-				frappe.db.commit()
-		else:
-			count_res = frappe.db.sql(
-				"SELECT COUNT(*) FROM `tabHbs Incentive Sheet` WHERE `voucher_date` < %s",
-				(period_from,)
-			)
-			purged_before_period_count = count_res[0][0] if count_res else 0
-			if purged_before_period_count > 0:
-				frappe.db.sql(
-					"DELETE FROM `tabHbs Incentive Sheet` WHERE `voucher_date` < %s",
-					(period_from,)
-				)
-				frappe.db.commit()
 
 	# Delete existing records for the incoming master_ids to ensure clean, idempotent snapshot
 	if incoming_master_ids:

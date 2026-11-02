@@ -116,13 +116,13 @@ def get_current_fy_str(date_val=None):
 def get_last_lead_pi_info(is_new_age=False, is_hbs_services=False):
 	"""Query the highest PI number generated on any Lead in the database for HBS, New Age, or HBS Services."""
 	if is_hbs_services:
-		cond = "(`quotation_format` = 'HBS Services Quotation' OR `pi_number` LIKE 'HB/%')"
-		default_pfx = "HB"
+		cond = "(`quotation_format` = 'HBS Services Quotation' OR `pi_number` LIKE 'HBSS/%' OR `pi_number` LIKE 'HB/%')"
+		default_pfx = "HBSS"
 	elif is_new_age:
 		cond = "(`quotation_format` = 'New Age Quotation' OR `pi_number` LIKE 'NIPL/%')"
 		default_pfx = "NIPL/TS"
 	else:
-		cond = "((`quotation_format` NOT IN ('New Age Quotation', 'HBS Services Quotation') OR `quotation_format` IS NULL) AND (`pi_number` NOT LIKE 'NIPL/%' AND `pi_number` NOT LIKE 'HB/%'))"
+		cond = "((`quotation_format` NOT IN ('New Age Quotation', 'HBS Services Quotation') OR `quotation_format` IS NULL) AND (`pi_number` NOT LIKE 'NIPL/%' AND `pi_number` NOT LIKE 'HBSS/%' AND `pi_number` NOT LIKE 'HB/%'))"
 		default_pfx = "HBS/TS"
 
 	rows = frappe.db.sql(
@@ -161,7 +161,7 @@ def assign_lead_pi_and_date(doc):
 	has_wrong_prefix = False
 	if doc.pi_number:
 		pi_str = str(doc.pi_number)
-		if is_hbs_services and not pi_str.startswith("HB/"):
+		if is_hbs_services and not (pi_str.startswith("HBSS/") or pi_str.startswith("HB/")):
 			has_wrong_prefix = True
 		elif is_new_age and not pi_str.startswith("NIPL/"):
 			has_wrong_prefix = True
@@ -172,7 +172,7 @@ def assign_lead_pi_and_date(doc):
 		if is_hbs_services:
 			setting_field = "hbs_services_lead_pi_number"
 			last_gen_field = "last_generated_hbs_services_pi_number"
-			default_prefix = "HB"
+			default_prefix = "HBSS"
 		elif is_new_age:
 			setting_field = "new_age_lead_pi_number"
 			last_gen_field = "last_generated_new_age_pi_number"
@@ -194,10 +194,7 @@ def assign_lead_pi_and_date(doc):
 		fy_start = d.year if d.month >= 4 else (d.year - 1)
 		fy_str = suffix or f"{str(fy_start)[-2:]}-{str(fy_start + 1)[-2:]}"
 		prefix_clean = prefix or default_prefix
-		if is_hbs_services:
-			full_pi_number = f"HB/{fy_str}/{next_num:04d}"
-		else:
-			full_pi_number = f"{prefix_clean}/{next_num}/{fy_str}"
+		full_pi_number = f"{prefix_clean}/{next_num}/{fy_str}"
 
 		if not doc.is_new():
 			doc.db_set("pi_number", full_pi_number, update_modified=False)
