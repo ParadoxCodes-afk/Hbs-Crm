@@ -135,6 +135,16 @@ def assign_renewal_pi_and_date(doc):
 
 
 class HbsTallyRenewal(Document):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		if self.name is not None and not isinstance(self.name, str):
+			self.name = str(self.name)
+
+	def load_from_db(self):
+		super().load_from_db()
+		if self.name is not None and not isinstance(self.name, str):
+			self.name = str(self.name)
+
 	def normalize_select_fields(self):
 		"""Gracefully handle legacy or unlisted select values from historical imports."""
 		for df in self.meta.get_select_fields():
@@ -1835,9 +1845,12 @@ def get_renewal_quotation_pdf_attachment(doc):
 	"""Render the HBS Renewal Quotation print format to PDF and return an attachments list (or [] on failure)."""
 	try:
 		assign_renewal_pi_and_date(doc)
+		name_str = str(doc.name)
+		doc.name = name_str
 		pdf_content = frappe.get_print(
 			doctype=doc.doctype,
-			name=doc.name,
+			name=name_str,
+			doc=doc,
 			print_format="HBS Renewal Quotation",
 			as_pdf=True,
 		)
@@ -1855,15 +1868,18 @@ def get_renewal_quotation_pdf_attachment(doc):
 @frappe.whitelist()
 def get_renewal_quotation_html(name):
 	"""Render the HBS Renewal Quotation print format to HTML for preview inside modal."""
-	doc = frappe.get_doc("Hbs Tally Renewal", name)
+	name_str = str(name)
+	doc = frappe.get_doc("Hbs Tally Renewal", name_str)
 	user = frappe.session.user if frappe.session else "System"
 	if not is_owner_or_admin(user) and not has_permission(doc, "read", user):
 		frappe.throw(_("Permission Denied"), frappe.PermissionError)
 
 	assign_renewal_pi_and_date(doc)
+	doc.name = str(doc.name)
 	raw_html = frappe.get_print(
 		doctype="Hbs Tally Renewal",
-		name=name,
+		name=name_str,
+		doc=doc,
 		print_format="HBS Renewal Quotation",
 		as_pdf=False
 	)

@@ -208,9 +208,12 @@ def get_quotation_pdf_attachment(doc):
 	"""Render the selected Quotation print format to PDF and return an attachments list (or [] on failure)."""
 	try:
 		pformat = getattr(doc, "quotation_format", None) or "HBS Quotation"
+		name_str = str(doc.name)
+		doc.name = name_str
 		pdf_content = frappe.get_print(
 			doctype=doc.doctype,
-			name=doc.name,
+			name=name_str,
+			doc=doc,
 			print_format=pformat,
 			as_pdf=True,
 		)
@@ -235,6 +238,16 @@ def get_last_activity_date(lead_name, fallback_date):
 
 
 class HbsCrmLead(Document):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		if self.name is not None and not isinstance(self.name, str):
+			self.name = str(self.name)
+
+	def load_from_db(self):
+		super().load_from_db()
+		if self.name is not None and not isinstance(self.name, str):
+			self.name = str(self.name)
+
 	@property
 	def user(self):
 		"""Fallback helper for 'user' attribute in custom email templates."""
@@ -877,16 +890,19 @@ def send_manual_lead_email(lead_name, to_email, subject, message, cc_email=None,
 @frappe.whitelist()
 def get_lead_quotation_html(name, print_format=None):
 	"""Render the selected Quotation print format to HTML for preview inside modal."""
-	doc = frappe.get_doc("Hbs Crm Lead", name)
+	name_str = str(name)
+	doc = frappe.get_doc("Hbs Crm Lead", name_str)
 	user = frappe.session.user if frappe.session else "System"
 	if not is_owner_or_admin(user) and not has_permission(doc, "read", user):
 		frappe.throw(_("Permission Denied"), frappe.PermissionError)
 
 	assign_lead_pi_and_date(doc)
 	pformat = print_format or getattr(doc, "quotation_format", None) or "HBS Quotation"
+	doc.name = str(doc.name)
 	raw_html = frappe.get_print(
 		doctype="Hbs Crm Lead",
-		name=name,
+		name=name_str,
+		doc=doc,
 		print_format=pformat,
 		as_pdf=False
 	)
@@ -898,17 +914,20 @@ def get_lead_quotation_html(name, print_format=None):
 @frappe.whitelist()
 def download_lead_quotation_pdf(name, print_format=None):
 	"""Download the quotation as PDF with '{Company_Name}_Quotation.pdf' filename."""
-	doc = frappe.get_doc("Hbs Crm Lead", name)
+	name_str = str(name)
+	doc = frappe.get_doc("Hbs Crm Lead", name_str)
 	user = frappe.session.user if frappe.session else "System"
 	if not is_owner_or_admin(user) and not has_permission(doc, "read", user):
 		frappe.throw(_("Permission Denied"), frappe.PermissionError)
 
 	assign_lead_pi_and_date(doc)
 	pformat = print_format or getattr(doc, "quotation_format", None) or "HBS Quotation"
+	doc.name = str(doc.name)
 
 	pdf_content = frappe.get_print(
 		doctype="Hbs Crm Lead",
-		name=name,
+		name=name_str,
+		doc=doc,
 		print_format=pformat,
 		as_pdf=True
 	)

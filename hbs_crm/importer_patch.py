@@ -199,3 +199,25 @@ def apply_data_import_patch():
 				frappe.log_error(f"Error applying Data Import patch: {str(e)}", "Data Import Patch Error")
 			except Exception:
 				pass
+
+
+def apply_safe_filename_patch():
+	"""
+	Monkey patch frappe.core.doctype.file.utils.get_safe_file_name to coerce file_name to str.
+	In Frappe 16.54+, printview.py calls get_safe_file_name(doc.name). For autoincrement DocTypes
+	(like Hbs Crm Lead and Hbs Tally Renewal), doc.name is an int, causing Python's re.sub to fail
+	with TypeError: expected string or bytes-like object, got 'int'.
+	"""
+	try:
+		import frappe.core.doctype.file.utils as file_utils
+		if getattr(file_utils, "_hbs_safe_file_name_patched", False):
+			return
+		file_utils._hbs_safe_file_name_patched = True
+
+		orig_fn = getattr(file_utils, "get_safe_file_name", None)
+		if orig_fn:
+			def safe_file_name_wrapper(file_name: str) -> str:
+				return orig_fn(str(file_name or ""))
+			file_utils.get_safe_file_name = safe_file_name_wrapper
+	except Exception:
+		pass
