@@ -32,6 +32,18 @@
   {
    "child": 1,
    "collapsible": 1,
+   "icon": "dashboard",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Executive Dashboard",
+   "link_to": "executive-dashboard",
+   "link_type": "Page",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
    "icon": "user-check",
    "indent": 0,
    "keep_closed": 0,
@@ -146,21 +158,9 @@
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
-   "icon": "file-text",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Incentive Summary",
-   "link_to": "Incentive Summary",
-   "link_type": "Report",
-   "show_arrow": 0,
-   "type": "Link"
   }
  ],
- "modified": "2026-10-09 13:48:07.645774",
+ "modified": "2026-11-03 17:06:43.101539",
  "modified_by": "Administrator",
  "module": "Hbs Crm",
  "name": "Hbs Crm",

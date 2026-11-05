@@ -56,3 +56,8 @@ jspm_packages/
 
 # Graphify
 graphify-out/
+
+# AI Context & Memory files (Local only)
+CONTEXT.md
+AGENTS.md
+GEMINI.md

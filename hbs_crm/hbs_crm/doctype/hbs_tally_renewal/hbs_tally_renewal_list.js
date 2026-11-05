@@ -299,6 +299,25 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		}
 
 		if (!is_admin_or_manager && listview.filter_area) {
+			// 1. Completely disable Frappe from caching temporary filters to MariaDB __UserSettings
+			listview.save_view_user_settings = function () {
+				return Promise.resolve();
+			};
+
+			// 2. Completely disable Frappe from writing filter query params to browser URL bar
+			listview.update_url_with_filters = function () {};
+
+			// 3. Clear existing in-memory and DB cached user settings for this doctype
+			if (frappe.boot?.user_settings?.[listview.doctype]?.List) {
+				frappe.boot.user_settings[listview.doctype].List.filters = [];
+			}
+			if (listview.view_user_settings) {
+				listview.view_user_settings.filters = [];
+			}
+			try {
+				frappe.model.user_settings.save(listview.doctype, "List", { filters: [] });
+			} catch (e) {}
+
 			if (listview.filter_area.filter_list) {
 				let fl = listview.filter_area.filter_list;
 				let orig_fl_clear = fl.clear_filters.bind(fl);
@@ -349,9 +368,33 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			};
 		}
 
-		// Ensure default filters (Pending, Follow Up <= Date, TSS Expiry Date <= current month end) are applied
+		// Ensure fresh default filters (Pending, Follow Up <= Date, TSS Expiry Date <= current month end) are strictly applied
 		function setup_default_renewal_filters() {
 			if (!listview.filter_area) return;
+
+			if (!is_admin_or_manager) {
+				// On fresh page load/refresh (not a drilldown from dashboard), clear search params and enforce clean defaults
+				if (!frappe.route_options || !Object.keys(frappe.route_options).length) {
+					if (window.location.search && !window.location.search.includes("report_name")) {
+						window.history.replaceState(null, null, window.location.pathname + window.location.hash);
+					}
+
+					let current_date = get_current_followup_date();
+					let default_renewal_filters = [
+						["Hbs Tally Renewal", "crm_status", "=", "PENDING"],
+						["Hbs Tally Renewal", "follow_up_date", "<=", current_date],
+						["Hbs Tally Renewal", "acc_expiry_date", "<=", default_cutoff_date]
+					];
+
+					listview.filter_area.clear(false, false).then(() => {
+						return listview.filter_area.add(default_renewal_filters);
+					}).then(() => {
+						lock_followup_filter_tag();
+					});
+					return;
+				}
+			}
+
 			let current_filters = listview.filter_area.get() || [];
 			let has_status = current_filters.some(f => f[1] === "crm_status");
 			let has_follow_up = current_filters.some(f => f[1] === "follow_up_date");
@@ -1611,7 +1654,7 @@ function preview_renewal_quotation_from_list(name) {
 			let final_html = cleaned_html.indexOf("<head>") !== -1 ? cleaned_html.replace("<head>", "<head>" + security_tags) : security_tags + cleaned_html;
 
 			let d = new frappe.ui.Dialog({
-				title: __("📄 Quotation Preview (View Only) - {0}", [name]),
+				title: __("📄 Quotation Preview - {0}", [name]),
 				size: "extra-large",
 				fields: [
 					{
@@ -1619,8 +1662,28 @@ function preview_renewal_quotation_from_list(name) {
 						fieldname: "preview_area",
 						options: `<div style="padding: 0; margin: 0; width: 100%; height: 87vh; overflow: auto; background: #ffffff; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"><iframe id="print-view-frame" style="width: 100%; height: 100%; border: none; min-height: 85vh;" srcdoc="${frappe.utils.escape_html(final_html)}"></iframe></div>`
 					}
-				]
+				],
+				primary_action_label: __("Close"),
+				primary_action() {
+					d.hide();
+				},
+				secondary_action_label: __("⬇️ Download PDF"),
+				secondary_action() {
+					let download_url = frappe.urllib.get_full_url(
+						`/api/method/hbs_crm.hbs_crm.doctype.hbs_tally_renewal.hbs_tally_renewal.download_renewal_quotation_pdf?name=${encodeURIComponent(name)}`
+					);
+					let a = document.createElement("a");
+					a.href = download_url;
+					a.download = "";
+					document.body.appendChild(a);
+					a.click();
+					document.body.removeChild(a);
+				}
 			});
+
+			if (d.get_secondary_btn) {
+				d.get_secondary_btn().addClass("btn-primary").removeClass("btn-default");
+			}
 			d.$wrapper.find(".modal-dialog").css({ "max-width": "1250px", "width": "96vw" });
 			d.show();
 		}

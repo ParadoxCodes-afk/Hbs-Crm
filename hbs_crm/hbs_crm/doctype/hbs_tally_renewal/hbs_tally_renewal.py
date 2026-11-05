@@ -1889,6 +1889,37 @@ def get_renewal_quotation_html(name):
 
 
 @frappe.whitelist()
+def download_renewal_quotation_pdf(name, print_format=None):
+	"""Download the renewal quotation as PDF with '{Account_Name}_Renewal_Quotation.pdf' filename."""
+	name_str = str(name)
+	doc = frappe.get_doc("Hbs Tally Renewal", name_str)
+	user = frappe.session.user if frappe.session else "System"
+	if not is_owner_or_admin(user) and not has_permission(doc, "read", user):
+		frappe.throw(_("Permission Denied"), frappe.PermissionError)
+
+	assign_renewal_pi_and_date(doc)
+	pformat = print_format or getattr(doc, "quotation_format", None) or "HBS Renewal Quotation"
+	doc.name = str(doc.name)
+
+	pdf_content = frappe.get_print(
+		doctype="Hbs Tally Renewal",
+		name=name_str,
+		doc=doc,
+		print_format=pformat,
+		as_pdf=True
+	)
+
+	company = (getattr(doc, "cc_acc_name", None) or getattr(doc, "portal_acc_name", None) or getattr(doc, "company_name", None) or str(doc.name)).strip()
+	import re
+	safe_company = re.sub(r'[\\/*?:"<>|]', '_', company).strip()
+	filename = f"{safe_company}_Renewal_Quotation.pdf" if safe_company else f"{doc.name}_Renewal_Quotation.pdf"
+
+	frappe.local.response.filename = filename
+	frappe.local.response.filecontent = pdf_content
+	frappe.local.response.type = "download"
+
+
+@frappe.whitelist()
 def send_manual_renewal_email(name, to_email, subject, message, cc_email=None, from_email=None, sender_name=None, extra_attachments=None, attach_print=1):
 	"""Backend endpoint for sending interactive quotation email to client for Hbs Tally Renewal."""
 	doc = frappe.get_doc("Hbs Tally Renewal", name)

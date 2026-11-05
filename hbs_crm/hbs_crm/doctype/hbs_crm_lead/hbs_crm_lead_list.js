@@ -121,37 +121,57 @@ frappe.listview_settings['Hbs Crm Lead'] = {
 			}
 		`);
 
-		// Default filters for non-admin/owner users only
+		// Zero-caching policy & forced clean defaults for standard executives
 		let user = frappe.session.user || "";
 		let roles = frappe.user_roles || [];
 		let is_admin_or_owner = user === "Administrator" || user.startsWith("admin@") || user === "admin@hbsmail.in" ||
 			roles.some(r => ["System Manager", "Administrator", "HBS Admin", "hbs admin", "Owner", "owner", "Hbs Owner"].includes(r));
 
-		function apply_default_lead_filters() {
+		function enforce_clean_lead_defaults() {
 			if (!listview.filter_area) return;
-			const current_filters = listview.filter_area.get() || [];
-			const has_status = current_filters.some(f => f[1] === "status");
-			const has_followup = current_filters.some(f => f[1] === "follow_up_date");
 
-			let default_filters = [];
-			if (!has_status) {
-				default_filters.push(["Hbs Crm Lead", "status", "=", "pending"]);
-			}
-			if (!has_followup) {
-				default_filters.push(["Hbs Crm Lead", "follow_up_date", "<=", frappe.datetime.get_today()]);
-			}
+			// 1. Completely disable Frappe from caching temporary filters to MariaDB __UserSettings
+			listview.save_view_user_settings = function () {
+				return Promise.resolve();
+			};
 
-			if (default_filters.length) {
-				listview.filter_area.add(default_filters);
+			// 2. Completely disable Frappe from writing filter query params to browser URL bar
+			listview.update_url_with_filters = function () {};
+
+			// 3. Clear existing in-memory and DB cached user settings for this doctype
+			if (frappe.boot?.user_settings?.[listview.doctype]?.List) {
+				frappe.boot.user_settings[listview.doctype].List.filters = [];
+			}
+			if (listview.view_user_settings) {
+				listview.view_user_settings.filters = [];
+			}
+			try {
+				frappe.model.user_settings.save(listview.doctype, "List", { filters: [] });
+			} catch (e) {}
+
+			// 4. On fresh page load/refresh (not a drilldown from dashboard), clear search params and enforce clean defaults
+			if (!frappe.route_options || !Object.keys(frappe.route_options).length) {
+				if (window.location.search && !window.location.search.includes("report_name")) {
+					window.history.replaceState(null, null, window.location.pathname + window.location.hash);
+				}
+
+				let default_filters = [
+					["Hbs Crm Lead", "status", "=", "pending"],
+					["Hbs Crm Lead", "follow_up_date", "<=", frappe.datetime.get_today()]
+				];
+
+				listview.filter_area.clear(false).then(() => {
+					return listview.filter_area.add(default_filters);
+				});
 			}
 		}
 
-		if (!is_admin_or_owner && (!frappe.route_options || !Object.keys(frappe.route_options).length)) {
+		if (!is_admin_or_owner) {
 			frappe.call({
 				method: "hbs_crm.hbs_crm.doctype.hbs_crm_lead.hbs_crm_lead.check_is_admin_or_owner",
 				callback: function (r) {
 					if (!r.message) {
-						apply_default_lead_filters();
+						enforce_clean_lead_defaults();
 					}
 				}
 			});
