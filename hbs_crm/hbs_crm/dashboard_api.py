@@ -15,6 +15,27 @@ def is_admin_or_manager(user=None):
 	return bool(set(roles) & {"System Manager", "Sales Manager"})
 
 
+def can_view_incentive(user=None):
+	"""Incentive figures are strictly restricted to Administrator and Owners (System Manager / HBS Admin)."""
+	user = user or frappe.session.user
+	if user in ("Administrator", "admin"):
+		return True
+	roles = frappe.get_roles(user)
+	return bool(set(roles) & {"System Manager", "HBS Admin"})
+
+
+def can_view_activity_log(user=None):
+	"""Check if user can view Daily Activity Log (Admin, System Manager, Sales Manager, or Team Supervisor)."""
+	user = user or frappe.session.user
+	if user in ("Administrator", "admin"):
+		return True
+	roles = frappe.get_roles(user)
+	if set(roles) & {"System Manager", "Sales Manager", "HBS Admin"}:
+		return True
+	subs = get_user_hierarchy_subordinates(user)
+	return len(subs) > 1
+
+
 def get_user_hierarchy_subordinates(user=None):
 	"""Return list of executive user emails that report to the given supervisor."""
 	user = user or frappe.session.user
@@ -91,6 +112,8 @@ def get_dashboard_meta():
 		"user": user,
 		"user_full_name": frappe.utils.get_fullname(user),
 		"is_admin": is_admin,
+		"can_view_incentive": can_view_incentive(user),
+		"can_view_activity_log": can_view_activity_log(user),
 		"default_from_date": str(first_of_month),
 		"default_to_date": str(last_of_month),
 		"allowed_executives": allowed_execs
@@ -240,7 +263,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 	total_billing = flt(s_row["total_billing"])
 	credit_note = flt(s_row["credit_note"])
 	net_sales = total_billing - credit_note
-	total_incentive = flt(s_row["total_incentive"])
+	total_incentive = flt(s_row["total_incentive"]) if can_view_incentive(user) else 0
 
 	sales_data = {
 		"total_billing": total_billing,
@@ -253,7 +276,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 	# -------------------------------------------------------------
 	# 4. OUTSTANDING SUMMARY
 	# -------------------------------------------------------------
-	out_conds = ["pending_amt > 0"]
+	out_conds = ["pending_amt > 0", "COALESCE(LOWER(status), '') = 'pending'"]
 	out_params = {}
 
 	if target_execs:
@@ -325,7 +348,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 		out_val = frappe.db.sql("""
 			SELECT COALESCE(SUM(pending_amt), 0) as val
 			FROM `tabHbs Outstanding`
-			WHERE (executive_1 IN %s OR executive_2 IN %s) AND pending_amt > 0
+			WHERE (executive_1 IN %s OR executive_2 IN %s) AND pending_amt > 0 AND COALESCE(LOWER(status), '') = 'pending'
 		""", (u_aliases, u_aliases))[0][0]
 
 		# Consolidated Sales & Incentive Metrics (Single query instead of 2 separate queries)
@@ -364,7 +387,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 			"visits": l_row["visits"] or 0,
 			"net_sales": net_sales_val,
 			"outstanding": out_amt_val,
-			"incentive": inc_val
+			"incentive": inc_val if can_view_incentive(user) else 0
 		})
 
 	# -------------------------------------------------------------
@@ -394,10 +417,14 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 		LIMIT 50
 	""", prod_params, as_dict=True)
 
+	if not can_view_incentive(user):
+		for r in prod_sales_raw:
+			r["total_incentive"] = 0
+
 	# -------------------------------------------------------------
 	# 8. TAB 3: PARTY-WISE OUTSTANDING CASES
 	# -------------------------------------------------------------
-	party_conds = ["pending_amt > 0"]
+	party_conds = ["pending_amt > 0", "COALESCE(LOWER(status), '') = 'pending'"]
 	party_params = {}
 	if target_execs:
 		party_conds.append("(executive_1 IN %(aliases)s OR executive_2 IN %(aliases)s)")
@@ -427,6 +454,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 		"from_date": str(from_dt),
 		"to_date": str(to_dt),
 		"executive": executive or "ALL",
+		"can_view_incentive": can_view_incentive(user),
 		"leads": leads_data,
 		"tss": tss_data,
 		"sales": sales_data,
@@ -439,7 +467,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 
 
 @frappe.whitelist()
-def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=None, page=1, limit=50):
+def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=None, page=1, limit=100):
 	"""Fetch detailed record rows for in-page modal drill-down preview."""
 	user = frappe.session.user
 	target_execs = _resolve_scope_conditions(executive, user)
@@ -464,9 +492,9 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(executive_1 IN %s OR executive_2 IN %s OR executive_3 IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Quotation Date", "PI Number", "Status"]
+		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Lead Type", "Executive", "PI Number", "Quotation Date", "Deal Value", "Status"]
 		raw = frappe.db.sql(f"""
-			SELECT name, company_name, contact_name, contact_phone, quotation_date, pi_number, status
+			SELECT name, company_name, contact_name, contact_phone as mobile, lead_type, executive_1 as executive, pi_number, quotation_date, final_total as deal_value, status
 			FROM `tabHbs Crm Lead` WHERE {where} ORDER BY modified DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 		rows = raw
@@ -480,9 +508,9 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(executive_1 IN %s OR executive_2 IN %s OR executive_3 IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Follow-up Date", "Status"]
+		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Lead Type", "Executive", "Follow-up Date", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT name, company_name, contact_name, contact_phone, follow_up_date, status
+			SELECT name, company_name, contact_name, contact_phone as mobile, lead_type, executive_1 as executive, follow_up_date, status, last_remark
 			FROM `tabHbs Crm Lead` WHERE {where} ORDER BY modified DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
@@ -494,9 +522,9 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(executive_1 IN %s OR executive_2 IN %s OR executive_3 IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Company Name", "Contact Name", "Follow-up Date", "Status", "Last Remark"]
+		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Lead Type", "Executive", "Follow-up Date", "Overdue Days", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT name, company_name, contact_name, follow_up_date, status, last_remark
+			SELECT name, company_name, contact_name, contact_phone as mobile, lead_type, executive_1 as executive, follow_up_date, DATEDIFF(CURDATE(), follow_up_date) as overdue_days, status, last_remark
 			FROM `tabHbs Crm Lead` WHERE {where} ORDER BY follow_up_date ASC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
@@ -508,9 +536,9 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(executive_1 IN %s OR executive_2 IN %s OR executive_3 IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Created On", "Status"]
+		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Lead Type", "Executive", "Created On", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT name, company_name, contact_name, contact_phone, DATE(creation) as created_on, status
+			SELECT name, company_name, contact_name, contact_phone as mobile, lead_type, executive_1 as executive, DATE(creation) as created_on, status, last_remark
 			FROM `tabHbs Crm Lead` WHERE {where} ORDER BY creation DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
@@ -522,9 +550,9 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(executive_1 IN %s OR executive_2 IN %s OR executive_3 IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Lost Date", "Last Remark"]
+		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Lead Type", "Executive", "Lost Date", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT name, company_name, contact_name, contact_phone, DATE(COALESCE(modified, creation)) as lost_date, last_remark
+			SELECT name, company_name, contact_name, contact_phone as mobile, lead_type, executive_1 as executive, DATE(COALESCE(modified, creation)) as lost_date, status, last_remark
 			FROM `tabHbs Crm Lead` WHERE {where} ORDER BY modified DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
@@ -536,9 +564,9 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(executive_1 IN %s OR executive_2 IN %s OR executive_3 IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Follow-up Date", "Status"]
+		columns = ["ID", "Company Name", "Contact Name", "Mobile", "Lead Type", "Executive", "Follow-up Date", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT name, company_name, contact_name, contact_phone, follow_up_date, status
+			SELECT name, company_name, contact_name, contact_phone as mobile, lead_type, executive_1 as executive, follow_up_date, status, last_remark
 			FROM `tabHbs Crm Lead` WHERE {where} ORDER BY modified DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
@@ -554,9 +582,9 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(crm_ex_1 IN %s OR crm_executive IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Party Name", "Serial No", "Expiry Date", "Follow-up Date", "Status"]
+		columns = ["ID", "Party Name", "Serial No", "Mobile", "Executive", "Expiry Date", "Follow-up Date", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT name, cc_acc_name as party_name, tss_tally_serial as serial_no, COALESCE(portal_expiry_date, acc_expiry_date) as portal_expiry_date, follow_up_date, crm_status as status
+			SELECT name, cc_acc_name as party_name, tss_tally_serial as serial_no, COALESCE(NULLIF(cc_mobile, ''), cc_phone) as mobile, crm_ex_1 as executive, COALESCE(portal_expiry_date, acc_expiry_date) as expiry_date, follow_up_date, crm_status as status, last_remark
 			FROM `tabHbs Tally Renewal` WHERE {where} ORDER BY COALESCE(portal_expiry_date, acc_expiry_date) ASC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
@@ -568,9 +596,9 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(crm_ex_1 IN %s OR crm_executive IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Party Name", "Serial No", "Expiry Date", "Follow-up Date", "Status"]
+		columns = ["ID", "Party Name", "Serial No", "Mobile", "Executive", "Follow-up Date", "Overdue Days", "Expiry Date", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT name, cc_acc_name as party_name, tss_tally_serial as serial_no, COALESCE(portal_expiry_date, acc_expiry_date) as portal_expiry_date, follow_up_date, crm_status as status
+			SELECT name, cc_acc_name as party_name, tss_tally_serial as serial_no, COALESCE(NULLIF(cc_mobile, ''), cc_phone) as mobile, crm_ex_1 as executive, follow_up_date, DATEDIFF(CURDATE(), follow_up_date) as overdue_days, COALESCE(portal_expiry_date, acc_expiry_date) as expiry_date, crm_status as status, last_remark
 			FROM `tabHbs Tally Renewal` WHERE {where} ORDER BY follow_up_date ASC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
@@ -586,9 +614,9 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(crm_ex_1 IN %s OR crm_executive IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Party Name", "Serial No", "Expiry Date", "Follow-up Date", "Status"]
+		columns = ["ID", "Party Name", "Serial No", "Mobile", "Executive", "Expiry Date", "Renewed On", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT name, cc_acc_name as party_name, tss_tally_serial as serial_no, COALESCE(portal_expiry_date, acc_expiry_date) as portal_expiry_date, follow_up_date, crm_status as status
+			SELECT name, cc_acc_name as party_name, tss_tally_serial as serial_no, COALESCE(NULLIF(cc_mobile, ''), cc_phone) as mobile, crm_ex_1 as executive, COALESCE(portal_expiry_date, acc_expiry_date) as expiry_date, DATE(modified) as renewed_on, crm_status as status, last_remark
 			FROM `tabHbs Tally Renewal` WHERE {where} ORDER BY modified DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
@@ -604,15 +632,15 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(crm_ex_1 IN %s OR crm_executive IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Party Name", "Serial No", "Expiry Date", "Follow-up Date", "Status"]
+		columns = ["ID", "Party Name", "Serial No", "Mobile", "Executive", "Expiry Date", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT name, cc_acc_name as party_name, tss_tally_serial as serial_no, COALESCE(portal_expiry_date, acc_expiry_date) as portal_expiry_date, follow_up_date, crm_status as status
+			SELECT name, cc_acc_name as party_name, tss_tally_serial as serial_no, COALESCE(NULLIF(cc_mobile, ''), cc_phone) as mobile, crm_ex_1 as executive, COALESCE(portal_expiry_date, acc_expiry_date) as expiry_date, crm_status as status, last_remark
 			FROM `tabHbs Tally Renewal` WHERE {where} ORDER BY modified DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
 	elif metric_type in ("outstanding_15", "outstanding_30", "outstanding_all"):
 		doctype = "Hbs Outstanding"
-		conds = ["pending_amt > 0"]
+		conds = ["pending_amt > 0", "COALESCE(LOWER(status), '') = 'pending'"]
 		params = []
 		if metric_type == "outstanding_30":
 			conds.append("DATEDIFF(CURDATE(), COALESCE(due_date, bill_date)) > 30")
@@ -622,24 +650,24 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(executive_1 IN %s OR executive_2 IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["Bill No", "Party Name", "Bill Date", "Due Date", "Pending Amt", "Overdue Days", "Status"]
+		columns = ["Bill No", "Party Name", "Contact Person", "Phone", "Bill Date", "Due Date", "Pending Amt", "Overdue Days", "Executive", "Payment Status", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT bill_no, party_name, bill_date, due_date, pending_amt, overdue_days, status
+			SELECT bill_no, party_name, contact_person, contact_number as phone, bill_date, due_date, pending_amt, overdue_days, executive_1 as executive, payment_status, status, last_remark
 			FROM `tabHbs Outstanding` WHERE {where} ORDER BY pending_amt DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
 	elif metric_type == "outstanding_parties":
 		doctype = "Hbs Outstanding"
-		conds = ["pending_amt > 0"]
+		conds = ["pending_amt > 0", "COALESCE(LOWER(status), '') = 'pending'"]
 		params = []
 		if target_execs:
 			conds.append("(executive_1 IN %s OR executive_2 IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["Party Name", "Contact Person", "Contact Number", "Total Balance", "Status"]
+		columns = ["Party Name", "Contact Person", "Phone", "Total Balance", "Executive", "Status", "Last Remark"]
 		rows = frappe.db.sql(f"""
-			SELECT party_name, contact_person, contact_number, SUM(pending_amt) as total_balance, status
-			FROM `tabHbs Outstanding` WHERE {where} GROUP BY party_name, contact_person, contact_number, status
+			SELECT party_name, contact_person, contact_number as phone, SUM(pending_amt) as total_balance, executive_1 as executive, status, MAX(last_remark) as last_remark
+			FROM `tabHbs Outstanding` WHERE {where} GROUP BY party_name, contact_person, contact_number, executive_1, status
 			ORDER BY total_balance DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
@@ -653,16 +681,203 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			conds.append("(executive IN %s OR executive_name IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
 		where = " AND ".join(conds)
-		columns = ["ID", "Voucher Date", "Vch No", "Party Name", "Item Name", "Amount", "Executive", "Incentive"]
+		columns = ["ID", "Voucher Date", "Vch No", "Voucher Type", "Party Name", "Item Name", "Qty", "Rate", "Amount", "Executive", "Incentive"]
 		rows = frappe.db.sql(f"""
-			SELECT name, voucher_date, vch_no, party_name, item_name, amount, executive_name, incentive
+			SELECT name, voucher_date, vch_no, voucher_type, party_name, item_name, qty, rate, amount, executive_name as executive, incentive
 			FROM `tabHbs Incentive Sheet` WHERE {where} ORDER BY voucher_date DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
+
+		if not can_view_incentive(user):
+			if "Incentive" in columns:
+				columns.remove("Incentive")
+			for r in rows:
+				r.pop("incentive", None)
+
+	# Calculate summary totals for modal header cards
+	total_amount = 0.0
+	for r in rows:
+		if "pending_amt" in r and r["pending_amt"]:
+			total_amount += flt(r["pending_amt"])
+		elif "total_balance" in r and r["total_balance"]:
+			total_amount += flt(r["total_balance"])
+		elif "amount" in r and r["amount"]:
+			total_amount += flt(r["amount"])
+		elif "deal_value" in r and r["deal_value"]:
+			total_amount += flt(r["deal_value"])
 
 	return {
 		"doctype": doctype,
 		"columns": columns,
 		"rows": rows,
 		"filters": filters_list,
-		"metric_type": metric_type
+		"metric_type": metric_type,
+		"total_count": len(rows),
+		"total_amount": total_amount
+	}
+
+
+@frappe.whitelist()
+def get_executive_daily_activities(date=None, executive=None, activity_type=None, module=None, page=1, limit=300):
+	"""Fetch daily executive activities, performance KPIs, and executive daily scorecards."""
+	user = frappe.session.user
+	if not can_view_activity_log(user):
+		frappe.throw(_("Daily Work Log is restricted to Administrators, Owners, and Supervisors only."), frappe.PermissionError)
+
+	is_admin = is_admin_or_manager(user)
+	allowed_subordinates = None
+	if not is_admin:
+		allowed_subordinates = get_user_hierarchy_subordinates(user)
+
+	try:
+		target_date = getdate(date) if (date and str(date).strip()) else getdate(nowdate())
+	except Exception:
+		target_date = getdate(nowdate())
+	offset = (cint(page) - 1) * cint(limit)
+
+	conds = ["activity_date = %s"]
+	params = [target_date]
+
+	# Role-based scoping
+	if not is_admin:
+		if executive and executive.strip() and executive != "ALL":
+			scoped_exec = [executive] if executive in allowed_subordinates else allowed_subordinates
+		else:
+			scoped_exec = allowed_subordinates
+		aliases = _get_exec_aliases(scoped_exec)
+		conds.append("(user IN %s OR user_name IN %s)")
+		params.extend([tuple(aliases), tuple(aliases)])
+	else:
+		if executive and executive.strip() and executive != "ALL":
+			aliases = _get_exec_aliases([executive])
+			conds.append("(user IN %s OR user_name IN %s)")
+			params.extend([tuple(aliases), tuple(aliases)])
+
+	if activity_type and activity_type.strip() and activity_type != "ALL":
+		conds.append("activity_type = %s")
+		params.append(activity_type.strip())
+
+	if module and module.strip() and module != "ALL":
+		conds.append("reference_doctype = %s")
+		params.append(module.strip())
+
+	where = " AND ".join(conds)
+
+	# 1. Summary KPI Counters
+	kpi_row = frappe.db.sql(f"""
+		SELECT
+			COUNT(*) as total_activities,
+			COUNT(CASE WHEN activity_type = 'New Lead Created' THEN 1 END) as new_leads_count,
+			COUNT(CASE WHEN activity_type LIKE '%%Remark%%' THEN 1 END) as followups_done,
+			COUNT(CASE WHEN activity_type = 'Follow-up Rescheduled' THEN 1 END) as rescheduled_count,
+			COUNT(CASE WHEN activity_type = 'Deal Won' THEN 1 END) as deals_won,
+			COUNT(CASE WHEN activity_type = 'Deal Lost' THEN 1 END) as deals_lost,
+			COUNT(CASE WHEN activity_type = 'Visit Done' THEN 1 END) as visits_done,
+			COUNT(DISTINCT party_name) as records_touched,
+			COUNT(CASE WHEN reference_doctype = 'Hbs Crm Lead' THEN 1 END) as leads_count,
+			COUNT(CASE WHEN reference_doctype = 'Hbs Tally Renewal' THEN 1 END) as renewals_count,
+			COUNT(CASE WHEN reference_doctype = 'Hbs Outstanding' THEN 1 END) as outstanding_count
+		FROM `tabHbs Executive Activity Log`
+		WHERE {where}
+	""", tuple(params), as_dict=True)[0]
+
+	# 2. Hourly breakdown (9 AM - 8 PM)
+	hourly_raw = frappe.db.sql(f"""
+		SELECT HOUR(activity_time) as h, COUNT(*) as cnt
+		FROM `tabHbs Executive Activity Log`
+		WHERE {where} AND activity_time IS NOT NULL
+		GROUP BY HOUR(activity_time)
+		ORDER BY h ASC
+	""", tuple(params), as_dict=True)
+
+	hourly_map = {r["h"]: r["cnt"] for r in hourly_raw}
+	hourly_data = []
+	for hour in range(9, 20):
+		label = f"{hour % 12 or 12} {'AM' if hour < 12 else 'PM'}"
+		hourly_data.append({
+			"hour": hour,
+			"label": label,
+			"count": hourly_map.get(hour, 0)
+		})
+
+	# 3. Timeline records list
+	rows = frappe.db.sql(f"""
+		SELECT
+			name, user, user_name, activity_date, activity_time, activity_type,
+			reference_doctype, reference_name, party_name, contact_person,
+			contact_phone, follow_up_date, status_before, status_after, details
+		FROM `tabHbs Executive Activity Log`
+		WHERE {where}
+		ORDER BY activity_time DESC
+		LIMIT %s OFFSET %s
+	""", tuple(params + [cint(limit), offset]), as_dict=True)
+
+	# 4. Active Executives Filter List
+	exec_conds = ["activity_date = %s", "user IS NOT NULL", "user != 'Administrator'"]
+	exec_params = [target_date]
+	if not is_admin:
+		exec_conds.append("(user IN %s OR user_name IN %s)")
+		exec_params.extend([tuple(aliases), tuple(aliases)])
+	exec_rows = frappe.db.sql(f"""
+		SELECT DISTINCT user, user_name
+		FROM `tabHbs Executive Activity Log`
+		WHERE {" AND ".join(exec_conds)}
+		ORDER BY user_name ASC
+	""", tuple(exec_params), as_dict=True)
+
+	# 5. Team Executive Daily Scorecard (Who worked today & work hours span)
+	scorecard_conds = ["activity_date = %s", "user IS NOT NULL", "user != 'Administrator'"]
+	scorecard_params = [target_date]
+	if not is_admin:
+		scorecard_conds.append("(user IN %s OR user_name IN %s)")
+		scorecard_params.extend([tuple(aliases), tuple(aliases)])
+	scorecard_raw = frappe.db.sql(f"""
+		SELECT
+			user,
+			COALESCE(NULLIF(user_name, ''), user) as user_name,
+			COUNT(*) as total_actions,
+			COUNT(CASE WHEN activity_type = 'New Lead Created' THEN 1 END) as new_leads,
+			COUNT(CASE WHEN activity_type LIKE '%%Remark%%' THEN 1 END) as followups,
+			COUNT(CASE WHEN activity_type = 'Deal Won' THEN 1 END) as deals_won,
+			COUNT(CASE WHEN activity_type = 'Visit Done' THEN 1 END) as visits_done,
+			COUNT(DISTINCT party_name) as accounts_touched,
+			MIN(activity_time) as first_time,
+			MAX(activity_time) as last_time
+		FROM `tabHbs Executive Activity Log`
+		WHERE {" AND ".join(scorecard_conds)}
+		GROUP BY user, user_name
+		ORDER BY total_actions DESC
+	""", tuple(scorecard_params), as_dict=True)
+
+	active_uids = {r["user"] for r in scorecard_raw}
+	team_scorecard = list(scorecard_raw)
+	candidate_uids = allowed_subordinates if not is_admin else [
+		u["name"] for u in frappe.db.sql("SELECT name FROM `tabUser` WHERE enabled=1 AND user_type='System User' AND name NOT IN ('Administrator', 'Guest')", as_dict=True)
+	]
+	for c_uid in (candidate_uids or []):
+		if c_uid and c_uid not in active_uids and c_uid not in ("Administrator", "admin", "Guest"):
+			c_name = frappe.get_cached_value("User", c_uid, "full_name") or c_uid
+			team_scorecard.append({
+				"user": c_uid,
+				"user_name": c_name,
+				"total_actions": 0,
+				"new_leads": 0,
+				"followups": 0,
+				"deals_won": 0,
+				"visits_done": 0,
+				"accounts_touched": 0,
+				"first_time": None,
+				"last_time": None,
+				"is_inactive": True
+			})
+
+	team_scorecard.sort(key=lambda x: (-x["total_actions"], str(x["user_name"])))
+
+	return {
+		"date": str(target_date),
+		"executive": executive or "ALL",
+		"kpis": kpi_row,
+		"hourly": hourly_data,
+		"timeline": rows,
+		"executives": exec_rows,
+		"scorecard": team_scorecard
 	}

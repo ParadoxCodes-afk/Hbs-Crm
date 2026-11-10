@@ -519,6 +519,24 @@ class HbsCrmLead(Document):
 				frappe.db.set_value("Hbs Customer", self.customer, "lead_reference", self.name)
 		self.send_auto_welcome_email()
 
+		# Log initial lead creation activity
+		from hbs_crm.hbs_crm.activity_logger import log_executive_activity
+		user = self.executive_1 or (frappe.session.user if frappe.session and frappe.session.user else "Administrator")
+		lead_type = self.lead_type or "General"
+		source = self.lead_source or "Direct"
+		log_executive_activity(
+			reference_doctype="Hbs Crm Lead",
+			reference_name=self.name,
+			activity_type="New Lead Created",
+			details=f"New Lead Created • Type: {lead_type} • Source: {source}",
+			party_name=self.company_name,
+			user=user,
+			contact_person=self.contact_name,
+			contact_phone=self.contact_phone,
+			follow_up_date=self.follow_up_date,
+			status_after=self.status
+		)
+
 	def validate_won_status_lock(self):
 		"""Block altering status if lead is already saved as 'won' or 'lost'."""
 		if not self.is_new():
@@ -578,6 +596,7 @@ class HbsCrmLead(Document):
 			self.flags.remark_recorded = True
 			user_email = frappe.session.user if frappe.session and frappe.session.user else "System"
 			new_remark = self.remarks.strip()
+			self.flags.recorded_remark_text = new_remark
 			self.append("custom_activities", {
 				"user": user_email,
 				"date_time": frappe.utils.now_datetime(),
@@ -658,6 +677,78 @@ class HbsCrmLead(Document):
 		html.append('</div>')
 
 		self.activity = "".join(html)
+
+	def on_update(self):
+		# Capture executive activities
+		from hbs_crm.hbs_crm.activity_logger import log_executive_activity
+		user = self.executive_1 or (frappe.session.user if frappe.session and frappe.session.user else "Administrator")
+
+		# 1. Remark logged
+		if getattr(self.flags, "remark_recorded", False) and getattr(self.flags, "recorded_remark_text", None):
+			log_executive_activity(
+				reference_doctype="Hbs Crm Lead",
+				reference_name=self.name,
+				activity_type="Follow-up Remark",
+				details=self.flags.recorded_remark_text,
+				party_name=self.company_name,
+				user=user,
+				contact_person=self.contact_name,
+				contact_phone=self.contact_phone,
+				follow_up_date=self.follow_up_date,
+				status_after=self.status
+			)
+			self.flags.remark_recorded = False
+
+		# 2. Status changed (only for modifications with a prior status)
+		if self.get_doc_before_save() and self.has_value_changed("status"):
+			old_st = self.get_doc_before_save().status
+			new_st = self.status
+			if old_st and old_st != new_st:
+				act_type = "Deal Won" if new_st == "Won" else ("Deal Lost" if new_st == "Lost" else "Status Change")
+				log_executive_activity(
+					reference_doctype="Hbs Crm Lead",
+					reference_name=self.name,
+					activity_type=act_type,
+					details=f"Status changed: {old_st} ➔ {new_st}",
+					party_name=self.company_name,
+					user=user,
+					contact_person=self.contact_name,
+					contact_phone=self.contact_phone,
+					status_before=old_st,
+					status_after=new_st
+				)
+
+		# 3. Follow-up date rescheduled (only for modifications with a prior date)
+		if self.get_doc_before_save() and self.has_value_changed("follow_up_date"):
+			old_fu = self.get_doc_before_save().follow_up_date
+			new_fu = self.follow_up_date
+			if old_fu and old_fu != new_fu:
+				log_executive_activity(
+					reference_doctype="Hbs Crm Lead",
+					reference_name=self.name,
+					activity_type="Follow-up Rescheduled",
+					details=f"Follow-up date moved to {new_fu} (was {old_fu})",
+					party_name=self.company_name,
+					user=user,
+					contact_person=self.contact_name,
+					contact_phone=self.contact_phone,
+					follow_up_date=new_fu,
+					status_after=self.status
+				)
+
+		# 4. Visit / Demo marked
+		if not self.is_new() and self.has_value_changed("demo_done") and self.demo_done:
+			log_executive_activity(
+				reference_doctype="Hbs Crm Lead",
+				reference_name=self.name,
+				activity_type="Visit Done",
+				details=f"Demo / Client Visit completed for {self.company_name}",
+				party_name=self.company_name,
+				user=user,
+				contact_person=self.contact_name,
+				contact_phone=self.contact_phone,
+				status_after=self.status
+			)
 
 	def on_trash(self):
 		"""Clear lead reference from Hbs Customer before deleting Hbs Crm Lead."""

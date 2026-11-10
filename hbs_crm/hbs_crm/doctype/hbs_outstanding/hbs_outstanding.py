@@ -59,8 +59,10 @@ class HbsOutstanding(Document):
 	def record_remark_activity(self):
 		"""Record new remark in Hbs Lead Activity child table."""
 		if self.remarks and self.remarks.strip():
+			self.flags.remark_recorded = True
 			user_email = frappe.session.user if frappe.session and frappe.session.user else "System"
 			new_remark = self.remarks.strip()
+			self.flags.recorded_remark_text = new_remark
 			self.append("custom_activities", {
 				"user": user_email,
 				"date_time": frappe.utils.now_datetime(),
@@ -166,6 +168,42 @@ class HbsOutstanding(Document):
 
 		html.append('</div>')
 		self.activity = "".join(html)
+
+	def on_update(self):
+		from hbs_crm.hbs_crm.activity_logger import log_executive_activity
+		user = frappe.session.user if frappe.session and frappe.session.user else "Administrator"
+
+		# 1. Payment Remark
+		if getattr(self.flags, "remark_recorded", False) and getattr(self.flags, "recorded_remark_text", None):
+			log_executive_activity(
+				reference_doctype="Hbs Outstanding",
+				reference_name=str(self.name),
+				activity_type="Payment Remark",
+				details=self.flags.recorded_remark_text,
+				party_name=self.party_name,
+				user=user,
+				contact_person=self.contact_person,
+				contact_phone=self.contact_number,
+				status_after=self.status
+			)
+			self.flags.remark_recorded = False
+
+		# 2. Payment Status changed
+		if not self.is_new() and self.has_value_changed("payment_status"):
+			old_ps = self.get_doc_before_save().payment_status if self.get_doc_before_save() else ""
+			new_ps = self.payment_status
+			log_executive_activity(
+				reference_doctype="Hbs Outstanding",
+				reference_name=str(self.name),
+				activity_type="Status Change",
+				details=f"Payment status updated: {old_ps} ➔ {new_ps}",
+				party_name=self.party_name,
+				user=user,
+				contact_person=self.contact_person,
+				contact_phone=self.contact_number,
+				status_before=old_ps,
+				status_after=new_ps
+			)
 
 
 def get_permission_query_conditions(user=None):

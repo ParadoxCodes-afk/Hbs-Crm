@@ -127,17 +127,37 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			return val || default_followup_date;
 		}
 
+		function deduplicate_followup_filters() {
+			if (!listview.filter_area || !listview.filter_area.filter_list) return;
+			let fl = listview.filter_area.filter_list;
+			let seen = false;
+			(fl.filters || []).slice().forEach(f => {
+				let fname = f.fieldname || (f.field && f.field.df && f.field.df.fieldname);
+				if (fname === "follow_up_date") {
+					if (seen) {
+						f.remove(true);
+					} else {
+						seen = true;
+					}
+				}
+			});
+		}
+
 		function apply_locked_followup_filter(date_val) {
 			if (!listview.filter_area) return;
-			let existing_filter = (listview.filter_area.filter_list?.filters || []).find(f => f.fieldname === "follow_up_date");
+			deduplicate_followup_filters();
+			let existing_filter = (listview.filter_area.filter_list?.filters || []).find(f => (f.fieldname === "follow_up_date" || f.field?.df?.fieldname === "follow_up_date"));
 			if (existing_filter && typeof existing_filter.set_values === "function") {
 				let p = existing_filter.set_values(existing_filter.doctype, "follow_up_date", "<=", date_val);
 				if (p && p.then) {
 					p.then(() => {
 						listview.filter_area.filter_list?.apply();
+						deduplicate_followup_filters();
+						lock_followup_filter_tag();
 					});
 				} else {
 					listview.filter_area.filter_list?.apply();
+					deduplicate_followup_filters();
 					lock_followup_filter_tag();
 				}
 			} else {
@@ -147,6 +167,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				listview.filter_area.filter_list.filters = [];
 				listview.filter_area.add(filtered);
 			}
+			deduplicate_followup_filters();
 			lock_followup_filter_tag();
 		}
 
@@ -212,6 +233,7 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 		}
 
 		function lock_followup_filter_tag() {
+			deduplicate_followup_filters();
 			if (!is_admin_or_manager) {
 				setTimeout(() => {
 					let $wrapper = $(listview.page.wrapper);
@@ -318,26 +340,6 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 				frappe.model.user_settings.save(listview.doctype, "List", { filters: [] });
 			} catch (e) {}
 
-			if (listview.filter_area.filter_list) {
-				let fl = listview.filter_area.filter_list;
-				let orig_fl_clear = fl.clear_filters.bind(fl);
-				fl.clear_filters = function () {
-					let current_date = get_current_followup_date();
-					let followup_filter = this.filters.find(f => (f.fieldname === "follow_up_date" || f.field?.df?.fieldname === "follow_up_date"));
-					this.filters.forEach(f => {
-						if (f !== followup_filter) {
-							f.remove(true);
-						}
-					});
-					if (followup_filter) {
-						this.filters = [followup_filter];
-					} else {
-						this.filters = [];
-						this.add_filter("Hbs Tally Renewal", "follow_up_date", "<=", current_date);
-					}
-				};
-			}
-
 			let orig_remove = listview.filter_area.remove.bind(listview.filter_area);
 			listview.filter_area.remove = function (fieldname) {
 				if (fieldname === "follow_up_date") {
@@ -354,23 +356,27 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 
 			let orig_clear = listview.filter_area.clear.bind(listview.filter_area);
 			listview.filter_area.clear = function (refresh = true, preserve_followup = true) {
-				let current_date = get_current_followup_date();
 				return orig_clear(refresh).then(() => {
 					if (!preserve_followup) return;
-					let current_filters = listview.filter_area.get() || [];
-					let has_follow_up = current_filters.some(f => f[1] === "follow_up_date");
+					let current_date = get_current_followup_date();
+					let fl_filters = listview.filter_area.filter_list?.filters || [];
+					let has_follow_up = fl_filters.some(f => (f.fieldname === "follow_up_date" || f.field?.df?.fieldname === "follow_up_date"))
+						|| (listview.filter_area.get() || []).some(f => f[1] === "follow_up_date");
 					if (!has_follow_up) {
 						return listview.filter_area.add([["Hbs Tally Renewal", "follow_up_date", "<=", current_date]], refresh);
 					}
 				}).then(() => {
+					deduplicate_followup_filters();
 					lock_followup_filter_tag();
 				});
 			};
 		}
 
-		// Ensure fresh default filters (Pending, Follow Up <= Date, TSS Expiry Date <= current month end) are strictly applied
+		// Ensure fresh default filters (Pending, Follow Up <= Date, TSS Expiry Date <= current month end) are strictly applied once
 		function setup_default_renewal_filters() {
 			if (!listview.filter_area) return;
+
+			deduplicate_followup_filters();
 
 			if (!is_admin_or_manager) {
 				// On fresh page load/refresh (not a drilldown from dashboard), clear search params and enforce clean defaults
@@ -380,6 +386,21 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 					}
 
 					let current_date = get_current_followup_date();
+					let fl_filters = listview.filter_area.filter_list?.filters || [];
+					let has_follow_up = fl_filters.some(f => (f.fieldname === "follow_up_date" || f.field?.df?.fieldname === "follow_up_date"))
+						|| (listview.filter_area.get() || []).some(f => f[1] === "follow_up_date");
+					let has_status = fl_filters.some(f => (f.fieldname === "crm_status" || f.field?.df?.fieldname === "crm_status"))
+						|| (listview.filter_area.get() || []).some(f => f[1] === "crm_status");
+					let has_expiry = fl_filters.some(f => (f.fieldname === "acc_expiry_date" || f.field?.df?.fieldname === "acc_expiry_date"))
+						|| (listview.filter_area.get() || []).some(f => f[1] === "acc_expiry_date");
+
+					// If all 3 default filters are already present, do not clear and re-add
+					if (has_follow_up && has_status && has_expiry) {
+						deduplicate_followup_filters();
+						lock_followup_filter_tag();
+						return;
+					}
+
 					let default_renewal_filters = [
 						["Hbs Tally Renewal", "crm_status", "=", "PENDING"],
 						["Hbs Tally Renewal", "follow_up_date", "<=", current_date],
@@ -389,16 +410,19 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 					listview.filter_area.clear(false, false).then(() => {
 						return listview.filter_area.add(default_renewal_filters);
 					}).then(() => {
+						deduplicate_followup_filters();
 						lock_followup_filter_tag();
 					});
 					return;
 				}
 			}
 
+			// For Managers/Admins: add missing defaults if no filters exist at all
 			let current_filters = listview.filter_area.get() || [];
-			let has_status = current_filters.some(f => f[1] === "crm_status");
-			let has_follow_up = current_filters.some(f => f[1] === "follow_up_date");
-			let has_expiry = current_filters.some(f => f[1] === "acc_expiry_date");
+			let fl_filters = listview.filter_area.filter_list?.filters || [];
+			let has_status = current_filters.some(f => f[1] === "crm_status") || fl_filters.some(f => (f.fieldname === "crm_status" || f.field?.df?.fieldname === "crm_status"));
+			let has_follow_up = current_filters.some(f => f[1] === "follow_up_date") || fl_filters.some(f => (f.fieldname === "follow_up_date" || f.field?.df?.fieldname === "follow_up_date"));
+			let has_expiry = current_filters.some(f => f[1] === "acc_expiry_date") || fl_filters.some(f => (f.fieldname === "acc_expiry_date" || f.field?.df?.fieldname === "acc_expiry_date"));
 
 			let to_add = [];
 			if (!has_status) {
@@ -413,9 +437,14 @@ frappe.listview_settings["Hbs Tally Renewal"] = {
 			}
 
 			if (to_add.length) {
-				listview.filter_area.add(to_add);
+				listview.filter_area.add(to_add).then(() => {
+					deduplicate_followup_filters();
+					lock_followup_filter_tag();
+				});
+			} else {
+				deduplicate_followup_filters();
+				lock_followup_filter_tag();
 			}
-			lock_followup_filter_tag();
 		}
 
 		setTimeout(() => {

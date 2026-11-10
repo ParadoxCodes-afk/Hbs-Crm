@@ -70,6 +70,20 @@ class HbsExecutiveDashboard {
 		return '₹' + val.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 	}
 
+	formatTime(val) {
+		if (!val || val === '-' || val === 'None' || val === 'null') return '-';
+		let s = String(val).trim();
+		let m = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+		if (m) {
+			let h = parseInt(m[1], 10);
+			let min = m[2];
+			let ampm = h >= 12 ? 'PM' : 'AM';
+			let h12 = h % 12 || 12;
+			return `${String(h12).padStart(2, '0')}:${min} ${ampm}`;
+		}
+		return s;
+	}
+
 	formatDate(val) {
 		if (!val || val === '-' || val === 'None' || val === 'null') return '-';
 		let s = String(val).trim();
@@ -229,10 +243,10 @@ class HbsExecutiveDashboard {
 					<div class="ed-kpi-card">
 						<div class="ed-kpi-header">
 							<div class="ed-kpi-title-block">
-								<span class="ed-kpi-title"><i class="fa fa-line-chart text-success"></i> ${__('Billing & Incentives')}</span>
-								<span class="ed-kpi-subtitle">${__('Sales vouchers, credit adjustments, net realized sales & commissions')}</span>
+								<span class="ed-kpi-title"><i class="fa fa-line-chart text-success"></i> ${this.meta.can_view_incentive ? __('Billing & Incentives') : __('Billing & Sales Realization')}</span>
+								<span class="ed-kpi-subtitle">${this.meta.can_view_incentive ? __('Sales vouchers, credit adjustments, net realized sales & commissions') : __('Sales vouchers, credit adjustments & net realized sales')}</span>
 							</div>
-							<span class="ed-kpi-chip chip-emerald">${__('REVENUE & COMM')}</span>
+							<span class="ed-kpi-chip chip-emerald">${this.meta.can_view_incentive ? __('REVENUE & COMM') : __('REVENUE')}</span>
 						</div>
 						<div class="ed-kpi-body">
 							<div class="ed-stat-box" data-drill="sales_all" title="Click to view all sales vouchers">
@@ -247,10 +261,11 @@ class HbsExecutiveDashboard {
 								<div class="ed-stat-val val-sales" id="kpi-billing-net">₹0</div>
 								<div class="ed-stat-label">${__('Net Sales')}</div>
 							</div>
+							${this.meta.can_view_incentive ? `
 							<div class="ed-stat-box" data-drill="sales_all" title="Click to view incentive details">
 								<div class="ed-stat-val val-won" id="kpi-billing-incentive">₹0</div>
 								<div class="ed-stat-label">${__('Incentive Earned')}</div>
-							</div>
+							</div>` : ''}
 						</div>
 					</div>
 
@@ -303,6 +318,12 @@ class HbsExecutiveDashboard {
 						<button class="ed-tab-btn" data-tab="parties">
 							<i class="fa fa-building"></i> ${__('Party Outstanding Aging')}
 						</button>
+						${(this.meta && (this.meta.can_view_activity_log || this.meta.is_admin)) ? `
+						<button class="ed-tab-btn ed-tab-admin-only" data-tab="activities">
+							<i class="fa fa-history"></i> ${__('Daily Activity & Work Log')}
+							<span class="ed-tab-badge">${this.meta.is_admin ? __('Admin') : __('Team')}</span>
+						</button>
+						` : ''}
 					</div>
 
 					<div class="ed-table-wrapper" id="ed-tab-content">
@@ -331,6 +352,18 @@ class HbsExecutiveDashboard {
 			const dy = String(d.getDate()).padStart(2, '0');
 			return `${yr}-${mo}-${dy}`;
 		};
+
+		// Auto-pick end of month when from-date changes
+		this.wrapper.find('#ed-from-date').on('change', function() {
+			const val = $(this).val();
+			if (val) {
+				const parts = val.split('-').map(Number);
+				if (parts.length === 3 && parts[0] && parts[1]) {
+					me.wrapper.find('#ed-to-date').val(toYMD(new Date(parts[0], parts[1], 0)));
+					me.fetchData();
+				}
+			}
+		});
 
 		this.wrapper.find('#ed-btn-this-month').on('click', () => {
 			const now = new Date();
@@ -522,7 +555,9 @@ class HbsExecutiveDashboard {
 		$('#kpi-billing-total').text(this.formatINR(s.total_billing));
 		$('#kpi-billing-credit').text(this.formatINR(s.credit_note));
 		$('#kpi-billing-net').text(this.formatINR(s.net_sales));
-		$('#kpi-billing-incentive').text(this.formatINR(s.total_incentive));
+		if (this.meta && this.meta.can_view_incentive) {
+			$('#kpi-billing-incentive').text(this.formatINR(s.total_incentive));
+		}
 
 		const o = this.data.outstanding || {};
 		$('#kpi-out-total').text(this.formatINR(o.total_outstanding));
@@ -617,6 +652,8 @@ class HbsExecutiveDashboard {
 			this.renderProductTable(container);
 		} else if (this.activeTab === 'parties') {
 			this.renderPartyTable(container);
+		} else if (this.activeTab === 'activities') {
+			this.renderActivityTable(container);
 		}
 	}
 
@@ -677,9 +714,14 @@ class HbsExecutiveDashboard {
 			return;
 		}
 
+		const canIncentive = Boolean(this.meta && this.meta.can_view_incentive);
+		const bannerDesc = canIncentive
+			? __('Performance metrics showing gross sales quantity, gross sales turnover, credit note adjustments, net realized billing, and total incentive accrued by product category.')
+			: __('Performance metrics showing gross sales quantity, gross sales turnover, credit note adjustments, and net realized billing by product category.');
+
 		let html = `
 			<div class="ed-tab-banner">
-				<i class="fa fa-info-circle text-primary"></i> <strong>${__('Product & Item Revenue Analysis:')}</strong> ${__('Performance metrics showing gross sales quantity, gross sales turnover, credit note adjustments, net realized billing, and total incentive accrued by product category.')}
+				<i class="fa fa-info-circle text-primary"></i> <strong>${__('Product & Item Revenue Analysis:')}</strong> ${bannerDesc}
 			</div>
 			<table class="ed-table">
 				<thead>
@@ -690,7 +732,7 @@ class HbsExecutiveDashboard {
 						<th class="num-cell">${__('Txns')}</th>
 						<th class="num-cell">${__('Credit Note')}</th>
 						<th class="num-cell">${__('Net Sales')}</th>
-						<th class="num-cell">${__('Total Incentive')}</th>
+						${canIncentive ? `<th class="num-cell">${__('Total Incentive')}</th>` : ''}
 					</tr>
 				</thead>
 				<tbody>
@@ -705,7 +747,7 @@ class HbsExecutiveDashboard {
 					<td class="num-cell">${r.gross_txns}</td>
 					<td class="num-cell val-credit">${this.formatFullINR(r.credit_note_value)}</td>
 					<td class="num-cell val-sales"><strong>${this.formatFullINR(r.net_sales)}</strong></td>
-					<td class="num-cell" style="color:#0284c7; font-weight:700;">${this.formatFullINR(r.total_incentive)}</td>
+					${canIncentive ? `<td class="num-cell" style="color:#0284c7; font-weight:700;">${this.formatFullINR(r.total_incentive)}</td>` : ''}
 				</tr>
 			`;
 		});
@@ -760,6 +802,635 @@ class HbsExecutiveDashboard {
 		container.html(html);
 	}
 
+	renderActivityTable(container) {
+		const me = this;
+		if (!this.activityState) {
+			this.activityState = {
+				date: frappe.datetime.get_today(),
+				loading: false,
+				data: null
+			};
+		}
+
+		if (this.activityState.loading) {
+			container.html(`
+				<div class="p-5 text-center text-muted">
+					<i class="fa fa-spinner fa-spin fa-2x"></i>
+					<p class="mt-2">${__('Loading executive daily activity log...')}</p>
+				</div>
+			`);
+			return;
+		}
+
+		if (!this.activityState.data) {
+			this.activityState.loading = true;
+			container.html(`
+				<div class="p-5 text-center text-muted">
+					<i class="fa fa-spinner fa-spin fa-2x"></i>
+					<p class="mt-2">${__('Loading executive daily activity log...')}</p>
+				</div>
+			`);
+			frappe.call({
+				method: 'hbs_crm.hbs_crm.dashboard_api.get_executive_daily_activities',
+				args: {
+					date: this.activityState.date
+				},
+				callback: (r) => {
+					me.activityState.loading = false;
+					if (r.message) {
+						me.activityState.data = r.message;
+						me.renderActivityTable(container);
+					}
+				},
+				error: (err) => {
+					me.activityState.loading = false;
+					container.html(`
+						<div class="p-4 text-center text-danger">
+							<i class="fa fa-exclamation-triangle fa-2x mb-2"></i>
+							<p>${__('Failed to load activity logs or unauthorized access.')}</p>
+						</div>
+					`);
+				}
+			});
+			return;
+		}
+
+		const res = this.activityState.data;
+		const kpi = res.kpis || {};
+		const hourly = res.hourly || [];
+		const scorecard = res.scorecard || [];
+
+		// Find max hourly count for relative team chart height
+		let maxHourly = 1;
+		hourly.forEach(h => { if (h.count > maxHourly) maxHourly = h.count; });
+
+		let html = `
+			<div class="ed-tab-banner">
+				<i class="fa fa-shield text-primary"></i> <strong>${__('Daily Activity & Work Log:')}</strong> ${__('Real-time audit trail of remarks, follow-up moves, status transitions, and client visits across CRM Leads, Renewals, and Outstanding.')}
+			</div>
+
+			<!-- Activity Filter Toolbar -->
+			<div class="ed-act-toolbar" style="margin-bottom: 16px;">
+				<div class="ed-act-filter-group">
+					<label><i class="fa fa-calendar"></i> ${__('Date')}:</label>
+					<input type="date" id="ed-act-date-picker" class="ed-date-input" value="${this.activityState.date}">
+					<button class="ed-btn ed-btn-outline ed-btn-xs" id="ed-act-btn-today">${__('Today')}</button>
+					<button class="ed-btn ed-btn-outline ed-btn-xs" id="ed-act-btn-yesterday">${__('Yesterday')}</button>
+				</div>
+				<div class="ed-act-filter-actions">
+					<button class="ed-btn ed-btn-outline" id="ed-act-btn-refresh" title="${__('Refresh Live Data')}">
+						<i class="fa fa-refresh"></i> ${__('Refresh')}
+					</button>
+				</div>
+			</div>
+
+			<!-- Daily Performance KPI Cards -->
+			<div class="ed-act-kpi-row">
+				<div class="ed-act-kpi-card kpi-blue">
+					<div class="kpi-icon"><i class="fa fa-bolt"></i></div>
+					<div class="kpi-body">
+						<div class="kpi-val">${kpi.total_activities || 0}</div>
+						<div class="kpi-lbl">${__('Total Actions Logged')}</div>
+					</div>
+				</div>
+				<div class="ed-act-kpi-card kpi-sky">
+					<div class="kpi-icon"><i class="fa fa-comments-o"></i></div>
+					<div class="kpi-body">
+						<div class="kpi-val">${kpi.followups_done || 0}</div>
+						<div class="kpi-lbl">${__('Follow-ups Submitted')}</div>
+					</div>
+				</div>
+				<div class="ed-act-kpi-card kpi-purple">
+					<div class="kpi-icon"><i class="fa fa-building-o"></i></div>
+					<div class="kpi-body">
+						<div class="kpi-val">${kpi.records_touched || 0}</div>
+						<div class="kpi-lbl">${__('Accounts Worked')}</div>
+					</div>
+				</div>
+				<div class="ed-act-kpi-card kpi-green">
+					<div class="kpi-icon"><i class="fa fa-trophy"></i></div>
+					<div class="kpi-body">
+						<div class="kpi-val">${kpi.deals_won || 0}</div>
+						<div class="kpi-lbl">${__('Deals Closed / Won')}</div>
+					</div>
+				</div>
+				<div class="ed-act-kpi-card kpi-amber">
+					<div class="kpi-icon"><i class="fa fa-calendar-check-o"></i></div>
+					<div class="kpi-body">
+						<div class="kpi-val">${kpi.rescheduled_count || 0}</div>
+						<div class="kpi-lbl">${__('Follow-ups Rescheduled')}</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Active Working Hours Timeline (Team Overview) -->
+			<div class="ed-hourly-card">
+				<div class="ed-hourly-header">
+					<span class="ed-hourly-title">
+						<i class="fa fa-clock-o text-primary"></i> ${__('Team Active Working Hours Timeline')} <small class="text-muted">(9:00 AM – 7:00 PM)</small>
+					</span>
+					<span class="ed-hourly-sub">
+						${__('Live team-wide distribution of call remarks and updates logged throughout the working day')}
+					</span>
+				</div>
+				<div class="ed-hourly-chart">
+					${hourly.map(h => {
+						const pct = h.count > 0 ? Math.max(12, Math.round((h.count / maxHourly) * 100)) : 0;
+						return `
+							<div class="ed-hourly-col" title="${h.count} ${__('team activities at')} ${h.label}">
+								<div class="ed-hourly-count ${h.count > 0 ? 'has-count' : ''}">${h.count > 0 ? h.count : ''}</div>
+								<div class="ed-hourly-bar-track">
+									<div class="ed-hourly-bar-fill" style="height: ${pct}%;"></div>
+								</div>
+								<div class="ed-hourly-label">${h.label}</div>
+							</div>
+						`;
+					}).join('')}
+				</div>
+			</div>
+
+			<!-- Team Executive Daily Scorecard -->
+			<div class="ed-act-scorecard-card">
+				<div class="ed-act-scorecard-header">
+					<span class="ed-act-scorecard-title">
+						<i class="fa fa-user-circle text-primary"></i> ${__('Team Executive Daily Scorecard')} 
+						<small class="text-muted ml-2">(${scorecard.filter(x => !x.is_inactive).length} ${__('Active')}, ${scorecard.filter(x => x.is_inactive).length} ${__('Inactive')})</small>
+					</span>
+					<span class="text-muted" style="font-size:11.5px;">
+						<i class="fa fa-hand-pointer-o text-primary"></i> ${__('Click any executive to inspect their individual activity stream & work hours')}
+					</span>
+				</div>
+				<div style="overflow-x:auto;">
+					<table class="ed-act-scorecard-table">
+						<thead>
+							<tr>
+								<th>${__('Executive')}</th>
+								<th class="text-center" style="width:120px;">${__('Daily Status')}</th>
+								<th class="text-right" style="width:95px;">${__('Actions')}</th>
+								<th class="text-right" style="width:85px;">${__('New Leads')}</th>
+								<th class="text-right" style="width:85px;">${__('Follow-ups')}</th>
+								<th class="text-right" style="width:75px;">${__('Won')}</th>
+								<th class="text-right" style="width:85px;">${__('Visits')}</th>
+								<th class="text-center" style="width:120px;">${__('First Action')}</th>
+								<th class="text-center" style="width:120px;">${__('Last Action')}</th>
+								<th class="text-center" style="width:130px;">${__('Activity Sheet')}</th>
+							</tr>
+						</thead>
+						<tbody>
+							${scorecard.length === 0 ? `
+								<tr><td colspan="9" class="text-center py-4 text-muted">${__('No executive records found for this date.')}</td></tr>
+							` : scorecard.map(s => `
+								<tr class="ed-scorecard-row-clickable" data-user="${frappe.utils.escape_html(s.user)}" data-name="${frappe.utils.escape_html(s.user_name || s.user)}">
+									<td>
+										<strong>${frappe.utils.escape_html(s.user_name || s.user)}</strong>
+										${s.user && s.user !== s.user_name ? `<br><small class="text-muted">${frappe.utils.escape_html(s.user)}</small>` : ''}
+									</td>
+									<td class="text-center">
+										${s.is_inactive || s.total_actions === 0 ? `
+											<span class="ed-badge-inactive"><i class="fa fa-times-circle"></i> ${__('No Activity')}</span>
+										` : `
+											<span class="ed-badge-active"><i class="fa fa-check-circle"></i> ${__('Active')}</span>
+										`}
+									</td>
+									<td class="text-right" style="font-weight:700;">${s.total_actions}</td>
+									<td class="text-right ${s.new_leads > 0 ? 'text-success font-weight-bold' : 'text-muted'}">${s.new_leads || 0}</td>
+									<td class="text-right">${s.followups}</td>
+									<td class="text-right ${s.deals_won > 0 ? 'text-success font-weight-bold' : 'text-muted'}">${s.deals_won}</td>
+									<td class="text-right ${s.visits_done > 0 ? 'text-info font-weight-bold' : 'text-muted'}">${s.visits_done}</td>
+									<td class="text-center text-muted font-weight-bold">${me.formatTime(s.first_time)}</td>
+									<td class="text-center text-muted font-weight-bold">${me.formatTime(s.last_time)}</td>
+									<td class="text-center">
+										<button class="ed-btn ed-btn-outline ed-btn-xs ed-btn-view-sheet" data-user="${frappe.utils.escape_html(s.user)}" data-name="${frappe.utils.escape_html(s.user_name || s.user)}">
+											<i class="fa fa-eye"></i> ${__('View Log')}
+										</button>
+									</td>
+								</tr>
+							`).join('')}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		`;
+
+		container.html(html);
+
+		// Toolbar Bindings
+		container.find('#ed-act-date-picker').on('change', function() {
+			me.activityState.date = $(this).val();
+			me.activityState.data = null;
+			me.renderActivityTable(container);
+		});
+
+		container.find('#ed-act-btn-today').on('click', () => {
+			me.activityState.date = frappe.datetime.get_today();
+			me.activityState.data = null;
+			me.renderActivityTable(container);
+		});
+
+		container.find('#ed-act-btn-yesterday').on('click', () => {
+			const d = new Date();
+			d.setDate(d.getDate() - 1);
+			const yr = d.getFullYear();
+			const mo = String(d.getMonth() + 1).padStart(2, '0');
+			const dy = String(d.getDate()).padStart(2, '0');
+			me.activityState.date = `${yr}-${mo}-${dy}`;
+			me.activityState.data = null;
+			me.renderActivityTable(container);
+		});
+
+		container.find('#ed-act-btn-refresh').on('click', () => {
+			me.activityState.data = null;
+			me.renderActivityTable(container);
+		});
+
+		// Open Executive Day Sheet on row or button click
+		container.find('.ed-scorecard-row-clickable').on('click', function(e) {
+			const user = $(this).attr('data-user');
+			const name = $(this).attr('data-name');
+			me.openExecutiveDaySheet(user, name, me.activityState.date);
+		});
+	}
+
+	openExecutiveDaySheet(user, userName, date) {
+		const me = this;
+		const initials = (userName || user || 'EX').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+		const modalHtml = $(`
+			<div class="ed-daysheet-backdrop">
+				<div class="ed-daysheet-modal">
+					<div class="ed-daysheet-header">
+						<div class="ed-daysheet-profile">
+							<div class="ed-daysheet-avatar">${initials}</div>
+							<div class="ed-daysheet-user-info">
+								<h3>${frappe.utils.escape_html(userName || user)}</h3>
+								<p><i class="fa fa-envelope-o"></i> ${frappe.utils.escape_html(user)} &bull; <i class="fa fa-calendar"></i> ${me.formatDate(date)}</p>
+							</div>
+						</div>
+						<div class="ed-daysheet-header-stats">
+							<span class="ed-modal-stat-chip"><i class="fa fa-list"></i> <b id="ed-sheet-total-acts">0</b> Actions</span>
+							<span class="ed-modal-stat-chip ed-chip-highlight" id="ed-sheet-hours-chip"><i class="fa fa-clock-o"></i> Hours: -</span>
+							<button class="ed-modal-close" id="ed-sheet-btn-close" title="Close (Esc)">&times;</button>
+						</div>
+					</div>
+
+					<div class="ed-daysheet-body" id="ed-sheet-body">
+						<div class="p-5 text-center text-muted">
+							<i class="fa fa-spinner fa-spin fa-2x"></i>
+							<p class="mt-2">${__('Loading executive day activity sheet...')}</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		`);
+
+		$('body').append(modalHtml);
+
+		const closeModal = () => {
+			$(document).off('keydown.ed_daysheet');
+			modalHtml.fadeOut(150, () => modalHtml.remove());
+		};
+
+		modalHtml.find('#ed-sheet-btn-close').on('click', closeModal);
+		modalHtml.on('click', (e) => {
+			if ($(e.target).hasClass('ed-daysheet-backdrop')) closeModal();
+		});
+		$(document).on('keydown.ed_daysheet', (e) => {
+			if (e.key === 'Escape' || e.keyCode === 27) closeModal();
+		});
+
+		// Fetch detailed data for this specific executive on this date
+		frappe.call({
+			method: 'hbs_crm.hbs_crm.dashboard_api.get_executive_daily_activities',
+			args: {
+				date: date,
+				executive: user,
+				limit: 500
+			},
+			callback: (r) => {
+				if (!r.message) {
+					modalHtml.find('#ed-sheet-body').html(`
+						<div class="p-5 text-center text-muted">${__('No activity records found.')}</div>
+					`);
+					return;
+				}
+
+				const sheetData = r.message;
+				const allRows = sheetData.timeline || [];
+				const hourly = sheetData.hourly || [];
+				const kpi = sheetData.kpis || {};
+
+				modalHtml.find('#ed-sheet-total-acts').text(allRows.length);
+				
+				// Calculate new leads count
+				const newLeadsCount = allRows.filter(x => x.activity_type === 'New Lead Created').length;
+				if (newLeadsCount > 0) {
+					modalHtml.find('#ed-sheet-hours-chip').before(`
+						<span class="ed-modal-stat-chip ed-chip-new-lead"><i class="fa fa-bolt text-success"></i> <b>${newLeadsCount}</b> ${newLeadsCount === 1 ? 'New Lead' : 'New Leads'}</span>
+					`);
+				}
+
+				// Calculate first & last times
+				if (allRows.length > 0) {
+					const times = allRows.map(x => x.activity_time).filter(Boolean).sort();
+					const firstTime = times[0];
+					const lastTime = times[times.length - 1];
+					modalHtml.find('#ed-sheet-hours-chip').html(`<i class="fa fa-clock-o"></i> ${me.formatTime(firstTime)} &rarr; ${me.formatTime(lastTime)}`);
+				} else {
+					modalHtml.find('#ed-sheet-hours-chip').html(`<i class="fa fa-clock-o"></i> No Activity Logged`);
+				}
+
+				// Render Sheet Content with interactive filters
+				let sheetState = {
+					selectedHour: null,
+					module: '',
+					activity_type: '',
+					search: ''
+				};
+
+				// Maximum count for hourly chart height
+				let maxHourly = 1;
+				hourly.forEach(h => { if (h.count > maxHourly) maxHourly = h.count; });
+
+				const renderSheetContent = () => {
+					let filtered = allRows;
+
+					if (sheetState.selectedHour !== null) {
+						filtered = filtered.filter(r => {
+							if (!r.activity_time) return false;
+							return parseInt(String(r.activity_time).split(':')[0], 10) === sheetState.selectedHour;
+						});
+					}
+
+					if (sheetState.module) {
+						filtered = filtered.filter(r => r.reference_doctype === sheetState.module);
+					}
+
+					if (sheetState.activity_type) {
+						filtered = filtered.filter(r => r.activity_type === sheetState.activity_type);
+					}
+
+					if (sheetState.search) {
+						const q = sheetState.search.toLowerCase().trim();
+						filtered = filtered.filter(r => {
+							const hay = [
+								r.party_name, r.contact_person, r.contact_phone,
+								r.reference_name, r.activity_type, r.details,
+								r.status_before, r.status_after
+							].filter(Boolean).join(' ').toLowerCase();
+							return hay.includes(q);
+						});
+					}
+
+					let selectedHourLabel = '';
+					if (sheetState.selectedHour !== null) {
+						const matchH = hourly.find(x => x.hour === sheetState.selectedHour);
+						selectedHourLabel = matchH ? matchH.label : `${sheetState.selectedHour}:00`;
+					}
+
+					const contentHtml = `
+						<!-- Executive Specific Active Working Hours Timeline -->
+						<div class="ed-hourly-card" style="margin-bottom:0;">
+							<div class="ed-hourly-header">
+								<span class="ed-hourly-title">
+									<i class="fa fa-clock-o text-primary"></i> ${frappe.utils.escape_html(userName || user)}'s Active Working Hours
+									<small class="text-muted">(9:00 AM – 7:00 PM)</small>
+								</span>
+								<span class="ed-hourly-sub">
+									${sheetState.selectedHour !== null ? `
+										<span style="color:#ea580c; font-weight:700;"><i class="fa fa-filter"></i> Filtered to ${selectedHourLabel}</span>
+										<a href="javascript:void(0)" id="ed-sheet-clear-hour" class="ml-2 font-weight-bold text-danger"><i class="fa fa-times"></i> Clear Hour</a>
+									` : `
+										Click any hour bar to isolate activities
+									`}
+								</span>
+							</div>
+							<div class="ed-hourly-chart">
+								${hourly.map(h => {
+									const pct = h.count > 0 ? Math.max(12, Math.round((h.count / maxHourly) * 100)) : 0;
+									const isSel = sheetState.selectedHour === h.hour;
+									return `
+										<div class="ed-hourly-col ${isSel ? 'selected-hour' : ''}" data-hour="${h.hour}" title="${h.count} actions at ${h.label} - Click to filter">
+											<div class="ed-hourly-count ${h.count > 0 ? 'has-count' : ''}">${h.count > 0 ? h.count : ''}</div>
+											<div class="ed-hourly-bar-track">
+												<div class="ed-hourly-bar-fill" style="height: ${pct}%;"></div>
+											</div>
+											<div class="ed-hourly-label">${h.label}</div>
+										</div>
+									`;
+								}).join('')}
+							</div>
+						</div>
+
+						<!-- In-Modal Filter & Search Toolbar -->
+						<div class="ed-act-toolbar" style="margin-bottom:0;">
+							<div class="ed-act-filter-group">
+								<label><i class="fa fa-cubes"></i> Module:</label>
+								<select id="ed-sheet-module-filter" class="ed-select-input">
+									<option value="">All Modules</option>
+									<option value="Hbs Crm Lead" ${sheetState.module === 'Hbs Crm Lead' ? 'selected' : ''}>CRM Leads (${kpi.leads_count || 0})</option>
+									<option value="Hbs Tally Renewal" ${sheetState.module === 'Hbs Tally Renewal' ? 'selected' : ''}>TSS Renewals (${kpi.renewals_count || 0})</option>
+									<option value="Hbs Outstanding" ${sheetState.module === 'Hbs Outstanding' ? 'selected' : ''}>Outstanding (${kpi.outstanding_count || 0})</option>
+								</select>
+							</div>
+							<div class="ed-act-filter-group">
+								<label><i class="fa fa-filter"></i> Activity:</label>
+								<select id="ed-sheet-type-filter" class="ed-select-input">
+									<option value="">All Activities</option>
+									<option value="New Lead Created" ${sheetState.activity_type === 'New Lead Created' ? 'selected' : ''}>New Lead Created</option>
+									<option value="Follow-up Remark" ${sheetState.activity_type === 'Follow-up Remark' ? 'selected' : ''}>Follow-up Remark</option>
+									<option value="Payment Remark" ${sheetState.activity_type === 'Payment Remark' ? 'selected' : ''}>Payment Remark</option>
+									<option value="Follow-up Rescheduled" ${sheetState.activity_type === 'Follow-up Rescheduled' ? 'selected' : ''}>Follow-up Rescheduled</option>
+									<option value="Status Change" ${sheetState.activity_type === 'Status Change' ? 'selected' : ''}>Status Change</option>
+									<option value="Deal Won" ${sheetState.activity_type === 'Deal Won' ? 'selected' : ''}>Deal Won</option>
+									<option value="Deal Lost" ${sheetState.activity_type === 'Deal Lost' ? 'selected' : ''}>Deal Lost</option>
+									<option value="Visit Done" ${sheetState.activity_type === 'Visit Done' ? 'selected' : ''}>Visit Done</option>
+								</select>
+							</div>
+							<div class="ed-act-search-box">
+								<i class="fa fa-search"></i>
+								<input type="text" id="ed-sheet-search-input" class="ed-act-search-input" placeholder="Search client, phone, remarks..." value="${frappe.utils.escape_html(sheetState.search || '')}">
+								${sheetState.search ? `<button id="ed-sheet-search-clear" class="ed-act-search-clear">&times;</button>` : ''}
+							</div>
+							<div class="ed-act-filter-actions">
+								<button class="ed-btn ed-btn-outline" id="ed-sheet-btn-export" title="Export this log as CSV">
+									<i class="fa fa-download"></i> Export Log
+								</button>
+							</div>
+						</div>
+
+						<!-- Activity Stream Feed -->
+						<div class="ed-daysheet-feed">
+							${filtered.length === 0 ? `
+								<div class="p-5 text-center text-muted" style="background:#ffffff; border-radius:8px; border:1px solid #e2e8f0;">
+									<i class="fa fa-calendar-times-o fa-2x mb-2" style="opacity:0.35;"></i>
+									<p><strong>No activities match your filters</strong></p>
+									<small>Try clearing hour, module, or search filters.</small>
+								</div>
+							` : filtered.map(r => {
+								let vertPill = 'ed-vert-crm';
+								let vertLabel = 'CRM Lead';
+								let vertIcon = 'fa-bullseye';
+								if (r.reference_doctype === 'Hbs Tally Renewal') {
+									vertPill = 'ed-vert-tss';
+									vertLabel = 'TSS Renewal';
+									vertIcon = 'fa-refresh';
+								} else if (r.reference_doctype === 'Hbs Outstanding') {
+									vertPill = 'ed-vert-out';
+									vertLabel = 'Outstanding';
+									vertIcon = 'fa-book';
+								}
+
+								let actBadgeCls = 'act-remark';
+								let actIcon = 'fa-commenting-o';
+								let cardModCls = '';
+								let isNewLead = (r.activity_type === 'New Lead Created');
+								if (isNewLead) {
+									actBadgeCls = 'act-new-lead';
+									actIcon = 'fa-star';
+									cardModCls = 'card-new-lead';
+								} else if (r.activity_type === 'Follow-up Rescheduled') {
+									actBadgeCls = 'act-reschedule';
+									actIcon = 'fa-calendar-check-o';
+								} else if (r.activity_type === 'Deal Won') {
+									actBadgeCls = 'act-won';
+									actIcon = 'fa-trophy';
+								} else if (r.activity_type === 'Deal Lost') {
+									actBadgeCls = 'act-lost';
+									actIcon = 'fa-times-circle';
+								} else if (r.activity_type === 'Status Change') {
+									actBadgeCls = 'act-status';
+									actIcon = 'fa-exchange';
+								} else if (r.activity_type === 'Visit Done') {
+									actBadgeCls = 'act-visit';
+									actIcon = 'fa-map-marker';
+								} else if (r.activity_type === 'Payment Remark') {
+									actBadgeCls = 'act-payment';
+									actIcon = 'fa-money';
+								}
+
+								const routeDoc = r.reference_doctype ? frappe.router.slug(r.reference_doctype) : 'hbs-crm-lead';
+								const linkUrl = `/app/${routeDoc}/${encodeURIComponent(r.reference_name || '')}`;
+
+								return `
+									<div class="ed-feed-card ${cardModCls}">
+										<div class="ed-feed-top">
+											<div class="ed-feed-meta-left">
+												<span class="ed-act-time"><i class="fa fa-clock-o text-muted"></i> ${me.formatTime(r.activity_time)}</span>
+												<span class="ed-vert-pill ${vertPill}"><i class="fa ${vertIcon}"></i> ${vertLabel}</span>
+												<span class="ed-act-badge ${actBadgeCls}"><i class="fa ${actIcon}"></i> ${frappe.utils.escape_html(r.activity_type)}</span>
+											</div>
+											${r.follow_up_date ? `
+												<span class="ed-fup-date"><i class="fa fa-calendar-check-o text-muted"></i> Next: <b>${me.formatDate(r.follow_up_date)}</b></span>
+											` : ''}
+										</div>
+
+										<div class="ed-feed-party-row">
+											<div class="ed-feed-party-name">
+												<a href="${linkUrl}" target="_blank" title="Open record in Desk">
+													<i class="fa fa-external-link text-primary mr-1"></i> ${frappe.utils.escape_html(r.party_name || r.reference_name)}
+												</a>
+												${isNewLead ? `<span class="ed-new-lead-pill"><i class="fa fa-bolt"></i> NEW LEAD</span>` : ''}
+											</div>
+											<div class="ed-feed-contact-group">
+												${(r.status_before && r.status_after) ? `
+													<div class="ed-status-trans">
+														<span class="st-before">${frappe.utils.escape_html(r.status_before)}</span>
+														<i class="fa fa-long-arrow-right"></i>
+														<span class="st-after">${frappe.utils.escape_html(r.status_after)}</span>
+													</div>
+												` : ''}
+												${r.contact_person ? `<span><i class="fa fa-user-o text-muted"></i> ${frappe.utils.escape_html(r.contact_person)}</span>` : ''}
+												${r.contact_phone ? `<a href="tel:${r.contact_phone.replace(/[^0-9]/g, '')}" class="ed-tel-link"><i class="fa fa-phone"></i> ${frappe.utils.escape_html(r.contact_phone)}</a>` : ''}
+											</div>
+										</div>
+
+										<div class="ed-feed-remark">
+											${frappe.utils.escape_html(r.details || '-')}
+										</div>
+									</div>
+								`;
+							}).join('')}
+						</div>
+					`;
+
+					modalHtml.find('#ed-sheet-body').html(contentHtml);
+
+					// Bind inside modal events
+					modalHtml.find('#ed-sheet-module-filter').on('change', function() {
+						sheetState.module = $(this).val();
+						renderSheetContent();
+					});
+
+					modalHtml.find('#ed-sheet-type-filter').on('change', function() {
+						sheetState.activity_type = $(this).val();
+						renderSheetContent();
+					});
+
+					modalHtml.find('#ed-sheet-search-input').on('input', function() {
+						sheetState.search = $(this).val();
+						renderSheetContent();
+						modalHtml.find('#ed-sheet-search-input').focus();
+					});
+
+					modalHtml.find('#ed-sheet-search-clear').on('click', () => {
+						sheetState.search = '';
+						renderSheetContent();
+					});
+
+					modalHtml.find('.ed-hourly-col').on('click', function() {
+						const hour = parseInt($(this).attr('data-hour'), 10);
+						if (sheetState.selectedHour === hour) {
+							sheetState.selectedHour = null;
+						} else {
+							sheetState.selectedHour = hour;
+						}
+						renderSheetContent();
+					});
+
+					modalHtml.find('#ed-sheet-clear-hour').on('click', () => {
+						sheetState.selectedHour = null;
+						renderSheetContent();
+					});
+
+					// Export CSV
+					modalHtml.find('#ed-sheet-btn-export').on('click', () => {
+						if (!filtered || !filtered.length) {
+							frappe.show_alert({ message: __('No activity rows to export'), indicator: 'orange' });
+							return;
+						}
+						let csv = ['Time,Executive,Email,Module,Party / Account,Contact Person,Phone,Action Type,Next Follow-up,Details'];
+						filtered.forEach(r => {
+							const line = [
+								`"${(me.formatTime(r.activity_time) || '').replace(/"/g, '""')}"`,
+								`"${(userName || '').replace(/"/g, '""')}"`,
+								`"${(user || '').replace(/"/g, '""')}"`,
+								`"${(r.reference_doctype || '').replace(/"/g, '""')}"`,
+								`"${(r.party_name || r.reference_name || '').replace(/"/g, '""')}"`,
+								`"${(r.contact_person || '').replace(/"/g, '""')}"`,
+								`"${(r.contact_phone || '').replace(/"/g, '""')}"`,
+								`"${(r.activity_type || '').replace(/"/g, '""')}"`,
+								`"${(r.follow_up_date || '').replace(/"/g, '""')}"`,
+								`"${(r.details || '').replace(/"/g, '""')}"`
+							].join(',');
+							csv.push(line);
+						});
+						const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+						const blobUrl = URL.createObjectURL(blob);
+						const a = document.createElement('a');
+						a.href = blobUrl;
+						a.download = `${(userName || user).replace(/\s+/g, '_')}_Activity_Log_${date}.csv`;
+						document.body.appendChild(a);
+						a.click();
+						document.body.removeChild(a);
+						URL.revokeObjectURL(blobUrl);
+					});
+				};
+
+				renderSheetContent();
+			}
+		});
+	}
+
 	openDrilldownModal(metricType) {
 		const fromDate = this.wrapper.find('#ed-from-date').val();
 		const toDate = this.wrapper.find('#ed-to-date').val();
@@ -786,9 +1457,129 @@ class HbsExecutiveDashboard {
 		const cols = res.columns || [];
 		const rows = res.rows || [];
 		const doctype = res.doctype || 'Hbs Crm Lead';
+		const metricType = res.metric_type || 'records';
+		const totalCount = res.total_count ?? rows.length;
+		const totalAmount = res.total_amount ?? 0;
+
+		// Clean vertical icons, categories & colors
+		const titlesMap = {
+			'leads_pending': { title: 'Pending CRM Leads', icon: 'fa fa-clock-o', tag: 'CRM PIPELINE', color: '#f59e0b' },
+			'leads_overdue': { title: 'Overdue Lead Follow-ups', icon: 'fa fa-exclamation-triangle', tag: 'CRM PIPELINE', color: '#ef4444' },
+			'leads_generated': { title: 'Newly Created Leads', icon: 'fa fa-plus-circle', tag: 'CRM PIPELINE', color: '#3b82f6' },
+			'leads_won': { title: 'Won Sales Deals', icon: 'fa fa-check-circle', tag: 'CRM PIPELINE', color: '#10b981' },
+			'leads_lost': { title: 'Lost Leads Queue', icon: 'fa fa-times-circle', tag: 'CRM PIPELINE', color: '#64748b' },
+			'leads_visits': { title: 'Completed Client Demos & Visits', icon: 'fa fa-map-marker', tag: 'CRM PIPELINE', color: '#8b5cf6' },
+			'tss_pending': { title: 'Pending Tally TSS Renewals', icon: 'fa fa-refresh', tag: 'SUBSCRIPTIONS', color: '#f59e0b' },
+			'tss_overdue': { title: 'Overdue Renewal Follow-ups', icon: 'fa fa-exclamation-circle', tag: 'SUBSCRIPTIONS', color: '#ef4444' },
+			'tss_won': { title: 'Renewed & Sold TSS Licenses', icon: 'fa fa-trophy', tag: 'SUBSCRIPTIONS', color: '#10b981' },
+			'tss_lost': { title: 'Lost TSS Subscriptions', icon: 'fa fa-ban', tag: 'SUBSCRIPTIONS', color: '#64748b' },
+			'sales_all': { title: 'Sales Billing Transactions', icon: 'fa fa-line-chart', tag: 'REVENUE & COMM', color: '#10b981' },
+			'sales_credit': { title: 'Credit Notes Issued', icon: 'fa fa-undo', tag: 'REVENUE & COMM', color: '#f97316' },
+			'outstanding_all': { title: 'All Pending Receivables', icon: 'fa fa-book', tag: 'COLLECTIONS', color: '#3b82f6' },
+			'outstanding_15': { title: 'Receivables Overdue > 15 Days', icon: 'fa fa-clock-o', tag: 'COLLECTIONS', color: '#d97706' },
+			'outstanding_30': { title: 'Critical Receivables Overdue > 30 Days', icon: 'fa fa-fire', tag: 'COLLECTIONS', color: '#dc2626' },
+			'outstanding_parties': { title: 'Party-Wise Outstanding Balances', icon: 'fa fa-users', tag: 'COLLECTIONS', color: '#6366f1' }
+		};
+
+		const metaInfo = titlesMap[metricType] || {
+			title: __(metricType.replace(/_/g, ' ').toUpperCase()),
+			icon: 'fa fa-list',
+			tag: 'RECORDS',
+			color: '#2563eb'
+		};
+
+		// Helper to render interactive table cell
+		const renderCell = (k, val, r, idx) => {
+			const kLower = String(k).toLowerCase();
+			const valStr = val !== null && val !== undefined ? String(val).trim() : '';
+			const docId = r.name || r.bill_no;
+
+			// Primary Key (First Column): clickable direct link
+			if (idx === 0 && docId && doctype) {
+				return `<td><a href="/app/${frappe.router.slug(doctype)}/${encodeURIComponent(docId)}" target="_blank" class="ed-cell-link" title="Open record"><i class="fa fa-external-link"></i> ${frappe.utils.escape_html(valStr || docId)}</a></td>`;
+			}
+
+			if (!valStr || valStr === '-') {
+				return `<td class="text-muted text-center">-</td>`;
+			}
+
+			// Phone / Mobile: click-to-call
+			if (kLower.includes('mobile') || kLower.includes('phone') || kLower.includes('contact_number')) {
+				const clean = valStr.replace(/[^0-9]/g, '');
+				return `
+					<td>
+						<div class="ed-contact-cell">
+							<a href="tel:${clean}" class="ed-tel-link" title="Call ${valStr}"><i class="fa fa-phone text-primary"></i> ${frappe.utils.escape_html(valStr)}</a>
+						</div>
+					</td>
+				`;
+			}
+
+			// Status badge pills
+			if (kLower === 'status' || kLower === 'payment_status' || kLower === 'crm_status') {
+				const stLower = valStr.toLowerCase();
+				let pillCls = 'ed-pill-neutral';
+				if (/won|renewed|complete|received|sold/.test(stLower)) pillCls = 'ed-pill-won';
+				else if (/pending|open|draft|in progress/.test(stLower)) pillCls = 'ed-pill-pending';
+				else if (/lost|cancelled|closed/.test(stLower)) pillCls = 'ed-pill-lost';
+				else if (/overdue/.test(stLower)) pillCls = 'ed-pill-overdue';
+				return `<td><span class="ed-status-pill ${pillCls}">${frappe.utils.escape_html(valStr)}</span></td>`;
+			}
+
+			// Overdue days
+			if (kLower.includes('overdue_days') || kLower.includes('overdue days')) {
+				const num = Number(val);
+				if (!isNaN(num) && num > 0) {
+					const badgeCls = num > 30 ? 'ed-overdue-crit' : (num > 15 ? 'ed-overdue-warn' : 'ed-overdue-soft');
+					return `<td><span class="ed-overdue-pill ${badgeCls}">${num}d</span></td>`;
+				}
+				return `<td class="text-muted text-center">-</td>`;
+			}
+
+			// Currency / Financial Amounts
+			if (
+				kLower.includes('amount') ||
+				kLower.includes('balance') ||
+				kLower.includes('rate') ||
+				kLower.includes('incentive') ||
+				kLower.includes('deal_value') ||
+				kLower.includes('deal value') ||
+				kLower.includes('pending amt') ||
+				kLower.includes('total balance')
+			) {
+				const num = Number(val);
+				if (!isNaN(num)) {
+					return `<td class="num-cell" style="font-weight:700;">${this.formatFullINR(num)}</td>`;
+				}
+			}
+
+			// Quantity
+			if (kLower === 'qty') {
+				return `<td class="num-cell">${Number(val) || 0}</td>`;
+			}
+
+			// Dates
+			if (
+				kLower.includes('date') ||
+				kLower.includes('expiry') ||
+				kLower.includes('created') ||
+				kLower.includes('follow') ||
+				/^\d{4}-\d{2}-\d{2}/.test(valStr)
+			) {
+				return `<td>${this.formatDate(valStr)}</td>`;
+			}
+
+			// Remarks
+			if (kLower.includes('remark')) {
+				const esc = frappe.utils.escape_html(valStr);
+				return `<td><span class="ed-remark-cell" title="${esc}">${esc}</span></td>`;
+			}
+
+			return `<td>${frappe.utils.escape_html(valStr)}</td>`;
+		};
 
 		let tableHtml = `
-			<table class="ed-table">
+			<table class="ed-table ed-modal-table">
 				<thead><tr>
 					${cols.map(c => `<th>${c}</th>`).join('')}
 				</tr></thead>
@@ -796,47 +1587,73 @@ class HbsExecutiveDashboard {
 		`;
 
 		if (!rows.length) {
-			tableHtml += `<tr><td colspan="${cols.length}" class="text-center py-4 text-muted">${__('No matching records found.')}</td></tr>`;
+			tableHtml += `<tr><td colspan="${cols.length}" class="text-center py-5 text-muted"><i class="fa fa-info-circle fa-2x mb-2" style="display:block; color:#94a3b8;"></i>${__('No matching records found for this criteria.')}</td></tr>`;
 		} else {
 			rows.forEach(r => {
-				const docId = r.name || r.bill_no;
 				tableHtml += '<tr>';
 				Object.entries(r).forEach(([k, val], idx) => {
-					if (idx === 0 && docId && doctype) {
-						tableHtml += `<td><a href="/app/${frappe.router.slug(doctype)}/${encodeURIComponent(docId)}" target="_blank" style="font-weight:600; color:#2563eb; text-decoration:none;">${val || docId}</a></td>`;
-					} else {
-						let displayVal = val !== null && val !== undefined ? val : '-';
-						const kLower = String(k).toLowerCase();
-						if (
-							kLower.includes('date') ||
-							kLower.includes('expiry') ||
-							kLower.includes('created') ||
-							kLower.includes('follow') ||
-							(typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val.trim()))
-						) {
-							displayVal = this.formatDate(val);
-						}
-						tableHtml += `<td>${displayVal}</td>`;
-					}
+					tableHtml += renderCell(k, val, r, idx);
 				});
 				tableHtml += '</tr>';
 			});
+			tableHtml += `<tr class="ed-no-match-row" style="display:none;"><td colspan="${cols.length}" class="text-center py-4 text-muted"><i class="fa fa-search text-muted mr-1"></i> ${__('No records match your search filter.')}</td></tr>`;
 		}
 		tableHtml += `</tbody></table>`;
+
+		const totalBadgeHtml = totalAmount > 0 ? `
+			<span class="ed-modal-stat-chip ed-chip-highlight" title="Total Value">
+				<i class="fa fa-inr"></i> Total: <b>${this.formatFullINR(totalAmount)}</b>
+			</span>
+		` : '';
+
+		const execBadgeHtml = (this.selectedExecutive && this.selectedExecutive !== 'ALL') ? `
+			<span class="ed-modal-stat-chip" title="Executive Scope">
+				<i class="fa fa-user"></i> ${frappe.utils.escape_html(this.selectedExecutive)}
+			</span>
+		` : '';
 
 		const modal = $(`
 			<div class="ed-modal-backdrop">
 				<div class="ed-modal-content">
 					<div class="ed-modal-header">
-						<h3><i class="fa fa-list text-primary"></i> ${__(res.metric_type.replace(/_/g, ' ').toUpperCase())} (${rows.length} ${__('Records')})</h3>
-						<button class="ed-modal-close">&times;</button>
+						<div class="ed-modal-header-left">
+							<span class="ed-modal-tag" style="background:${metaInfo.color}15; color:${metaInfo.color}; border:1px solid ${metaInfo.color}30;">
+								${metaInfo.tag}
+							</span>
+							<h3><i class="${metaInfo.icon}" style="color:${metaInfo.color};"></i> ${metaInfo.title}</h3>
+						</div>
+						<div class="ed-modal-header-right">
+							<span class="ed-modal-stat-chip">
+								<i class="fa fa-list"></i> <b id="ed-modal-visible-count">${rows.length}</b> / ${totalCount} Records
+							</span>
+							${totalBadgeHtml}
+							${execBadgeHtml}
+							<button class="ed-modal-close" title="Close (Esc)">&times;</button>
+						</div>
 					</div>
+
+					<div class="ed-modal-toolbar">
+						<div class="ed-modal-search-wrapper">
+							<i class="fa fa-search"></i>
+							<input type="text" class="ed-modal-search" placeholder="Type to search in records (Party, Serial, Mobile, Bill, Item, Remark)...">
+							<button class="ed-search-clear" style="display:none;" title="Clear search">&times;</button>
+						</div>
+						<div class="ed-modal-actions">
+							<button class="ed-btn ed-modal-open-list" title="Open full list view in Desk">
+								<i class="fa fa-external-link"></i> ${__('Open in List')}
+							</button>
+						</div>
+					</div>
+
 					<div class="ed-modal-body">
 						${tableHtml}
 					</div>
+
 					<div class="ed-modal-footer">
+						<span class="text-muted" style="font-size:11px; margin-right:auto;">
+							<i class="fa fa-info-circle"></i> ${__('Tip: Click any phone number to dial directly.')}
+						</span>
 						<button class="ed-btn ed-btn-outline ed-modal-cancel">${__('Close')}</button>
-						<button class="ed-btn ed-modal-open-list"><i class="fa fa-external-link"></i> ${__('Open in List View')}</button>
 					</div>
 				</div>
 			</div>
@@ -844,13 +1661,47 @@ class HbsExecutiveDashboard {
 
 		$('body').append(modal);
 
-		modal.find('.ed-modal-close, .ed-modal-cancel').on('click', () => modal.remove());
+		// Event: Close Handlers
+		const closeModal = () => {
+			$(document).off('keydown.ed_modal');
+			modal.fadeOut(150, () => modal.remove());
+		};
+		modal.find('.ed-modal-close, .ed-modal-cancel').on('click', closeModal);
 		modal.on('click', (e) => {
-			if ($(e.target).hasClass('ed-modal-backdrop')) modal.remove();
+			if ($(e.target).hasClass('ed-modal-backdrop')) closeModal();
 		});
+		$(document).on('keydown.ed_modal', (e) => {
+			if (e.key === 'Escape' || e.keyCode === 27) closeModal();
+		});
+
+		// Event: Open List View
 		modal.find('.ed-modal-open-list').on('click', () => {
-			modal.remove();
+			closeModal();
 			frappe.set_route('List', doctype);
 		});
+
+		// Event: Live Search Filter
+		const searchInput = modal.find('.ed-modal-search');
+		const clearBtn = modal.find('.ed-search-clear');
+		searchInput.on('input', function() {
+			const q = $(this).val().toLowerCase().trim();
+			clearBtn.toggle(!!q);
+			let visibleCount = 0;
+			modal.find('.ed-modal-table tbody tr:not(.ed-no-match-row)').each(function() {
+				const text = $(this).text().toLowerCase();
+				if (!q || text.includes(q)) {
+					$(this).show();
+					visibleCount++;
+				} else {
+					$(this).hide();
+				}
+			});
+			modal.find('#ed-modal-visible-count').text(visibleCount);
+			modal.find('.ed-no-match-row').toggle(visibleCount === 0 && rows.length > 0);
+		});
+		clearBtn.on('click', () => {
+			searchInput.val('').trigger('input').focus();
+		});
+
 	}
 }

@@ -525,8 +525,10 @@ class HbsTallyRenewal(Document):
 	def record_remark_activity(self):
 		"""Record new remark in Hbs Lead Activity child table."""
 		if self.remarks and self.remarks.strip():
+			self.flags.remark_recorded = True
 			user_email = frappe.session.user if frappe.session and frappe.session.user else "System"
 			new_remark = self.remarks.strip()
+			self.flags.recorded_remark_text = new_remark
 			self.append("custom_activities", {
 				"user": user_email,
 				"date_time": frappe.utils.now_datetime(),
@@ -641,6 +643,61 @@ class HbsTallyRenewal(Document):
 
 		html.append('</div>')
 		self.activity = "".join(html)
+
+	def on_update(self):
+		from hbs_crm.hbs_crm.activity_logger import log_executive_activity
+		user = frappe.session.user if frappe.session and frappe.session.user else "Administrator"
+
+		# 1. Remark logged
+		if getattr(self.flags, "remark_recorded", False) and getattr(self.flags, "recorded_remark_text", None):
+			log_executive_activity(
+				reference_doctype="Hbs Tally Renewal",
+				reference_name=self.name,
+				activity_type="Follow-up Remark",
+				details=self.flags.recorded_remark_text,
+				party_name=self.cc_acc_name,
+				user=user,
+				contact_person=self.cc_contact,
+				contact_phone=self.cc_mobile or self.cc_phone,
+				follow_up_date=self.follow_up_date,
+				status_after=self.crm_status
+			)
+			self.flags.remark_recorded = False
+
+		# 2. Status changed
+		if not self.is_new() and self.has_value_changed("crm_status"):
+			old_st = self.get_doc_before_save().crm_status if self.get_doc_before_save() else ""
+			new_st = self.crm_status
+			act_type = "Deal Won" if new_st in ("Won", "Renewed", "Sold") else ("Deal Lost" if new_st in ("Lost", "Closed - Lost") else "Status Change")
+			log_executive_activity(
+				reference_doctype="Hbs Tally Renewal",
+				reference_name=self.name,
+				activity_type=act_type,
+				details=f"Renewal status changed: {old_st} ➔ {new_st}",
+				party_name=self.cc_acc_name,
+				user=user,
+				contact_person=self.cc_contact,
+				contact_phone=self.cc_mobile or self.cc_phone,
+				status_before=old_st,
+				status_after=new_st
+			)
+
+		# 3. Follow-up date rescheduled
+		if not self.is_new() and self.has_value_changed("follow_up_date"):
+			old_fu = self.get_doc_before_save().follow_up_date if self.get_doc_before_save() else ""
+			new_fu = self.follow_up_date
+			log_executive_activity(
+				reference_doctype="Hbs Tally Renewal",
+				reference_name=self.name,
+				activity_type="Follow-up Rescheduled",
+				details=f"Follow-up date moved to {new_fu}" + (f" (was {old_fu})" if old_fu else ""),
+				party_name=self.cc_acc_name,
+				user=user,
+				contact_person=self.cc_contact,
+				contact_phone=self.cc_mobile or self.cc_phone,
+				follow_up_date=new_fu,
+				status_after=self.crm_status
+			)
 
 
 @frappe.whitelist()
