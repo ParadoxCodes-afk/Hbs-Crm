@@ -757,15 +757,16 @@ class HbsExecutiveDashboard {
 	}
 
 	renderPartyTable(container) {
-		const rows = this.data.party_outstanding || [];
+		const allRows = this.data.party_outstanding || [];
+		const rows = allRows.filter(r => !r.crm_status || String(r.crm_status).trim().toLowerCase() === 'pending');
 		if (!rows.length) {
-			container.html(`<div class="p-4 text-center text-muted">${__('No party outstanding records found.')}</div>`);
+			container.html(`<div class="p-4 text-center text-muted">${__('No pending party outstanding records found.')}</div>`);
 			return;
 		}
 
 		let html = `
 			<div class="ed-tab-banner">
-				<i class="fa fa-info-circle text-primary"></i> <strong>${__('Party Outstanding Aging:')}</strong> ${__('Unpaid customer ledger balances categorized into aging buckets: Current (<15 days), Overdue (15–30 days), and Critical (>30 days overdue).')}
+				<i class="fa fa-info-circle text-primary"></i> <strong>${__('Party Outstanding Aging:')}</strong> ${__('Unpaid customer ledger balances categorized into aging buckets: Current (<15 days), Overdue (15–30 days), and Critical (>30 days overdue). Only pending status accounts are displayed.')}
 			</div>
 			<table class="ed-table">
 				<thead>
@@ -788,7 +789,7 @@ class HbsExecutiveDashboard {
 				<tr>
 					<td><strong>${r.party_name || '-'}</strong></td>
 					<td>${r.contact_person || r.contact_number || '-'}</td>
-					<td><span class="badge badge-light">${r.crm_status || 'Open'}</span></td>
+					<td><span class="badge badge-warning" style="background:#fef3c7; color:#92400e; font-weight:600;">${r.crm_status || 'Pending'}</span></td>
 					<td class="num-cell val-outstanding"><strong>${this.formatFullINR(r.balance)}</strong></td>
 					<td class="num-cell">${this.formatFullINR(r.current_bucket)}</td>
 					<td class="num-cell" style="color:#d97706;">${this.formatFullINR(r.bucket_15_30)}</td>

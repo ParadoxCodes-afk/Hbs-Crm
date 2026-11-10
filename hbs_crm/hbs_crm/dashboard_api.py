@@ -276,7 +276,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 	# -------------------------------------------------------------
 	# 4. OUTSTANDING SUMMARY
 	# -------------------------------------------------------------
-	out_conds = ["pending_amt > 0", "COALESCE(LOWER(status), '') = 'pending'"]
+	out_conds = ["pending_amt > 0", "TRIM(LOWER(COALESCE(status, ''))) = 'pending'"]
 	out_params = {}
 
 	if target_execs:
@@ -348,7 +348,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 		out_val = frappe.db.sql("""
 			SELECT COALESCE(SUM(pending_amt), 0) as val
 			FROM `tabHbs Outstanding`
-			WHERE (executive_1 IN %s OR executive_2 IN %s) AND pending_amt > 0 AND COALESCE(LOWER(status), '') = 'pending'
+			WHERE (executive_1 IN %s OR executive_2 IN %s) AND pending_amt > 0 AND TRIM(LOWER(COALESCE(status, ''))) = 'pending'
 		""", (u_aliases, u_aliases))[0][0]
 
 		# Consolidated Sales & Incentive Metrics (Single query instead of 2 separate queries)
@@ -424,7 +424,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 	# -------------------------------------------------------------
 	# 8. TAB 3: PARTY-WISE OUTSTANDING CASES
 	# -------------------------------------------------------------
-	party_conds = ["pending_amt > 0", "COALESCE(LOWER(status), '') = 'pending'"]
+	party_conds = ["pending_amt > 0", "TRIM(LOWER(COALESCE(status, ''))) = 'pending'"]
 	party_params = {}
 	if target_execs:
 		party_conds.append("(executive_1 IN %(aliases)s OR executive_2 IN %(aliases)s)")
@@ -640,7 +640,7 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 
 	elif metric_type in ("outstanding_15", "outstanding_30", "outstanding_all"):
 		doctype = "Hbs Outstanding"
-		conds = ["pending_amt > 0", "COALESCE(LOWER(status), '') = 'pending'"]
+		conds = ["pending_amt > 0", "TRIM(LOWER(COALESCE(status, ''))) = 'pending'"]
 		params = []
 		if metric_type == "outstanding_30":
 			conds.append("DATEDIFF(CURDATE(), COALESCE(due_date, bill_date)) > 30")
@@ -658,7 +658,7 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 
 	elif metric_type == "outstanding_parties":
 		doctype = "Hbs Outstanding"
-		conds = ["pending_amt > 0", "COALESCE(LOWER(status), '') = 'pending'"]
+		conds = ["pending_amt > 0", "TRIM(LOWER(COALESCE(status, ''))) = 'pending'"]
 		params = []
 		if target_execs:
 			conds.append("(executive_1 IN %s OR executive_2 IN %s)")
