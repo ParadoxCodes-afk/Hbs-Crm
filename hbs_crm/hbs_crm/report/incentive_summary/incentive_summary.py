@@ -18,7 +18,8 @@ def execute(filters=None):
 	columns = get_columns()
 	data = get_data(filters)
 	report_summary = get_report_summary(data)
-	return columns, data, None, None, report_summary
+	# skip_total_row=1 prevents Frappe's native table from double-counting parent & child rows
+	return columns, data, None, None, report_summary, 1
 
 
 def get_columns():
@@ -75,19 +76,25 @@ def get_conditions(filters):
 	values = {}
 
 	if filters.get("from_date"):
-		conditions.append("voucher_date >= %(from_date)s")
+		conditions.append("his.voucher_date >= %(from_date)s")
 		values["from_date"] = filters.from_date
 
 	if filters.get("to_date"):
-		conditions.append("voucher_date <= %(to_date)s")
+		conditions.append("his.voucher_date <= %(to_date)s")
 		values["to_date"] = filters.to_date
 
 	if filters.get("executive"):
-		conditions.append("executive = %(executive)s")
-		values["executive"] = filters.executive
+		from hbs_crm.hbs_crm.dashboard_api import _get_exec_aliases
+		aliases = _get_exec_aliases([filters.executive])
+		if aliases:
+			conditions.append("(his.executive IN %(aliases)s OR his.executive_name IN %(aliases)s)")
+			values["aliases"] = tuple(aliases)
+		else:
+			conditions.append("his.executive = %(executive)s")
+			values["executive"] = filters.executive
 
 	if filters.get("company_name"):
-		conditions.append("company_name = %(company_name)s")
+		conditions.append("his.company_name = %(company_name)s")
 		values["company_name"] = filters.company_name
 
 	return (" AND " + " AND ".join(conditions)) if conditions else "", values
@@ -99,16 +106,18 @@ def get_data(filters):
 	query = f"""
 		SELECT 
 			COALESCE(NULLIF(u.full_name, ''), NULLIF(u.first_name, ''), NULLIF(his.executive_name, ''), his.executive, 'Unknown') AS exec_display_name,
-			his.executive,
+			MAX(his.executive) AS executive,
 			COALESCE(NULLIF(his.roll_type, ''), '-') AS roll_type,
 			COALESCE(NULLIF(his.item_name, ''), '-') AS item_name,
-			SUM(COALESCE(his.qty, 0)) AS total_qty,
-			SUM(COALESCE(his.actual_amt, 0)) AS total_item_value,
+			SUM(CASE WHEN his.voucher_type = 'Credit Note' THEN -COALESCE(his.qty, 0) ELSE COALESCE(his.qty, 0) END) AS total_qty,
+			SUM(CASE WHEN his.voucher_type = 'Credit Note' THEN -COALESCE(his.actual_amt, 0) ELSE COALESCE(his.actual_amt, 0) END) AS total_item_value,
 			SUM(COALESCE(his.incentive, 0)) AS total_amount
 		FROM `tabHbs Incentive Sheet` his
 		LEFT JOIN `tabUser` u ON u.name = his.executive
-		WHERE 1=1 {cond_str}
-		GROUP BY his.executive, exec_display_name, his.roll_type, his.item_name
+		WHERE his.docstatus < 2
+			AND (his.vch_no IS NOT NULL OR his.actual_amt > 0 OR his.incentive > 0 OR his.voucher_date IS NOT NULL)
+			{cond_str}
+		GROUP BY exec_display_name, his.roll_type, his.item_name
 		ORDER BY exec_display_name ASC, roll_type ASC, item_name ASC
 	"""
 	raw_records = frappe.db.sql(query, values, as_dict=True)
@@ -116,7 +125,7 @@ def get_data(filters):
 	if not raw_records:
 		return []
 
-	# Group by executive
+	# Group by executive display name
 	grouped_by_exec = {}
 	for r in raw_records:
 		key = (r.exec_display_name or "Unknown", r.executive or "")
@@ -206,6 +215,7 @@ def get_report_summary(data):
 @frappe.whitelist()
 def get_executive_incentive_details(
 	executive=None,
+	executive_name=None,
 	from_date=None,
 	to_date=None,
 	company_name=None,
@@ -216,8 +226,9 @@ def get_executive_incentive_details(
 	# Security check: Non-admin/non-Incentive-Viewer can strictly only query their own records
 	if not is_admin_owner_or_manager(user) and "Incentive Viewer" not in frappe.get_roles(user):
 		executive = user
+		executive_name = None
 
-	conditions = []
+	conditions = ["docstatus < 2"]
 	values = {}
 
 	if from_date:
@@ -226,12 +237,22 @@ def get_executive_incentive_details(
 	if to_date:
 		conditions.append("voucher_date <= %(to_date)s")
 		values["to_date"] = to_date
-	if executive:
-		conditions.append("executive = %(executive)s")
-		values["executive"] = executive
 	if company_name:
 		conditions.append("company_name = %(company_name)s")
 		values["company_name"] = company_name
+
+	target_names = [x for x in (executive, executive_name) if x]
+	if target_names:
+		from hbs_crm.hbs_crm.dashboard_api import _get_exec_aliases
+		aliases = _get_exec_aliases(target_names)
+		if aliases:
+			conditions.append("(executive IN %(aliases)s OR executive_name IN %(aliases)s)")
+			values["aliases"] = tuple(aliases)
+		else:
+			conditions.append("(executive IN %(names)s OR executive_name IN %(names)s)")
+			values["names"] = tuple(target_names)
+	else:
+		conditions.append("(executive IS NULL OR executive = '') AND (executive_name IS NULL OR executive_name = '')")
 
 	where_clause = (" AND " + " AND ".join(conditions)) if conditions else ""
 

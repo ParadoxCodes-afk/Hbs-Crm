@@ -534,11 +534,24 @@ def sync_incentives(data=None, **kwargs):
 	incoming_from_dates = []
 	incoming_companies = set()
 
+	def _s(val, max_len=140):
+		if val is None:
+			return None
+		s = str(val).strip()
+		return s[:max_len] if s else None
+
 	for voucher in data:
 		if not isinstance(voucher, dict):
 			continue
 
 		master_id = _normalize_key(voucher, "Master Id", "Master ID", "master_id", "Master_Id", "id")
+		if not master_id or not str(master_id).strip():
+			# Tally assigns Master ID by default; skip empty trailer/noise rows
+			continue
+
+		master_id_str = str(master_id).strip()
+		incoming_master_ids.add(master_id_str)
+
 		company_name = _normalize_key(voucher, "COMPANY NAME", "Company Name", "company_name", "Company")
 		voucher_date = _safe_date(_normalize_key(voucher, "DATE", "Date", "voucher_date", "date"))
 		voucher_type = _normalize_key(voucher, "VCH TYPE", "Voucher Type", "vch_type", "voucher_type", "type")
@@ -557,20 +570,17 @@ def sync_incentives(data=None, **kwargs):
 		if company_name:
 			incoming_companies.add(str(company_name).strip())
 
-		if master_id is not None:
-			incoming_master_ids.add(str(master_id).strip())
-
 		v_header = {
-			"master_id": str(master_id).strip() if master_id is not None else None,
-			"company_name": str(company_name).strip() if company_name else None,
+			"master_id": _s(master_id_str),
+			"company_name": _s(company_name),
 			"voucher_date": voucher_date,
-			"voucher_type": str(voucher_type).strip() if voucher_type else None,
-			"vch_no": str(vch_no).strip() if vch_no is not None else None,
-			"party_name": str(party_name).strip() if party_name else None,
-			"mobile_no": str(mobile_no).strip() if mobile_no else None,
-			"email": str(email).strip() if email else None,
-			"state": str(state).strip() if state else None,
-			"pincode": str(pincode).strip() if pincode else None,
+			"voucher_type": _s(voucher_type),
+			"vch_no": _s(vch_no),
+			"party_name": _s(party_name),
+			"mobile_no": _s(mobile_no),
+			"email": _s(email),
+			"state": _s(state),
+			"pincode": _s(pincode),
 		}
 
 		items = voucher.get("Items") or voucher.get("items")
@@ -596,15 +606,15 @@ def sync_incentives(data=None, **kwargs):
 				for target in assigned_execs:
 					parsed_rows.append({
 						**v_header,
-						"item_name": str(item_name).strip() if item_name else None,
-						"serial_no": str(serial_no).strip() if serial_no else None,
+						"item_name": _s(item_name),
+						"serial_no": _s(serial_no),
 						"qty": qty,
 						"rate": rate,
 						"amount": amount,
-						"period": str(period).strip() if period else None,
+						"period": _s(period),
 						"from_date": from_date,
 						"to_date": to_date,
-						"roll_type": str(roll_type).strip() if roll_type else None,
+						"roll_type": _s(roll_type),
 						"executive": target["email"],
 						"executive_name": target["name"],
 						"actual_amt": actual_amt,
@@ -615,17 +625,17 @@ def sync_incentives(data=None, **kwargs):
 				exec_user = user_map.get(clean_code) if clean_code else None
 				parsed_rows.append({
 					**v_header,
-					"item_name": str(item_name).strip() if item_name else None,
-					"serial_no": str(serial_no).strip() if serial_no else None,
+					"item_name": _s(item_name),
+					"serial_no": _s(serial_no),
 					"qty": qty,
 					"rate": rate,
 					"amount": amount,
-					"period": str(period).strip() if period else None,
+					"period": _s(period),
 					"from_date": from_date,
 					"to_date": to_date,
-					"roll_type": str(roll_type).strip() if roll_type else None,
+					"roll_type": _s(roll_type),
 					"executive": exec_user,
-					"executive_name": str(exec_raw).strip() if exec_raw else None,
+					"executive_name": _s(exec_raw),
 					"actual_amt": actual_amt,
 					"incentive": incentive,
 					"last_sync_date": now_dt
@@ -647,12 +657,12 @@ def sync_incentives(data=None, **kwargs):
 
 			it_base = {
 				**v_header,
-				"item_name": str(it_name).strip() if it_name else None,
-				"serial_no": str(it_serial).strip() if it_serial else None,
+				"item_name": _s(it_name),
+				"serial_no": _s(it_serial),
 				"qty": it_qty,
 				"rate": it_rate,
 				"amount": it_amount,
-				"period": str(it_period).strip() if it_period else None,
+				"period": _s(it_period),
 				"from_date": it_from,
 				"to_date": it_to,
 			}
@@ -674,7 +684,7 @@ def sync_incentives(data=None, **kwargs):
 						for target in assigned_execs:
 							parsed_rows.append({
 								**it_base,
-								"roll_type": str(roll_type).strip() if roll_type else None,
+								"roll_type": _s(roll_type),
 								"executive": target["email"],
 								"executive_name": target["name"],
 								"actual_amt": actual_amt,
@@ -685,9 +695,9 @@ def sync_incentives(data=None, **kwargs):
 						exec_user = user_map.get(clean_code) if clean_code else None
 						parsed_rows.append({
 							**it_base,
-							"roll_type": str(roll_type).strip() if roll_type else None,
+							"roll_type": _s(roll_type),
 							"executive": exec_user,
-							"executive_name": str(exec_raw).strip() if exec_raw else None,
+							"executive_name": _s(exec_raw),
 							"actual_amt": actual_amt,
 							"incentive": inc_val,
 							"last_sync_date": now_dt
@@ -710,82 +720,84 @@ def sync_incentives(data=None, **kwargs):
 	# Determine active period start date (DataF date)
 	period_from = top_from_date or (min(incoming_from_dates) if incoming_from_dates else None)
 
-	# Retain historical records across all date ranges (do not purge older periods)
-	purged_before_period_count = 0
-
-	# Delete existing records for the incoming master_ids to ensure clean, idempotent snapshot
-	if incoming_master_ids:
-		master_id_list = list(incoming_master_ids)
-		for i in range(0, len(master_id_list), 500):
-			chunk = master_id_list[i:i + 500]
-			frappe.db.sql(
-				"DELETE FROM `tabHbs Incentive Sheet` WHERE `master_id` IN %s",
-				[tuple(chunk)]
-			)
-		frappe.db.commit()
-
-	# Batch insert into tabHbs Incentive Sheet
-	BATCH_SIZE = 50
+	# Execute atomic snapshot sync (single transaction: DELETE matching master_ids + INSERT new records)
+	BATCH_SIZE = 100
 	inserted_count = 0
-	for i in range(0, len(parsed_rows), BATCH_SIZE):
-		batch = parsed_rows[i:i + BATCH_SIZE]
-		val_tuples = []
-		for r in batch:
-			seq_val = frappe.db.get_next_sequence_val("Hbs Incentive Sheet")
-			val_tuples.append((
-				seq_val,
-				r["master_id"],
-				r["company_name"],
-				r["voucher_date"],
-				r["voucher_type"],
-				r["vch_no"],
-				r["party_name"],
-				r["mobile_no"],
-				r["email"],
-				r["state"],
-				r["pincode"],
-				r["item_name"],
-				r["serial_no"],
-				r["qty"],
-				r["rate"],
-				r["amount"],
-				r["period"],
-				r["from_date"],
-				r["to_date"],
-				r["roll_type"],
-				r["executive"],
-				r["executive_name"],
-				r["actual_amt"],
-				r["incentive"],
-				r["last_sync_date"],
-				now_dt,
-				now_dt,
-				"Administrator",
-				"Administrator",
-				0
-			))
 
-		if val_tuples:
-			placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"] * len(val_tuples))
-			flat_vals = [item for sub in val_tuples for item in sub]
-			frappe.db.sql(f"""
-				INSERT INTO `tabHbs Incentive Sheet` (
-					`name`, `master_id`, `company_name`, `voucher_date`, `voucher_type`, `vch_no`,
-					`party_name`, `mobile_no`, `email`, `state`, `pincode`,
-					`item_name`, `serial_no`, `qty`, `rate`, `amount`, `period`,
-					`from_date`, `to_date`, `roll_type`, `executive`, `executive_name`,
-					`actual_amt`, `incentive`, `last_sync_date`, `creation`, `modified`,
-					`owner`, `modified_by`, `docstatus`
-				) VALUES {placeholders}
-			""", flat_vals)
-		inserted_count += len(batch)
+	try:
+		if incoming_master_ids:
+			master_id_list = list(incoming_master_ids)
+			for i in range(0, len(master_id_list), 500):
+				chunk = master_id_list[i:i + 500]
+				frappe.db.sql(
+					"DELETE FROM `tabHbs Incentive Sheet` WHERE `master_id` IN %s",
+					[tuple(chunk)]
+				)
+
+		for i in range(0, len(parsed_rows), BATCH_SIZE):
+			batch = parsed_rows[i:i + BATCH_SIZE]
+			val_tuples = []
+			for r in batch:
+				seq_val = frappe.db.get_next_sequence_val("Hbs Incentive Sheet")
+				val_tuples.append((
+					seq_val,
+					r["master_id"],
+					r["company_name"],
+					r["voucher_date"],
+					r["voucher_type"],
+					r["vch_no"],
+					r["party_name"],
+					r["mobile_no"],
+					r["email"],
+					r["state"],
+					r["pincode"],
+					r["item_name"],
+					r["serial_no"],
+					r["qty"],
+					r["rate"],
+					r["amount"],
+					r["period"],
+					r["from_date"],
+					r["to_date"],
+					r["roll_type"],
+					r["executive"],
+					r["executive_name"],
+					r["actual_amt"],
+					r["incentive"],
+					r["last_sync_date"],
+					now_dt,
+					now_dt,
+					"Administrator",
+					"Administrator",
+					0
+				))
+
+			if val_tuples:
+				placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"] * len(val_tuples))
+				flat_vals = [item for sub in val_tuples for item in sub]
+				frappe.db.sql(f"""
+					INSERT INTO `tabHbs Incentive Sheet` (
+						`name`, `master_id`, `company_name`, `voucher_date`, `voucher_type`, `vch_no`,
+						`party_name`, `mobile_no`, `email`, `state`, `pincode`,
+						`item_name`, `serial_no`, `qty`, `rate`, `amount`, `period`,
+						`from_date`, `to_date`, `roll_type`, `executive`, `executive_name`,
+						`actual_amt`, `incentive`, `last_sync_date`, `creation`, `modified`,
+						`owner`, `modified_by`, `docstatus`
+					) VALUES {placeholders}
+				""", flat_vals)
+			inserted_count += len(batch)
+
+		# Commit entire sync transaction atomically
 		frappe.db.commit()
+	except Exception as e:
+		frappe.db.rollback()
+		frappe.log_error(f"Incentive sync failed: {str(e)}", "sync_incentives")
+		raise
 
 	return {
 		"status": "success",
 		"message": f"Synced {len(parsed_rows)} incentive lines successfully.",
 		"period_from": str(period_from) if period_from else None,
-		"purged_before_period": purged_before_period_count,
 		"total_vouchers": len(data),
 		"inserted_records": inserted_count,
 		"master_ids": list(incoming_master_ids)

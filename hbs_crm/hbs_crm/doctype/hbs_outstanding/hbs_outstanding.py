@@ -171,7 +171,7 @@ class HbsOutstanding(Document):
 
 	def on_update(self):
 		from hbs_crm.hbs_crm.activity_logger import log_executive_activity
-		user = frappe.session.user if frappe.session and frappe.session.user else "Administrator"
+		user = self.executive_1 or (frappe.session.user if frappe.session and frappe.session.user else "Administrator")
 
 		# 1. Payment Remark
 		if getattr(self.flags, "remark_recorded", False) and getattr(self.flags, "recorded_remark_text", None):
@@ -305,6 +305,8 @@ def log_remark(name, remark, payment_status=None, attachment=None, **kwargs):
 	doc.last_remark = clean_rem
 	doc.last_remarks_date = now_d
 	doc.remarks = ""
+	doc.flags.remark_recorded = True
+	doc.flags.recorded_remark_text = clean_rem
 
 	if payment_status is not None:
 		doc.payment_status = str(payment_status).strip()

@@ -155,6 +155,7 @@ function open_incentive_drilldown_dialog(report, exec_user, exec_name) {
 
 	let args = {
 		executive: exec_user || "",
+		executive_name: exec_name || "",
 		from_date: filters.from_date || "",
 		to_date: filters.to_date || "",
 		company_name: filters.company_name || ""
@@ -290,6 +291,8 @@ function render_incentive_drilldown_dialog(exec_user, exec_name, label, records,
 		let route_opts = {};
 		if (exec_user) {
 			route_opts["executive"] = exec_user;
+		} else if (exec_name && exec_name !== "Unknown") {
+			route_opts["executive_name"] = exec_name;
 		}
 		if (filters.from_date && filters.to_date) {
 			route_opts["voucher_date"] = ["Between", [filters.from_date, filters.to_date]];

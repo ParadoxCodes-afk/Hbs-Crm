@@ -54,7 +54,25 @@ def get_user_hierarchy_subordinates(user=None):
 		for r in res:
 			if r[0]:
 				execs.add(r[0])
-	
+
+	# Also check Support Team Hierarchy
+	try:
+		sup_parents = frappe.db.sql("""
+			SELECT DISTINCT parent FROM `tabsupport_team_supervisor`
+			WHERE user = %s AND parenttype = 'support_team_hierarchy'
+		""", (user,))
+		if sup_parents:
+			sp_names = [p[0] for p in sup_parents]
+			s_res = frappe.db.sql("""
+				SELECT DISTINCT user FROM `tabsupport_team_executive`
+				WHERE parent IN %s AND parenttype = 'support_team_hierarchy' AND user IS NOT NULL
+			""", [tuple(sp_names)])
+			for r in s_res:
+				if r[0]:
+					execs.add(r[0])
+	except Exception:
+		pass
+
 	# Also include self
 	execs.add(user)
 	return list(execs)
@@ -173,7 +191,7 @@ def _get_all_exec_aliases_map():
 			val = u.get(k)
 			if val:
 				aliases.add(val.strip())
-		alias_map[u["name"]] = tuple(aliases)
+		alias_map[u["name"]] = aliases
 	return alias_map
 
 
@@ -301,6 +319,31 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 	}
 
 	# -------------------------------------------------------------
+	# 4b. SUPPORT TICKETS SUMMARY
+	# -------------------------------------------------------------
+	ticket_conds = ["docstatus < 2"]
+	ticket_params = {"from_date": from_dt, "to_date": to_dt}
+	if target_execs:
+		ticket_conds.append("(executive IN %(aliases)s OR executive2 IN %(aliases)s)")
+		ticket_params["aliases"] = tuple(exec_aliases)
+
+	ticket_where = " AND ".join(ticket_conds)
+	ticket_res = frappe.db.sql(f"""
+		SELECT
+			COUNT(CASE WHEN DATE(creation) BETWEEN %(from_date)s AND %(to_date)s THEN 1 END) as created,
+			COUNT(CASE WHEN UPPER(COALESCE(status, '')) IN ('NEW', 'FOLLOWUP', 'PENDING', 'OPEN', '') THEN 1 END) as pending,
+			COUNT(CASE WHEN UPPER(COALESCE(status, '')) = 'COMPLETED' AND DATE(COALESCE(completed_on, modified, creation)) BETWEEN %(from_date)s AND %(to_date)s THEN 1 END) as resolved,
+			COUNT(CASE WHEN amc_status = 'YES' AND DATE(creation) BETWEEN %(from_date)s AND %(to_date)s THEN 1 END) as amc,
+			COUNT(CASE WHEN followup_date < CURDATE() AND UPPER(COALESCE(status, '')) NOT IN ('COMPLETED', 'LOST', 'CLOSED', 'CANCELLED') THEN 1 END) as overdue,
+			COALESCE(ROUND(AVG(CASE WHEN UPPER(COALESCE(status, '')) = 'COMPLETED' AND total_time_taken_mins > 0 AND DATE(COALESCE(completed_on, modified, creation)) BETWEEN %(from_date)s AND %(to_date)s THEN total_time_taken_mins END), 1), 0) as avg_resolution_mins
+		FROM `tabsupport_ticket`
+		WHERE {ticket_where}
+	""", ticket_params, as_dict=True)
+	tickets_data = ticket_res[0] if ticket_res else {
+		"created": 0, "pending": 0, "resolved": 0, "amc": 0, "overdue": 0, "avg_resolution_mins": 0
+	}
+
+	# -------------------------------------------------------------
 	# 5. EXECUTIVE CAROUSEL & BREAKDOWN STATS (Consolidated High-Perf)
 	# -------------------------------------------------------------
 	is_admin = is_admin_or_manager(user)
@@ -317,61 +360,116 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 	else:
 		active_users = frappe.db.sql(f"SELECT name, full_name FROM `tabUser` WHERE {exec_query_cond} ORDER BY full_name", as_dict=True)
 
+	# Batch-aggregate across all 4 tables in 4 queries (O(1) queries regardless of user count)
+	lead_grouped = frappe.db.sql("""
+		SELECT
+			executive_1, executive_2, executive_3,
+			COUNT(CASE WHEN LOWER(status) IN ('open', 'pending', 'in progress', 'follow up', 'contacted', 'new', 'draft') THEN 1 END) as p,
+			COUNT(CASE WHEN follow_up_date < CURDATE() AND LOWER(status) NOT IN ('won', 'lost', 'cancelled', 'closed') THEN 1 END) as o,
+			COUNT(CASE WHEN DATE(creation) BETWEEN %s AND %s THEN 1 END) as n,
+			COUNT(CASE WHEN LOWER(status) = 'won' AND DATE(COALESCE(modified, creation)) BETWEEN %s AND %s THEN 1 END) as won,
+			COUNT(CASE WHEN LOWER(status) = 'lost' AND DATE(COALESCE(modified, creation)) BETWEEN %s AND %s THEN 1 END) as lost,
+			COUNT(CASE WHEN demo_done = 1 AND DATE(COALESCE(modified, creation)) BETWEEN %s AND %s THEN 1 END) as visits
+		FROM `tabHbs Crm Lead`
+		WHERE docstatus < 2
+		GROUP BY executive_1, executive_2, executive_3
+	""", (from_dt, to_dt, from_dt, to_dt, from_dt, to_dt, from_dt, to_dt), as_dict=True)
+
+	tss_grouped = frappe.db.sql("""
+		SELECT
+			crm_ex_1, crm_executive,
+			COUNT(CASE WHEN COALESCE(LOWER(crm_status), '') IN ('', 'open', 'pending', 'follow up', 'new') AND COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %s AND %s THEN 1 END) as p,
+			COUNT(CASE WHEN follow_up_date < CURDATE() AND LOWER(crm_status) NOT IN ('won', 'renewed', 'closed', 'lost', 'sold') THEN 1 END) as o
+		FROM `tabHbs Tally Renewal`
+		WHERE COALESCE(isdeleted, 0) = 0
+		GROUP BY crm_ex_1, crm_executive
+	""", (from_dt, to_dt), as_dict=True)
+
+	out_grouped = frappe.db.sql("""
+		SELECT executive_1, executive_2, COALESCE(SUM(pending_amt), 0) as val
+		FROM `tabHbs Outstanding`
+		WHERE pending_amt > 0 AND TRIM(LOWER(COALESCE(status, ''))) = 'pending'
+		GROUP BY executive_1, executive_2
+	""", as_dict=True)
+
+	sales_grouped = frappe.db.sql("""
+		SELECT
+			executive, executive_name,
+			COALESCE(SUM(CASE WHEN voucher_type != 'Credit Note' THEN amount ELSE -amount END), 0) as net_sales,
+			COALESCE(SUM(incentive), 0) as incentive
+		FROM `tabHbs Incentive Sheet`
+		WHERE voucher_date BETWEEN %s AND %s AND docstatus < 2
+		GROUP BY executive, executive_name
+	""", (from_dt, to_dt), as_dict=True)
+
+	ticket_grouped = frappe.db.sql("""
+		SELECT
+			executive, executive2,
+			COUNT(CASE WHEN UPPER(COALESCE(status, '')) IN ('NEW', 'FOLLOWUP', 'PENDING', 'OPEN', '') THEN 1 END) as p,
+			COUNT(CASE WHEN UPPER(COALESCE(status, '')) = 'COMPLETED' AND DATE(COALESCE(completed_on, modified, creation)) BETWEEN %s AND %s THEN 1 END) as res
+		FROM `tabsupport_ticket`
+		WHERE docstatus < 2
+		GROUP BY executive, executive2
+	""", (from_dt, to_dt), as_dict=True)
+
+	def _matches(row, keys, alias_set):
+		for k in keys:
+			v = row.get(k)
+			if v and v in alias_set:
+				return True
+		return False
+
+	can_inc = can_view_incentive(user)
+
 	for u in active_users:
 		u_id = u["name"]
 		u_name = u["full_name"] or u_id
-		u_aliases = all_aliases_map.get(u_id) or (u_id,)
+		u_aliases = all_aliases_map.get(u_id) or {u_id}
 
-		# Consolidated Lead Metrics (Single query instead of 4 separate queries)
-		l_row = frappe.db.sql("""
-			SELECT
-				COUNT(CASE WHEN LOWER(status) IN ('open', 'pending', 'in progress', 'follow up', 'contacted', 'new', 'draft') THEN 1 END) as p,
-				COUNT(CASE WHEN follow_up_date < CURDATE() AND LOWER(status) NOT IN ('won', 'lost', 'cancelled', 'closed') THEN 1 END) as o,
-				COUNT(CASE WHEN DATE(creation) BETWEEN %s AND %s THEN 1 END) as n,
-				COUNT(CASE WHEN LOWER(status) = 'won' AND DATE(COALESCE(modified, creation)) BETWEEN %s AND %s THEN 1 END) as won,
-				COUNT(CASE WHEN LOWER(status) = 'lost' AND DATE(COALESCE(modified, creation)) BETWEEN %s AND %s THEN 1 END) as lost,
-				COUNT(CASE WHEN demo_done = 1 AND DATE(COALESCE(modified, creation)) BETWEEN %s AND %s THEN 1 END) as visits
-			FROM `tabHbs Crm Lead`
-			WHERE (executive_1 IN %s OR executive_2 IN %s OR executive_3 IN %s) AND docstatus < 2
-		""", (from_dt, to_dt, from_dt, to_dt, from_dt, to_dt, from_dt, to_dt, u_aliases, u_aliases, u_aliases), as_dict=True)[0]
+		lp = lo = ln = lwon = llost = lvisits = 0
+		for row in lead_grouped:
+			if _matches(row, ("executive_1", "executive_2", "executive_3"), u_aliases):
+				lp += row["p"] or 0
+				lo += row["o"] or 0
+				ln += row["n"] or 0
+				lwon += row["won"] or 0
+				llost += row["lost"] or 0
+				lvisits += row["visits"] or 0
 
-		# Consolidated TSS Metrics
-		t_row = frappe.db.sql("""
-			SELECT
-				COUNT(CASE WHEN COALESCE(LOWER(crm_status), '') IN ('', 'open', 'pending', 'follow up', 'new') AND COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %s AND %s THEN 1 END) as p,
-				COUNT(CASE WHEN follow_up_date < CURDATE() AND LOWER(crm_status) NOT IN ('won', 'renewed', 'closed', 'lost', 'sold') THEN 1 END) as o
-			FROM `tabHbs Tally Renewal`
-			WHERE (crm_ex_1 IN %s OR crm_executive IN %s) AND COALESCE(isdeleted, 0) = 0
-		""", (from_dt, to_dt, u_aliases, u_aliases), as_dict=True)[0]
+		tp = to_cnt = 0
+		for row in tss_grouped:
+			if _matches(row, ("crm_ex_1", "crm_executive"), u_aliases):
+				tp += row["p"] or 0
+				to_cnt += row["o"] or 0
 
-		# Outstanding Value
-		out_val = frappe.db.sql("""
-			SELECT COALESCE(SUM(pending_amt), 0) as val
-			FROM `tabHbs Outstanding`
-			WHERE (executive_1 IN %s OR executive_2 IN %s) AND pending_amt > 0 AND TRIM(LOWER(COALESCE(status, ''))) = 'pending'
-		""", (u_aliases, u_aliases))[0][0]
+		out_amt_val = 0.0
+		for row in out_grouped:
+			if _matches(row, ("executive_1", "executive_2"), u_aliases):
+				out_amt_val += flt(row["val"])
 
-		# Consolidated Sales & Incentive Metrics (Single query instead of 2 separate queries)
-		s_row = frappe.db.sql("""
-			SELECT
-				COALESCE(SUM(CASE WHEN voucher_type != 'Credit Note' THEN amount ELSE -amount END), 0) as net_sales,
-				COALESCE(SUM(incentive), 0) as incentive
-			FROM `tabHbs Incentive Sheet`
-			WHERE (executive IN %s OR executive_name IN %s) AND voucher_date BETWEEN %s AND %s AND docstatus < 2
-		""", (u_aliases, u_aliases, from_dt, to_dt), as_dict=True)[0]
+		net_sales_val = 0.0
+		inc_val = 0.0
+		for row in sales_grouped:
+			if _matches(row, ("executive", "executive_name"), u_aliases):
+				net_sales_val += flt(row["net_sales"])
+				inc_val += flt(row["incentive"])
 
-		net_sales_val = flt(s_row["net_sales"])
-		out_amt_val = flt(out_val)
-		inc_val = flt(s_row["incentive"])
+		tk_p = tk_res = 0
+		for row in ticket_grouped:
+			if _matches(row, ("executive", "executive2"), u_aliases):
+				tk_p += row["p"] or 0
+				tk_res += row["res"] or 0
 
 		carousel_execs.append({
 			"id": u_id,
 			"name": u_name,
-			"leads_p": l_row["p"] or 0,
-			"leads_o": l_row["o"] or 0,
-			"leads_n": l_row["n"] or 0,
-			"tss_p": t_row["p"] or 0,
-			"tss_o": t_row["o"] or 0,
+			"leads_p": lp,
+			"leads_o": lo,
+			"leads_n": ln,
+			"tss_p": tp,
+			"tss_o": to_cnt,
+			"tickets_p": tk_p,
+			"tickets_r": tk_res,
 			"outstanding": out_amt_val,
 			"net_sales": net_sales_val
 		})
@@ -379,15 +477,15 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 		exec_breakdown.append({
 			"executive": u_name,
 			"executive_id": u_id,
-			"pending": l_row["p"] or 0,
-			"overdue": l_row["o"] or 0,
-			"generated": l_row["n"] or 0,
-			"won": l_row["won"] or 0,
-			"lost": l_row["lost"] or 0,
-			"visits": l_row["visits"] or 0,
+			"pending": lp,
+			"overdue": lo,
+			"generated": ln,
+			"won": lwon,
+			"lost": llost,
+			"visits": lvisits,
 			"net_sales": net_sales_val,
 			"outstanding": out_amt_val,
-			"incentive": inc_val if can_view_incentive(user) else 0
+			"incentive": inc_val if can_inc else 0
 		})
 
 	# -------------------------------------------------------------
@@ -436,6 +534,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 			party_name,
 			contact_person,
 			contact_number,
+			executive_1,
 			status as crm_status,
 			due_date,
 			last_remarks_date as followup_date,
@@ -445,10 +544,15 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 			SUM(CASE WHEN DATEDIFF(CURDATE(), COALESCE(due_date, bill_date)) > 30 THEN pending_amt ELSE 0 END) as bucket_above_30
 		FROM `tabHbs Outstanding`
 		WHERE {party_where}
-		GROUP BY party_name, contact_person, contact_number, status, due_date, last_remarks_date
+		GROUP BY party_name, contact_person, contact_number, executive_1, status, due_date, last_remarks_date
 		ORDER BY balance DESC
 		LIMIT 100
 	""", party_params, as_dict=True)
+
+	user_name_map = {u["name"]: (u["full_name"] or u["name"]) for u in active_users}
+	for r in party_out_raw:
+		ex = r.get("executive_1")
+		r["executive_name"] = user_name_map.get(ex, ex) if ex else ""
 
 	return {
 		"from_date": str(from_dt),
@@ -457,6 +561,7 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 		"can_view_incentive": can_view_incentive(user),
 		"leads": leads_data,
 		"tss": tss_data,
+		"tickets": tickets_data,
 		"sales": sales_data,
 		"outstanding": out_data,
 		"carousel": carousel_execs,
@@ -486,7 +591,7 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 
 	if metric_type == "leads_won":
 		doctype = "Hbs Crm Lead"
-		conds = ["status = 'Won'", "DATE(COALESCE(modified, creation)) BETWEEN %s AND %s", "docstatus < 2"]
+		conds = ["LOWER(status) = 'won'", "DATE(COALESCE(modified, creation)) BETWEEN %s AND %s", "docstatus < 2"]
 		params = [from_dt, to_dt]
 		if target_execs:
 			conds.append("(executive_1 IN %s OR executive_2 IN %s OR executive_3 IN %s)")
@@ -693,6 +798,44 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			for r in rows:
 				r.pop("incentive", None)
 
+	elif metric_type in ("ticket_created", "ticket_pending", "ticket_resolved", "ticket_amc", "ticket_overdue", "ticket_all"):
+		doctype = "support_ticket"
+		conds = ["docstatus < 2"]
+		params = []
+		if metric_type == "ticket_created":
+			conds.append("DATE(creation) BETWEEN %s AND %s")
+			params.extend([from_dt, to_dt])
+		elif metric_type == "ticket_pending":
+			conds.append("UPPER(COALESCE(status, '')) IN ('NEW', 'FOLLOWUP', 'PENDING', 'OPEN', '')")
+		elif metric_type == "ticket_resolved":
+			conds.append("UPPER(COALESCE(status, '')) = 'COMPLETED'")
+			conds.append("DATE(COALESCE(completed_on, modified, creation)) BETWEEN %s AND %s")
+			params.extend([from_dt, to_dt])
+		elif metric_type == "ticket_amc":
+			conds.append("amc_status = 'YES'")
+			conds.append("DATE(creation) BETWEEN %s AND %s")
+			params.extend([from_dt, to_dt])
+		elif metric_type == "ticket_overdue":
+			conds.append("followup_date < CURDATE()")
+			conds.append("UPPER(COALESCE(status, '')) NOT IN ('COMPLETED', 'LOST', 'CLOSED', 'CANCELLED')")
+
+		if target_execs:
+			conds.append("(executive IN %s OR executive2 IN %s)")
+			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
+
+		where = " AND ".join(conds)
+		columns = ["Ticket ID", "Party Name", "Serial No", "Mobile", "Call Type", "AMC", "Priority", "Executive", "Follow-up Date", "Status", "Time Taken"]
+		rows = frappe.db.sql(f"""
+			SELECT
+				name, party_name, serial_no, contact_phone as mobile, call_type,
+				amc_status, priority, COALESCE(NULLIF(executive2, ''), executive) as executive,
+				followup_date, status, COALESCE(NULLIF(total_time_taken, ''), pending_time) as time_taken
+			FROM `tabsupport_ticket`
+			WHERE {where}
+			ORDER BY modified DESC
+			LIMIT %s OFFSET %s
+		""", tuple(params + [cint(limit), offset]), as_dict=True)
+
 	# Calculate summary totals for modal header cards
 	total_amount = 0.0
 	for r in rows:
@@ -775,7 +918,8 @@ def get_executive_daily_activities(date=None, executive=None, activity_type=None
 			COUNT(DISTINCT party_name) as records_touched,
 			COUNT(CASE WHEN reference_doctype = 'Hbs Crm Lead' THEN 1 END) as leads_count,
 			COUNT(CASE WHEN reference_doctype = 'Hbs Tally Renewal' THEN 1 END) as renewals_count,
-			COUNT(CASE WHEN reference_doctype = 'Hbs Outstanding' THEN 1 END) as outstanding_count
+			COUNT(CASE WHEN reference_doctype = 'Hbs Outstanding' THEN 1 END) as outstanding_count,
+			COUNT(CASE WHEN reference_doctype = 'support_ticket' THEN 1 END) as tickets_count
 		FROM `tabHbs Executive Activity Log`
 		WHERE {where}
 	""", tuple(params), as_dict=True)[0]
@@ -870,7 +1014,37 @@ def get_executive_daily_activities(date=None, executive=None, activity_type=None
 				"is_inactive": True
 			})
 
-	team_scorecard.sort(key=lambda x: (-x["total_actions"], str(x["user_name"])))
+	# 6. Page Visit & Active Screen Time Aggregation (single indexed query)
+	pv_conds = ["visit_date = %s", "user != 'Administrator'"]
+	pv_params = [target_date]
+	if not is_admin:
+		pv_conds.append("user IN %s")
+		pv_params.append(tuple(allowed_subordinates or [user]))
+
+	app_time_rows = frappe.db.sql(f"""
+		SELECT user, COALESCE(SUM(active_seconds), 0) as total_secs
+		FROM `tabHbs Page Visit Log`
+		WHERE {" AND ".join(pv_conds)}
+		GROUP BY user
+	""", tuple(pv_params), as_dict=True)
+	app_time_map = {r["user"]: cint(r["total_secs"]) for r in app_time_rows}
+
+	for r in team_scorecard:
+		r["app_time_seconds"] = app_time_map.get(r["user"], 0)
+
+	page_visits = []
+	if executive and executive.strip() and executive != "ALL":
+		target_execs = [executive.strip()] if is_admin else (
+			[executive.strip()] if executive.strip() in (allowed_subordinates or []) else (allowed_subordinates or [user])
+		)
+		page_visits = frappe.db.sql("""
+			SELECT page_name, page_route, active_seconds, visit_count, first_visit_time, last_visit_time
+			FROM `tabHbs Page Visit Log`
+			WHERE visit_date = %s AND user IN %s
+			ORDER BY active_seconds DESC, visit_count DESC
+		""", (target_date, tuple(target_execs)), as_dict=True)
+
+	team_scorecard.sort(key=lambda x: (-x["total_actions"], -x["app_time_seconds"], str(x["user_name"])))
 
 	return {
 		"date": str(target_date),
@@ -879,5 +1053,6 @@ def get_executive_daily_activities(date=None, executive=None, activity_type=None
 		"hourly": hourly_data,
 		"timeline": rows,
 		"executives": exec_rows,
-		"scorecard": team_scorecard
+		"scorecard": team_scorecard,
+		"page_visits": page_visits
 	}

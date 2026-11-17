@@ -36,7 +36,7 @@ add_to_apps_screen = [
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/hbs_crm/css/hbs_crm.css"
-# app_include_js = "/assets/hbs_crm/js/hbs_crm.js"
+app_include_js = "/assets/hbs_crm/js/page_tracker.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/hbs_crm/css/hbs_crm.css"
@@ -152,13 +152,12 @@ after_migrate = [
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"support_ticket": {
+		"after_insert": "hbs_crm.hbs_crm.ticket_activity_bridge.on_ticket_insert",
+		"on_update": "hbs_crm.hbs_crm.ticket_activity_bridge.on_ticket_update",
+	}
+}
 
 # Scheduled Tasks
 # ---------------
@@ -254,9 +253,9 @@ scheduler_events = {
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True
 
-# default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
-# }
+default_log_clearing_doctypes = {
+	"Hbs Page Visit Log": 90  # days to retain page visit summaries
+}
 
 # Translation
 # ------------

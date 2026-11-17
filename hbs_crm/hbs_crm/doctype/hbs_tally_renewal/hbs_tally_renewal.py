@@ -347,11 +347,6 @@ class HbsTallyRenewal(Document):
 			user = frappe.session.user if frappe.session else "System"
 			self.crm_ex_1 = user
 
-	def on_update(self):
-		if self.crm_ex_1 and self.owner != self.crm_ex_1:
-			frappe.db.set_value("Hbs Tally Renewal", self.name, "owner", self.crm_ex_1, update_modified=False)
-			self.owner = self.crm_ex_1
-
 	def before_delete(self):
 		"""Prevent regular users from deleting Hbs Tally Renewal records.
 		Only Administrator, System Manager, or Owner in Hbs User Hierarchy can delete.
@@ -645,8 +640,12 @@ class HbsTallyRenewal(Document):
 		self.activity = "".join(html)
 
 	def on_update(self):
+		if self.crm_ex_1 and self.owner != self.crm_ex_1:
+			frappe.db.set_value("Hbs Tally Renewal", self.name, "owner", self.crm_ex_1, update_modified=False)
+			self.owner = self.crm_ex_1
+
 		from hbs_crm.hbs_crm.activity_logger import log_executive_activity
-		user = frappe.session.user if frappe.session and frappe.session.user else "Administrator"
+		user = self.crm_ex_1 or (frappe.session.user if frappe.session and frappe.session.user else "Administrator")
 
 		# 1. Remark logged
 		if getattr(self.flags, "remark_recorded", False) and getattr(self.flags, "recorded_remark_text", None):
@@ -665,10 +664,11 @@ class HbsTallyRenewal(Document):
 			self.flags.remark_recorded = False
 
 		# 2. Status changed
-		if not self.is_new() and self.has_value_changed("crm_status"):
-			old_st = self.get_doc_before_save().crm_status if self.get_doc_before_save() else ""
+		if self.get_doc_before_save() and self.has_value_changed("crm_status"):
+			old_st = self.get_doc_before_save().crm_status
 			new_st = self.crm_status
-			act_type = "Deal Won" if new_st in ("Won", "Renewed", "Sold") else ("Deal Lost" if new_st in ("Lost", "Closed - Lost") else "Status Change")
+			st_upper = (new_st or "").strip().upper()
+			act_type = "Deal Won" if st_upper in ("WON", "RENEWED", "SOLD") else ("Deal Lost" if st_upper in ("LOST", "CLOSED - LOST") else "Status Change")
 			log_executive_activity(
 				reference_doctype="Hbs Tally Renewal",
 				reference_name=self.name,
@@ -683,8 +683,8 @@ class HbsTallyRenewal(Document):
 			)
 
 		# 3. Follow-up date rescheduled
-		if not self.is_new() and self.has_value_changed("follow_up_date"):
-			old_fu = self.get_doc_before_save().follow_up_date if self.get_doc_before_save() else ""
+		if self.get_doc_before_save() and self.has_value_changed("follow_up_date") and self.follow_up_date:
+			old_fu = self.get_doc_before_save().follow_up_date
 			new_fu = self.follow_up_date
 			log_executive_activity(
 				reference_doctype="Hbs Tally Renewal",
@@ -878,6 +878,8 @@ def log_follow_up(name, follow_up_date=None, remark=None, crm_status=None, crm_s
 	})
 	doc.last_remark = clean_rem
 	doc.remarks = ""
+	doc.flags.remark_recorded = True
+	doc.flags.recorded_remark_text = clean_rem
 	doc.render_activity_html()
 	if hasattr(doc, "render_old_remarks_html"):
 		doc.render_old_remarks_html()

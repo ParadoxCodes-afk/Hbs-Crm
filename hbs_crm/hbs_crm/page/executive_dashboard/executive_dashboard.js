@@ -13,8 +13,8 @@ frappe.pages['executive-dashboard'].on_page_load = function(wrapper) {
 };
 
 frappe.pages['executive-dashboard'].on_page_show = function(wrapper) {
-	if (wrapper.dashboard && wrapper.dashboard.meta) {
-		wrapper.dashboard.fetchData(true);
+	if (wrapper.dashboard && wrapper.dashboard.meta && !wrapper.dashboard.isSyncing) {
+		wrapper.dashboard.triggerLiveSync('page_show');
 	}
 };
 
@@ -82,6 +82,17 @@ class HbsExecutiveDashboard {
 			return `${String(h12).padStart(2, '0')}:${min} ${ampm}`;
 		}
 		return s;
+	}
+
+	formatDuration(seconds) {
+		const total = Math.max(0, parseInt(seconds || 0, 10));
+		if (!total) return '-';
+		const h = Math.floor(total / 3600);
+		const m = Math.floor((total % 3600) / 60);
+		const s = total % 60;
+		if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+		if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+		return `${s}s`;
 	}
 
 	formatDate(val) {
@@ -297,6 +308,43 @@ class HbsExecutiveDashboard {
 							</div>
 						</div>
 					</div>
+
+					<!-- 5. SUPPORT TICKETS -->
+					<div class="ed-kpi-card">
+						<div class="ed-kpi-header">
+							<div class="ed-kpi-title-block">
+								<span class="ed-kpi-title"><i class="fa fa-life-ring" style="color:#0d9488;"></i> ${__('Support Tickets')}</span>
+								<span class="ed-kpi-subtitle">${__('Ticket intake, resolution throughput, AMC coverage & SLA speed')}</span>
+							</div>
+							<span class="ed-kpi-chip chip-teal">${__('SUPPORT')}</span>
+						</div>
+						<div class="ed-kpi-body">
+							<div class="ed-stat-box" data-drill="ticket_created" title="Click to view created tickets">
+								<div class="ed-stat-val val-new" id="kpi-tk-created">0</div>
+								<div class="ed-stat-label">${__('Created')}</div>
+							</div>
+							<div class="ed-stat-box" data-drill="ticket_pending" title="Click to view open/pending tickets">
+								<div class="ed-stat-val val-pending" id="kpi-tk-pending">0</div>
+								<div class="ed-stat-label">${__('Pending / Open')}</div>
+							</div>
+							<div class="ed-stat-box" data-drill="ticket_resolved" title="Click to view resolved tickets">
+								<div class="ed-stat-val val-won" id="kpi-tk-resolved">0</div>
+								<div class="ed-stat-label">${__('Resolved')}</div>
+							</div>
+							<div class="ed-stat-box" data-drill="ticket_amc" title="Click to view AMC tickets">
+								<div class="ed-stat-val" style="color:#0284c7;" id="kpi-tk-amc">0</div>
+								<div class="ed-stat-label">${__('AMC Tickets')}</div>
+							</div>
+							<div class="ed-stat-box" data-drill="ticket_overdue" title="Click to view overdue ticket follow-ups">
+								<div class="ed-stat-val val-overdue" id="kpi-tk-overdue">0</div>
+								<div class="ed-stat-label">${__('Overdue')}</div>
+							</div>
+							<div class="ed-stat-box" data-drill="ticket_resolved" title="Click to view resolved tickets & resolution times">
+								<div class="ed-stat-val" style="color:#0d9488;" id="kpi-tk-avg">-</div>
+								<div class="ed-stat-label">${__('Avg Resolution')}</div>
+							</div>
+						</div>
+					</div>
 				</div>
 
 				<!-- Deep Dive Detail Section -->
@@ -474,8 +522,14 @@ class HbsExecutiveDashboard {
 		}
 	}
 
+	isDashboardVisible() {
+		return document.visibilityState === 'visible' &&
+			frappe.get_route_str &&
+			frappe.get_route_str() === 'executive-dashboard';
+	}
+
 	setupRealtime() {
-		const doctypes = ['Hbs Crm Lead', 'Hbs Tally Renewal', 'Hbs Incentive Sheet', 'Hbs Outstanding'];
+		const doctypes = ['Hbs Crm Lead', 'Hbs Tally Renewal', 'Hbs Incentive Sheet', 'Hbs Outstanding', 'support_ticket'];
 
 		// 1. Subscribe to standard Frappe doctype rooms over Socket.IO
 		if (frappe.realtime) {
@@ -485,36 +539,36 @@ class HbsExecutiveDashboard {
 				} catch (e) {}
 			});
 
-			frappe.realtime.on('list_update', (data) => {
-				if (data && doctypes.includes(data.doctype)) {
+			if (this._onRealtimeUpdate) {
+				frappe.realtime.off('list_update', this._onRealtimeUpdate);
+				frappe.realtime.off('doc_update', this._onRealtimeUpdate);
+			}
+			this._onRealtimeUpdate = (data) => {
+				if (data && doctypes.includes(data.doctype) && this.isDashboardVisible()) {
 					this.triggerLiveSync(data.doctype);
 				}
-			});
-
-			frappe.realtime.on('doc_update', (data) => {
-				if (data && doctypes.includes(data.doctype)) {
-					this.triggerLiveSync(data.doctype);
-				}
-			});
+			};
+			frappe.realtime.on('list_update', this._onRealtimeUpdate);
+			frappe.realtime.on('doc_update', this._onRealtimeUpdate);
 		}
 
-		// 2. Auto-sync on window focus & tab visibility change
+		// 2. Auto-sync only while Executive Dashboard is actually the active visible route
 		$(window).off('focus.ed_dashboard').on('focus.ed_dashboard', () => {
-			if (this.meta && !this.isSyncing) {
+			if (this.meta && !this.isSyncing && this.isDashboardVisible()) {
 				this.triggerLiveSync('focus');
 			}
 		});
 
-		document.addEventListener('visibilitychange', () => {
-			if (document.visibilityState === 'visible' && this.meta && !this.isSyncing) {
+		$(document).off('visibilitychange.ed_dashboard').on('visibilitychange.ed_dashboard', () => {
+			if (this.meta && !this.isSyncing && this.isDashboardVisible()) {
 				this.triggerLiveSync('visibility');
 			}
 		});
 
-		// 3. Fallback background sync (every 60s)
+		// 3. Fallback background sync (every 60s) — only when dashboard is visible
 		if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
 		this.heartbeatInterval = setInterval(() => {
-			if (document.visibilityState === 'visible' && this.meta && !this.isSyncing) {
+			if (this.meta && !this.isSyncing && this.isDashboardVisible()) {
 				this.fetchData(true);
 			}
 		}, 60000);
@@ -564,6 +618,15 @@ class HbsExecutiveDashboard {
 		$('#kpi-out-15').text(this.formatINR(o.above_15_days));
 		$('#kpi-out-30').text(this.formatINR(o.above_30_days));
 		$('#kpi-out-parties').text(o.parties_count || 0);
+
+		const tk = this.data.tickets || {};
+		$('#kpi-tk-created').text(tk.created || 0);
+		$('#kpi-tk-pending').text(tk.pending || 0);
+		$('#kpi-tk-resolved').text(tk.resolved || 0);
+		$('#kpi-tk-amc').text(tk.amc || 0);
+		$('#kpi-tk-overdue').text(tk.overdue || 0);
+		const avgMins = parseFloat(tk.avg_resolution_mins || 0);
+		$('#kpi-tk-avg').text(avgMins > 0 ? this.formatDuration(Math.round(avgMins * 60)) : '-');
 
 		// 3. Render Active Tab Content
 		this.renderActiveTab();
@@ -773,6 +836,7 @@ class HbsExecutiveDashboard {
 					<tr>
 						<th>${__('Party Name')}</th>
 						<th>${__('Contact')}</th>
+						<th>${__('Executive')}</th>
 						<th>${__('Status')}</th>
 						<th class="num-cell">${__('Balance')}</th>
 						<th class="num-cell">${__('Current (<15d)')}</th>
@@ -789,6 +853,7 @@ class HbsExecutiveDashboard {
 				<tr>
 					<td><strong>${r.party_name || '-'}</strong></td>
 					<td>${r.contact_person || r.contact_number || '-'}</td>
+					<td>${frappe.utils.escape_html(r.executive_name || r.executive_1 || '-')}</td>
 					<td><span class="badge badge-warning" style="background:#fef3c7; color:#92400e; font-weight:600;">${r.crm_status || 'Pending'}</span></td>
 					<td class="num-cell val-outstanding"><strong>${this.formatFullINR(r.balance)}</strong></td>
 					<td class="num-cell">${this.formatFullINR(r.current_bucket)}</td>
@@ -967,7 +1032,8 @@ class HbsExecutiveDashboard {
 							<tr>
 								<th>${__('Executive')}</th>
 								<th class="text-center" style="width:120px;">${__('Daily Status')}</th>
-								<th class="text-right" style="width:95px;">${__('Actions')}</th>
+								<th class="text-right" style="width:95px;">${__('App Time')}</th>
+								<th class="text-right" style="width:85px;">${__('Actions')}</th>
 								<th class="text-right" style="width:85px;">${__('New Leads')}</th>
 								<th class="text-right" style="width:85px;">${__('Follow-ups')}</th>
 								<th class="text-right" style="width:75px;">${__('Won')}</th>
@@ -979,7 +1045,7 @@ class HbsExecutiveDashboard {
 						</thead>
 						<tbody>
 							${scorecard.length === 0 ? `
-								<tr><td colspan="9" class="text-center py-4 text-muted">${__('No executive records found for this date.')}</td></tr>
+								<tr><td colspan="11" class="text-center py-4 text-muted">${__('No executive records found for this date.')}</td></tr>
 							` : scorecard.map(s => `
 								<tr class="ed-scorecard-row-clickable" data-user="${frappe.utils.escape_html(s.user)}" data-name="${frappe.utils.escape_html(s.user_name || s.user)}">
 									<td>
@@ -993,6 +1059,7 @@ class HbsExecutiveDashboard {
 											<span class="ed-badge-active"><i class="fa fa-check-circle"></i> ${__('Active')}</span>
 										`}
 									</td>
+									<td class="text-right ${s.app_time_seconds > 0 ? 'text-primary font-weight-bold' : 'text-muted'}" style="font-family:'JetBrains Mono', monospace;">${me.formatDuration(s.app_time_seconds)}</td>
 									<td class="text-right" style="font-weight:700;">${s.total_actions}</td>
 									<td class="text-right ${s.new_leads > 0 ? 'text-success font-weight-bold' : 'text-muted'}">${s.new_leads || 0}</td>
 									<td class="text-right">${s.followups}</td>
@@ -1119,8 +1186,14 @@ class HbsExecutiveDashboard {
 				const allRows = sheetData.timeline || [];
 				const hourly = sheetData.hourly || [];
 				const kpi = sheetData.kpis || {};
+				const pageVisits = sheetData.page_visits || [];
+				const totalAppSecs = pageVisits.reduce((acc, p) => acc + parseInt(p.active_seconds || 0, 10), 0);
+				const maxPageSecs = pageVisits.reduce((mx, p) => Math.max(mx, parseInt(p.active_seconds || 0, 10)), 1);
 
 				modalHtml.find('#ed-sheet-total-acts').text(allRows.length);
+				modalHtml.find('#ed-sheet-hours-chip').before(`
+					<span class="ed-modal-stat-chip ed-chip-app-time"><i class="fa fa-laptop text-primary"></i> App Time: <b>${me.formatDuration(totalAppSecs)}</b></span>
+				`);
 				
 				// Calculate new leads count
 				const newLeadsCount = allRows.filter(x => x.activity_type === 'New Lead Created').length;
@@ -1222,6 +1295,39 @@ class HbsExecutiveDashboard {
 							</div>
 						</div>
 
+						<!-- Pages Visited & Active Screen Time Breakdown -->
+						<div class="ed-page-usage-card">
+							<div class="ed-hourly-header">
+								<span class="ed-hourly-title">
+									<i class="fa fa-desktop text-primary"></i> ${__('Pages Visited & Active Screen Time')}
+									<small class="text-muted">(${pageVisits.length} ${pageVisits.length === 1 ? 'screen' : 'screens'}, ${me.formatDuration(totalAppSecs)} active)</small>
+								</span>
+								<span class="ed-hourly-sub">${__('Focused time only (pauses when idle > 2m or tab hidden)')}</span>
+							</div>
+							${pageVisits.length === 0 ? `
+								<div class="text-muted" style="font-size:12px; padding:6px 0;">${__('No page visits tracked for this date yet.')}</div>
+							` : `
+								<div class="ed-page-usage-list">
+									${pageVisits.map(pv => {
+										const pct = maxPageSecs > 0 ? Math.max(4, Math.round((parseInt(pv.active_seconds || 0, 10) / maxPageSecs) * 100)) : 0;
+										return `
+											<div class="ed-page-usage-row">
+												<div class="ed-page-usage-name">
+													<strong>${frappe.utils.escape_html(pv.page_name || pv.page_route)}</strong>
+													<span class="ed-page-visit-pill">${pv.visit_count || 0} ${pv.visit_count === 1 ? 'visit' : 'visits'}</span>
+												</div>
+												<div class="ed-page-usage-bar-wrap">
+													<div class="ed-page-usage-bar" style="width:${pct}%;"></div>
+												</div>
+												<div class="ed-page-usage-window">${me.formatTime(pv.first_visit_time)} &rarr; ${me.formatTime(pv.last_visit_time)}</div>
+												<div class="ed-page-usage-time">${me.formatDuration(pv.active_seconds)}</div>
+											</div>
+										`;
+									}).join('')}
+								</div>
+							`}
+						</div>
+
 						<!-- In-Modal Filter & Search Toolbar -->
 						<div class="ed-act-toolbar" style="margin-bottom:0;">
 							<div class="ed-act-filter-group">
@@ -1231,6 +1337,7 @@ class HbsExecutiveDashboard {
 									<option value="Hbs Crm Lead" ${sheetState.module === 'Hbs Crm Lead' ? 'selected' : ''}>CRM Leads (${kpi.leads_count || 0})</option>
 									<option value="Hbs Tally Renewal" ${sheetState.module === 'Hbs Tally Renewal' ? 'selected' : ''}>TSS Renewals (${kpi.renewals_count || 0})</option>
 									<option value="Hbs Outstanding" ${sheetState.module === 'Hbs Outstanding' ? 'selected' : ''}>Outstanding (${kpi.outstanding_count || 0})</option>
+									<option value="support_ticket" ${sheetState.module === 'support_ticket' ? 'selected' : ''}>Support Tickets (${kpi.tickets_count || 0})</option>
 								</select>
 							</div>
 							<div class="ed-act-filter-group">
@@ -1238,6 +1345,8 @@ class HbsExecutiveDashboard {
 								<select id="ed-sheet-type-filter" class="ed-select-input">
 									<option value="">All Activities</option>
 									<option value="New Lead Created" ${sheetState.activity_type === 'New Lead Created' ? 'selected' : ''}>New Lead Created</option>
+									<option value="Ticket Created" ${sheetState.activity_type === 'Ticket Created' ? 'selected' : ''}>Ticket Created</option>
+									<option value="Ticket Resolved" ${sheetState.activity_type === 'Ticket Resolved' ? 'selected' : ''}>Ticket Resolved</option>
 									<option value="Follow-up Remark" ${sheetState.activity_type === 'Follow-up Remark' ? 'selected' : ''}>Follow-up Remark</option>
 									<option value="Payment Remark" ${sheetState.activity_type === 'Payment Remark' ? 'selected' : ''}>Payment Remark</option>
 									<option value="Follow-up Rescheduled" ${sheetState.activity_type === 'Follow-up Rescheduled' ? 'selected' : ''}>Follow-up Rescheduled</option>
@@ -1279,6 +1388,10 @@ class HbsExecutiveDashboard {
 									vertPill = 'ed-vert-out';
 									vertLabel = 'Outstanding';
 									vertIcon = 'fa-book';
+								} else if (r.reference_doctype === 'support_ticket') {
+									vertPill = 'ed-vert-ticket';
+									vertLabel = 'Support Ticket';
+									vertIcon = 'fa-life-ring';
 								}
 
 								let actBadgeCls = 'act-remark';
@@ -1289,6 +1402,13 @@ class HbsExecutiveDashboard {
 									actBadgeCls = 'act-new-lead';
 									actIcon = 'fa-star';
 									cardModCls = 'card-new-lead';
+								} else if (r.activity_type === 'Ticket Created') {
+									actBadgeCls = 'act-ticket-new';
+									actIcon = 'fa-ticket';
+								} else if (r.activity_type === 'Ticket Resolved') {
+									actBadgeCls = 'act-won';
+									actIcon = 'fa-check-circle';
+									cardModCls = 'card-won';
 								} else if (r.activity_type === 'Follow-up Rescheduled') {
 									actBadgeCls = 'act-reschedule';
 									actIcon = 'fa-calendar-check-o';
@@ -1479,7 +1599,13 @@ class HbsExecutiveDashboard {
 			'outstanding_all': { title: 'All Pending Receivables', icon: 'fa fa-book', tag: 'COLLECTIONS', color: '#3b82f6' },
 			'outstanding_15': { title: 'Receivables Overdue > 15 Days', icon: 'fa fa-clock-o', tag: 'COLLECTIONS', color: '#d97706' },
 			'outstanding_30': { title: 'Critical Receivables Overdue > 30 Days', icon: 'fa fa-fire', tag: 'COLLECTIONS', color: '#dc2626' },
-			'outstanding_parties': { title: 'Party-Wise Outstanding Balances', icon: 'fa fa-users', tag: 'COLLECTIONS', color: '#6366f1' }
+			'outstanding_parties': { title: 'Party-Wise Outstanding Balances', icon: 'fa fa-users', tag: 'COLLECTIONS', color: '#6366f1' },
+			'ticket_created': { title: 'Support Tickets Created', icon: 'fa fa-plus-circle', tag: 'SUPPORT', color: '#0284c7' },
+			'ticket_pending': { title: 'Pending / Open Support Tickets', icon: 'fa fa-clock-o', tag: 'SUPPORT', color: '#f59e0b' },
+			'ticket_resolved': { title: 'Resolved Support Tickets', icon: 'fa fa-check-circle', tag: 'SUPPORT', color: '#10b981' },
+			'ticket_amc': { title: 'AMC Covered Support Tickets', icon: 'fa fa-shield', tag: 'SUPPORT', color: '#0d9488' },
+			'ticket_overdue': { title: 'Overdue Support Ticket Follow-ups', icon: 'fa fa-exclamation-triangle', tag: 'SUPPORT', color: '#ef4444' },
+			'ticket_all': { title: 'All Support Tickets', icon: 'fa fa-life-ring', tag: 'SUPPORT', color: '#0d9488' }
 		};
 
 		const metaInfo = titlesMap[metricType] || {

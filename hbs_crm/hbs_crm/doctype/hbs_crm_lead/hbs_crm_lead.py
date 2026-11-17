@@ -704,7 +704,8 @@ class HbsCrmLead(Document):
 			old_st = self.get_doc_before_save().status
 			new_st = self.status
 			if old_st and old_st != new_st:
-				act_type = "Deal Won" if new_st == "Won" else ("Deal Lost" if new_st == "Lost" else "Status Change")
+				st_lower = (new_st or "").strip().lower()
+				act_type = "Deal Won" if st_lower in ("won", "deal won") else ("Deal Lost" if st_lower in ("lost", "deal lost") else "Status Change")
 				log_executive_activity(
 					reference_doctype="Hbs Crm Lead",
 					reference_name=self.name,

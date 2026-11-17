@@ -65,7 +65,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Activity Type",
-   "options": "Follow-up Remark\nFollow-up Rescheduled\nDeal Won\nDeal Lost\nQuotation Created\nVisit Done\nStatus Change\nPayment Remark\nNew Record\nNew Lead Created",
+   "options": "Follow-up Remark\nFollow-up Rescheduled\nDeal Won\nDeal Lost\nQuotation Created\nVisit Done\nStatus Change\nPayment Remark\nNew Record\nNew Lead Created\nTicket Created\nTicket Resolved",
    "search_index": 1,
    "columns": 2
   },
