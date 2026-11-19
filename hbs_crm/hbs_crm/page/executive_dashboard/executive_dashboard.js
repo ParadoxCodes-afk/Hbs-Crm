@@ -214,10 +214,6 @@ class HbsExecutiveDashboard {
 								<div class="ed-stat-val val-lost" id="kpi-leads-lost">0</div>
 								<div class="ed-stat-label">${__('Lost')}</div>
 							</div>
-							<div class="ed-stat-box" data-drill="leads_visits" title="Click to view completed visits">
-								<div class="ed-stat-val" style="color: #0d9488;" id="kpi-leads-visits">0</div>
-								<div class="ed-stat-label">${__('Visits')}</div>
-							</div>
 						</div>
 					</div>
 
@@ -260,7 +256,7 @@ class HbsExecutiveDashboard {
 							<span class="ed-kpi-chip chip-emerald">${this.meta.can_view_incentive ? __('REVENUE & COMM') : __('REVENUE')}</span>
 						</div>
 						<div class="ed-kpi-body">
-							<div class="ed-stat-box" data-drill="sales_all" title="Click to view all sales vouchers">
+							<div class="ed-stat-box" data-drill="sales_billing" title="Click to view total sales billing">
 								<div class="ed-stat-val val-sales" id="kpi-billing-total">₹0</div>
 								<div class="ed-stat-label">${__('Total Billing')}</div>
 							</div>
@@ -268,12 +264,12 @@ class HbsExecutiveDashboard {
 								<div class="ed-stat-val val-credit" id="kpi-billing-credit">₹0</div>
 								<div class="ed-stat-label">${__('Credit Note')}</div>
 							</div>
-							<div class="ed-stat-box" data-drill="sales_all" title="Click to view net sales vouchers">
+							<div class="ed-stat-box" data-drill="sales_net" title="Click to view net sales vouchers">
 								<div class="ed-stat-val val-sales" id="kpi-billing-net">₹0</div>
 								<div class="ed-stat-label">${__('Net Sales')}</div>
 							</div>
 							${this.meta.can_view_incentive ? `
-							<div class="ed-stat-box" data-drill="sales_all" title="Click to view incentive details">
+							<div class="ed-stat-box" data-drill="sales_incentive" title="Click to view incentive details">
 								<div class="ed-stat-val val-won" id="kpi-billing-incentive">₹0</div>
 								<div class="ed-stat-label">${__('Incentive Earned')}</div>
 							</div>` : ''}
@@ -597,7 +593,6 @@ class HbsExecutiveDashboard {
 		$('#kpi-leads-generated').text(l.generated || 0);
 		$('#kpi-leads-won').text(l.won || 0);
 		$('#kpi-leads-lost').text(l.lost || 0);
-		$('#kpi-leads-visits').text(l.completed_visits || 0);
 
 		const t = this.data.tss || {};
 		$('#kpi-tss-pending').text(t.pending || 0);
@@ -740,7 +735,6 @@ class HbsExecutiveDashboard {
 						<th class="num-cell">${__('Generated')}</th>
 						<th class="num-cell">${__('Won')}</th>
 						<th class="num-cell">${__('Lost')}</th>
-						<th class="num-cell">${__('Visits')}</th>
 						<th class="num-cell">${__('Net Sales')}</th>
 						<th class="num-cell">${__('Outstanding')}</th>
 						<th class="num-cell">${__('Incentive')}</th>
@@ -758,7 +752,6 @@ class HbsExecutiveDashboard {
 					<td class="num-cell val-generated">${r.generated}</td>
 					<td class="num-cell val-won">${r.won}</td>
 					<td class="num-cell val-lost">${r.lost}</td>
-					<td class="num-cell" style="color:#0d9488;">${r.visits}</td>
 					<td class="num-cell val-sales"><strong>${this.formatFullINR(r.net_sales)}</strong></td>
 					<td class="num-cell val-outstanding">${this.formatFullINR(r.outstanding)}</td>
 					<td class="num-cell" style="color:#0284c7; font-weight:700;">${this.formatFullINR(r.incentive)}</td>
@@ -1595,7 +1588,10 @@ class HbsExecutiveDashboard {
 			'tss_won': { title: 'Renewed & Sold TSS Licenses', icon: 'fa fa-trophy', tag: 'SUBSCRIPTIONS', color: '#10b981' },
 			'tss_lost': { title: 'Lost TSS Subscriptions', icon: 'fa fa-ban', tag: 'SUBSCRIPTIONS', color: '#64748b' },
 			'sales_all': { title: 'Sales Billing Transactions', icon: 'fa fa-line-chart', tag: 'REVENUE & COMM', color: '#10b981' },
+			'sales_billing': { title: 'Total Sales Billing', icon: 'fa fa-line-chart', tag: 'REVENUE & COMM', color: '#10b981' },
 			'sales_credit': { title: 'Credit Notes Issued', icon: 'fa fa-undo', tag: 'REVENUE & COMM', color: '#f97316' },
+			'sales_net': { title: 'Net Sales Realized', icon: 'fa fa-check-circle', tag: 'REVENUE & COMM', color: '#10b981' },
+			'sales_incentive': { title: 'Incentives Earned', icon: 'fa fa-gift', tag: 'REVENUE & COMM', color: '#059669' },
 			'outstanding_all': { title: 'All Pending Receivables', icon: 'fa fa-book', tag: 'COLLECTIONS', color: '#3b82f6' },
 			'outstanding_15': { title: 'Receivables Overdue > 15 Days', icon: 'fa fa-clock-o', tag: 'COLLECTIONS', color: '#d97706' },
 			'outstanding_30': { title: 'Critical Receivables Overdue > 30 Days', icon: 'fa fa-fire', tag: 'COLLECTIONS', color: '#dc2626' },
@@ -1676,6 +1672,9 @@ class HbsExecutiveDashboard {
 			) {
 				const num = Number(val);
 				if (!isNaN(num)) {
+					if (kLower === 'amount' && r.voucher_type === 'Credit Note') {
+						return `<td class="num-cell" style="font-weight:700; color:#dc2626;">-${this.formatFullINR(num)}</td>`;
+					}
 					return `<td class="num-cell" style="font-weight:700;">${this.formatFullINR(num)}</td>`;
 				}
 			}

@@ -40,31 +40,43 @@ def get_columns():
 			"fieldname": "item_name",
 			"label": _("Item Name"),
 			"fieldtype": "Data",
-			"width": 240,
+			"width": 220,
 		},
 		{
 			"fieldname": "qty",
 			"label": _("Qty"),
 			"fieldtype": "Float",
-			"width": 80,
+			"width": 70,
+		},
+		{
+			"fieldname": "gross_value",
+			"label": _("Total Billing"),
+			"fieldtype": "Currency",
+			"width": 120,
+		},
+		{
+			"fieldname": "credit_value",
+			"label": _("Credit Note"),
+			"fieldtype": "Currency",
+			"width": 110,
 		},
 		{
 			"fieldname": "item_value",
-			"label": _("Item Value"),
+			"label": _("Net Sales"),
 			"fieldtype": "Currency",
 			"width": 120,
 		},
 		{
 			"fieldname": "amount",
-			"label": _("Amount"),
+			"label": _("Incentive"),
 			"fieldtype": "Currency",
-			"width": 120,
+			"width": 110,
 		},
 		{
 			"fieldname": "action",
 			"label": _("Action"),
 			"fieldtype": "Data",
-			"width": 140,
+			"width": 130,
 			"sortable": False,
 			"filterable": False,
 		},
@@ -110,6 +122,8 @@ def get_data(filters):
 			COALESCE(NULLIF(his.roll_type, ''), '-') AS roll_type,
 			COALESCE(NULLIF(his.item_name, ''), '-') AS item_name,
 			SUM(CASE WHEN his.voucher_type = 'Credit Note' THEN -COALESCE(his.qty, 0) ELSE COALESCE(his.qty, 0) END) AS total_qty,
+			SUM(CASE WHEN his.voucher_type != 'Credit Note' THEN COALESCE(his.actual_amt, 0) ELSE 0 END) AS gross_item_value,
+			SUM(CASE WHEN his.voucher_type = 'Credit Note' THEN COALESCE(his.actual_amt, 0) ELSE 0 END) AS credit_note_value,
 			SUM(CASE WHEN his.voucher_type = 'Credit Note' THEN -COALESCE(his.actual_amt, 0) ELSE COALESCE(his.actual_amt, 0) END) AS total_item_value,
 			SUM(COALESCE(his.incentive, 0)) AS total_amount
 		FROM `tabHbs Incentive Sheet` his
@@ -136,6 +150,8 @@ def get_data(filters):
 	data = []
 	for (exec_name, exec_user), items in grouped_by_exec.items():
 		exec_total_qty = sum(flt(i.total_qty) for i in items)
+		exec_total_gross = sum(flt(i.gross_item_value) for i in items)
+		exec_total_credit = sum(flt(i.credit_note_value) for i in items)
 		exec_total_item_value = sum(flt(i.total_item_value) for i in items)
 		exec_total_amount = sum(flt(i.total_amount) for i in items)
 
@@ -155,6 +171,8 @@ def get_data(filters):
 			"roll_type": "",
 			"item_name": "",
 			"qty": exec_total_qty,
+			"gross_value": exec_total_gross,
+			"credit_value": exec_total_credit,
 			"item_value": exec_total_item_value,
 			"amount": exec_total_amount,
 			"action": action_btn,
@@ -170,6 +188,8 @@ def get_data(filters):
 				"roll_type": it.roll_type,
 				"item_name": it.item_name,
 				"qty": flt(it.total_qty),
+				"gross_value": flt(it.gross_item_value),
+				"credit_value": flt(it.credit_note_value),
 				"item_value": flt(it.total_item_value),
 				"amount": flt(it.total_amount),
 				"action": "",
@@ -187,18 +207,33 @@ def get_report_summary(data):
 	# Calculate summary across child rows to avoid double-counting parent totals
 	child_rows = [r for r in data if r.get("indent") == 1]
 	total_qty = sum(flt(r.get("qty", 0)) for r in child_rows)
-	total_value = sum(flt(r.get("item_value", 0)) for r in child_rows)
+	total_gross = sum(flt(r.get("gross_value", 0)) for r in child_rows)
+	total_credit = sum(flt(r.get("credit_value", 0)) for r in child_rows)
+	net_sales = sum(flt(r.get("item_value", 0)) for r in child_rows)
 	total_incentive = sum(flt(r.get("amount", 0)) for r in child_rows)
 
-	return [
+	summary = [
 		{
 			"value": total_qty,
 			"label": _("Total Qty"),
 			"datatype": "Float",
 		},
 		{
-			"value": total_value,
-			"label": _("Total Item Value"),
+			"value": total_gross,
+			"label": _("Total Billing"),
+			"datatype": "Currency",
+			"currency": "INR",
+		},
+		{
+			"value": total_credit,
+			"label": _("Credit Note"),
+			"datatype": "Currency",
+			"currency": "INR",
+			"indicator": "Orange" if total_credit > 0 else None,
+		},
+		{
+			"value": net_sales,
+			"label": _("Net Sales"),
 			"datatype": "Currency",
 			"currency": "INR",
 		},
@@ -210,6 +245,8 @@ def get_report_summary(data):
 			"indicator": "Green",
 		},
 	]
+
+	return summary
 
 
 @frappe.whitelist()
@@ -261,6 +298,7 @@ def get_executive_incentive_details(
 			name,
 			vch_no,
 			voucher_date,
+			voucher_type,
 			party_name,
 			company_name,
 			item_name,

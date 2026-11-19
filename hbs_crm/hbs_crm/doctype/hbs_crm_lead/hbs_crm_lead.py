@@ -1067,7 +1067,7 @@ def get_permission_query_conditions(user=None):
 
 	user_escaped = frappe.db.escape(user)
 	conditions = [
-		f"(`tabHbs Crm Lead`.`executive_1` = {user_escaped} OR `tabHbs Crm Lead`.`executive_2` = {user_escaped} OR `tabHbs Crm Lead`.`executive_3` = {user_escaped} OR `tabHbs Crm Lead`.`owner` = {user_escaped})"
+		f"(`tabHbs Crm Lead`.`executive_1` = {user_escaped} OR `tabHbs Crm Lead`.`executive_2` = {user_escaped} OR `tabHbs Crm Lead`.`executive_3` = {user_escaped})"
 	]
 
 	# Team hierarchy permissions (configured in Hbs Lead Team Hierarchy)
@@ -1078,9 +1078,9 @@ def get_permission_query_conditions(user=None):
 			exec_escaped = ", ".join([frappe.db.escape(u) for u in team_perms["executives"]])
 			if team_perms["lead_types"]:
 				lt_escaped = ", ".join([frappe.db.escape(lt) for lt in team_perms["lead_types"]])
-				conditions.append(f"((`tabHbs Crm Lead`.`executive_1` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({exec_escaped})) AND `tabHbs Crm Lead`.`lead_type` IN ({lt_escaped}))")
+				conditions.append(f"((`tabHbs Crm Lead`.`executive_1` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({exec_escaped})) AND `tabHbs Crm Lead`.`lead_type` IN ({lt_escaped}))")
 			else:
-				conditions.append(f"(`tabHbs Crm Lead`.`executive_1` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`owner` IN ({exec_escaped}))")
+				conditions.append(f"(`tabHbs Crm Lead`.`executive_1` IN ({exec_escaped}) OR `tabHbs Crm Lead`.`executive_2` IN ({exec_escaped}))")
 	except Exception:
 		pass
 
@@ -1089,7 +1089,7 @@ def get_permission_query_conditions(user=None):
 
 def has_permission(doc, ptype="read", user=None):
 	"""Check document-level read and write permission based strictly on Hbs Lead Team Hierarchy.
-	- Assigned executives (executive_1, executive_2, executive_3, owner): Full read & write.
+	- Assigned executives (executive_1, executive_2, executive_3): Full read & write.
 	- Team Managers (configured in Hbs Lead Team Hierarchy): Full read & write for assigned lead types.
 	- Team Supervisors (configured in Hbs Lead Team Hierarchy): Strictly READ-ONLY (write denied).
 	"""
@@ -1106,7 +1106,7 @@ def has_permission(doc, ptype="read", user=None):
 		return True
 
 	doc_obj = doc if hasattr(doc, "get") else frappe.get_doc("Hbs Crm Lead", doc)
-	doc_execs = [doc_obj.get("executive_1"), doc_obj.get("executive_2"), doc_obj.get("executive_3"), doc_obj.get("owner")]
+	doc_execs = [doc_obj.get("executive_1"), doc_obj.get("executive_2"), doc_obj.get("executive_3")]
 	doc_lead_type = doc_obj.get("lead_type")
 
 	# Assigned executives have full access to their own leads
@@ -1417,7 +1417,7 @@ def get_overdue_followup_summary():
 			"((last_remarks_date IS NOT NULL AND last_remarks_date <= %(cutoff)s) OR (last_remarks_date IS NULL AND DATE(creation) <= %(cutoff)s))"
 		]
 		params = {"cutoff": cutoff_date, "user": user}
-		user_clause = "(executive_1 = %(user)s OR executive_2 = %(user)s OR executive_3 = %(user)s OR owner = %(user)s)"
+		user_clause = "(executive_1 = %(user)s OR executive_2 = %(user)s OR executive_3 = %(user)s)"
 
 		try:
 			from hbs_crm.hbs_crm.doctype.hbs_lead_team_hierarchy.hbs_lead_team_hierarchy import get_user_lead_team_permissions
@@ -1426,9 +1426,9 @@ def get_overdue_followup_summary():
 				params["team_execs"] = tuple(team_perms["executives"])
 				if team_perms["lead_types"]:
 					params["team_lead_types"] = tuple(team_perms["lead_types"])
-					team_clause = "((executive_1 IN %(team_execs)s OR executive_2 IN %(team_execs)s OR owner IN %(team_execs)s) AND lead_type IN %(team_lead_types)s)"
+					team_clause = "((executive_1 IN %(team_execs)s OR executive_2 IN %(team_execs)s) AND lead_type IN %(team_lead_types)s)"
 				else:
-					team_clause = "(executive_1 IN %(team_execs)s OR executive_2 IN %(team_execs)s OR owner IN %(team_execs)s)"
+					team_clause = "(executive_1 IN %(team_execs)s OR executive_2 IN %(team_execs)s)"
 				conditions.append(f"({user_clause} OR {team_clause})")
 			else:
 				conditions.append(user_clause)

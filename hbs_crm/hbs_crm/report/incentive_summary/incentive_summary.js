@@ -138,7 +138,18 @@ frappe.query_reports["Incentive Summary"] = {
 		value = default_formatter(value, row, column, data);
 
 		if (data && data.is_group) {
+			if (column.fieldname === "credit_value" && flt(data.credit_value) > 0) {
+				return `<span class="is-group-cell" style="font-weight: 700; color: #dc2626;">-${value}</span>`;
+			}
 			return `<span class="is-group-cell" style="font-weight: 700; color: #0f172a;">${value}</span>`;
+		}
+
+		if (column.fieldname === "credit_value") {
+			let cv = flt(data ? data.credit_value : 0);
+			if (cv > 0) {
+				return `<span style="font-weight: 600; color: #dc2626;">-${value}</span>`;
+			}
+			return `<span class="text-muted" style="color: #94a3b8;">-</span>`;
 		}
 
 		if (column.fieldname === "amount" && (!data || !data.is_group)) {
@@ -174,17 +185,36 @@ function open_incentive_drilldown_dialog(report, exec_user, exec_name) {
 }
 
 function render_incentive_drilldown_dialog(exec_user, exec_name, label, records, filters) {
-	let total_val = records.reduce((sum, r) => sum + (parseFloat(r.actual_amt) || 0), 0);
+	let total_billing = records.reduce((sum, r) => sum + (r.voucher_type !== 'Credit Note' ? (parseFloat(r.actual_amt) || 0) : 0), 0);
+	let total_credit = records.reduce((sum, r) => sum + (r.voucher_type === 'Credit Note' ? (parseFloat(r.actual_amt) || 0) : 0), 0);
+	let net_sales = total_billing - total_credit;
 	let total_inc = records.reduce((sum, r) => sum + (parseFloat(r.incentive) || 0), 0);
-	let formatted_val = format_currency(total_val, "INR");
+
+	let formatted_billing = format_currency(total_billing, "INR");
+	let formatted_credit = format_currency(total_credit, "INR");
+	let formatted_net = format_currency(net_sales, "INR");
 	let formatted_inc = format_currency(total_inc, "INR");
 
 	let build_table_rows = function (list) {
 		if (!list || list.length === 0) {
-			return `<tr><td colspan="10" class="text-center text-muted" style="padding: 20px;">${__("No incentive records found.")}</td></tr>`;
+			return `<tr><td colspan="11" class="text-center text-muted" style="padding: 20px;">${__("No incentive records found.")}</td></tr>`;
 		}
-		return list.map((r, idx) => `
-			<tr>
+		return list.map((r, idx) => {
+			let is_cn = (r.voucher_type === "Credit Note");
+			let row_bg = is_cn ? 'background-color: #fff5f5;' : '';
+			let type_badge = is_cn 
+				? `<span class="badge" style="background: #fee2e2; color: #b91c1c; font-weight: 600; font-size: 11px; padding: 3px 7px;">${__('Credit Note')}</span>`
+				: `<span class="badge" style="background: #dcfce7; color: #15803d; font-weight: 600; font-size: 11px; padding: 3px 7px;">${__('Sales')}</span>`;
+			let qty_val = is_cn ? -(Math.abs(parseFloat(r.qty) || 1)) : (parseFloat(r.qty) || 0);
+			let qty_display = is_cn 
+				? `<span style="color: #b91c1c; font-weight: 600;">${qty_val}</span>`
+				: `${qty_val}`;
+			let amt_display = is_cn 
+				? `<span style="color: #b91c1c; font-weight: 700;">-${format_currency(r.actual_amt, "INR")}</span>`
+				: `${format_currency(r.actual_amt, "INR")}`;
+
+			return `
+			<tr style="${row_bg}">
 				<td style="text-align: center; color: #6b7280; font-size: 11px;">${idx + 1}</td>
 				<td style="text-align: center; white-space: nowrap;">
 					<a href="/app/hbs-incentive-sheet/${r.name}" target="_blank" style="font-weight: bold; font-family: monospace;">
@@ -192,16 +222,30 @@ function render_incentive_drilldown_dialog(exec_user, exec_name, label, records,
 					</a>
 				</td>
 				<td style="text-align: center; white-space: nowrap;">${r.voucher_date ? frappe.datetime.str_to_user(r.voucher_date) : '-'}</td>
+				<td style="text-align: center;">${type_badge}</td>
 				<td><b>${frappe.utils.escape_html(r.party_name || '-')}</b></td>
 				<td>${frappe.utils.escape_html(r.item_name || '-')}</td>
 				<td style="font-family: monospace; font-size: 11px;">${frappe.utils.escape_html(r.serial_no || '-')}</td>
 				<td><span class="badge badge-light" style="font-size: 11px;">${frappe.utils.escape_html(r.roll_type || '-')}</span></td>
-				<td style="text-align: right;">${r.qty || 0}</td>
-				<td style="text-align: right; font-weight: 500;">${format_currency(r.actual_amt, "INR")}</td>
+				<td style="text-align: right;">${qty_display}</td>
+				<td style="text-align: right; font-weight: 500;">${amt_display}</td>
 				<td style="text-align: right; font-weight: 700; color: #047857;">${format_currency(r.incentive, "INR")}</td>
 			</tr>
-		`).join("");
+			`;
+		}).join("");
 	};
+
+	let header_stats_html = total_credit > 0 ? `
+		Vouchers: <b>${records.length}</b> | 
+		Total Billing: <b>${formatted_billing}</b> | 
+		Credit Note: <b style="color: #b91c1c;">-${formatted_credit}</b> | 
+		Net Sales: <b>${formatted_net}</b> | 
+		Total Incentive: <b style="color: #047857; font-size: 14px;">${formatted_inc}</b>
+	` : `
+		Vouchers: <b>${records.length}</b> | 
+		Item Value: <b>${formatted_net}</b> | 
+		Total Incentive: <b style="color: #047857; font-size: 14px;">${formatted_inc}</b>
+	`;
 
 	let dialog = new frappe.ui.Dialog({
 		title: __("💰 Incentive Records: {0}", [label]),
@@ -215,13 +259,11 @@ function render_incentive_drilldown_dialog(exec_user, exec_name, label, records,
 						<div>
 							<span style="font-size: 15px; font-weight: bold; color: #1e293b;">${frappe.utils.escape_html(label)}</span>
 							<span class="text-muted" style="margin-left: 10px; font-size: 13px;">
-								Vouchers: <b>${records.length}</b> | 
-								Item Value: <b>${formatted_val}</b> | 
-								Total Incentive: <b style="color: #047857; font-size: 14px;">${formatted_inc}</b>
+								${header_stats_html}
 							</span>
 						</div>
 						<div style="display: flex; gap: 8px;">
-							<input type="text" class="form-control form-control-sm inc-filter-input" placeholder="${__('Search voucher, party, item, serial...')}" style="width: 250px; font-size: 12px;">
+							<input type="text" class="form-control form-control-sm inc-filter-input" placeholder="${__('Search voucher, party, item, serial, type...')}" style="width: 260px; font-size: 12px;">
 							<button class="btn btn-xs btn-default btn-open-inc-list" style="font-weight: 600;">
 								<i class="fa fa-external-link"></i> ${__('Open in List View')}
 							</button>
@@ -240,10 +282,11 @@ function render_incentive_drilldown_dialog(exec_user, exec_name, label, records,
 									<th style="width: 40px; text-align: center;">#</th>
 									<th style="width: 100px; text-align: center;">${__('Vch No')}</th>
 									<th style="width: 95px; text-align: center;">${__('Date')}</th>
+									<th style="width: 95px; text-align: center;">${__('Type')}</th>
 									<th style="width: 200px;">${__('Party Name')}</th>
 									<th style="width: 200px;">${__('Item Name')}</th>
 									<th style="width: 110px;">${__('Serial No')}</th>
-									<th style="width: 110px;">${__('Roll Type')}</th>
+									<th style="width: 90px;">${__('Roll Type')}</th>
 									<th style="width: 50px; text-align: right;">${__('Qty')}</th>
 									<th style="width: 110px; text-align: right;">${__('Actual Amt')}</th>
 									<th style="width: 110px; text-align: right;">${__('Incentive')}</th>
@@ -281,6 +324,7 @@ function render_incentive_drilldown_dialog(exec_user, exec_name, label, records,
 			(r.item_name && r.item_name.toLowerCase().includes(q)) ||
 			(r.serial_no && String(r.serial_no).toLowerCase().includes(q)) ||
 			(r.roll_type && r.roll_type.toLowerCase().includes(q)) ||
+			(r.voucher_type && r.voucher_type.toLowerCase().includes(q)) ||
 			(r.company_name && r.company_name.toLowerCase().includes(q))
 		);
 		dialog.$wrapper.find(".inc-table-body").html(build_table_rows(filtered));

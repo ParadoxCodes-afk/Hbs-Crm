@@ -220,11 +220,11 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 	lead_res = frappe.db.sql(f"""
 		SELECT
 			COUNT(CASE WHEN LOWER(status) IN ('open', 'pending', 'in progress', 'follow up', 'contacted', 'draft', 'new') THEN 1 END) as pending,
-			COUNT(CASE WHEN follow_up_date < CURDATE() AND LOWER(status) NOT IN ('won', 'lost', 'cancelled', 'closed') THEN 1 END) as overdue,
+			COUNT(CASE WHEN follow_up_date <= DATE_SUB(CURDATE(), INTERVAL 10 DAY) AND LOWER(status) NOT IN ('won', 'lost', 'cancelled', 'closed') THEN 1 END) as overdue,
 			COUNT(CASE WHEN DATE(creation) BETWEEN %(from_date)s AND %(to_date)s THEN 1 END) as generated,
 			COUNT(CASE WHEN LOWER(status) = 'won' AND DATE(COALESCE(modified, creation)) BETWEEN %(from_date)s AND %(to_date)s THEN 1 END) as won,
 			COUNT(CASE WHEN LOWER(status) = 'lost' AND DATE(COALESCE(modified, creation)) BETWEEN %(from_date)s AND %(to_date)s THEN 1 END) as lost,
-			COUNT(CASE WHEN demo_done = 1 THEN 1 END) as completed_visits
+			0 as completed_visits
 		FROM `tabHbs Crm Lead`
 		WHERE {lead_where}
 	""", lead_params, as_dict=True)
@@ -246,9 +246,9 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 	tss_res = frappe.db.sql(f"""
 		SELECT
 			COUNT(CASE WHEN COALESCE(LOWER(crm_status), '') IN ('', 'open', 'pending', 'follow up', 'in progress', 'new') AND COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %(from_date)s AND %(to_date)s THEN 1 END) as pending,
-			COUNT(CASE WHEN follow_up_date < CURDATE() AND LOWER(crm_status) NOT IN ('won', 'renewed', 'closed', 'lost', 'sold') THEN 1 END) as overdue,
-			COUNT(CASE WHEN LOWER(crm_status) IN ('won', 'renewed', 'closed - won', 'sold') AND (COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %(from_date)s AND %(to_date)s OR DATE(modified) BETWEEN %(from_date)s AND %(to_date)s) THEN 1 END) as won,
-			COUNT(CASE WHEN LOWER(crm_status) IN ('lost', 'not interested', 'closed - lost') AND (COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %(from_date)s AND %(to_date)s OR DATE(modified) BETWEEN %(from_date)s AND %(to_date)s) THEN 1 END) as lost
+			COUNT(CASE WHEN follow_up_date <= DATE_SUB(CURDATE(), INTERVAL 10 DAY) AND LOWER(crm_status) NOT IN ('won', 'renewed', 'closed', 'lost', 'sold', 'closed - won', 'closed - lost') THEN 1 END) as overdue,
+			COUNT(CASE WHEN LOWER(crm_status) IN ('won', 'renewed', 'closed - won', 'sold') AND COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %(from_date)s AND %(to_date)s THEN 1 END) as won,
+			COUNT(CASE WHEN LOWER(crm_status) IN ('lost', 'not interested', 'closed - lost') AND COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %(from_date)s AND %(to_date)s THEN 1 END) as lost
 		FROM `tabHbs Tally Renewal`
 		WHERE {tss_where}
 	""", tss_params, as_dict=True)
@@ -266,17 +266,39 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 		# tabHbs Incentive Sheet stores executive user or executive full_name
 		sales_conds.append("(executive IN %(aliases)s OR executive_name IN %(aliases)s)")
 		sales_params["aliases"] = tuple(exec_aliases)
-
-	sales_where = " AND ".join(sales_conds)
-	sales_res = frappe.db.sql(f"""
-		SELECT
-			COALESCE(SUM(CASE WHEN voucher_type != 'Credit Note' THEN amount ELSE 0 END), 0) as total_billing,
-			COALESCE(SUM(CASE WHEN voucher_type = 'Credit Note' THEN amount ELSE 0 END), 0) as credit_note,
-			COALESCE(SUM(incentive), 0) as total_incentive,
-			COUNT(DISTINCT vch_no) as total_transactions
-		FROM `tabHbs Incentive Sheet`
-		WHERE {sales_where}
-	""", sales_params, as_dict=True)
+		sales_where = " AND ".join(sales_conds)
+		sales_res = frappe.db.sql(f"""
+			SELECT
+				COALESCE(SUM(CASE WHEN voucher_type != 'Credit Note' THEN amount ELSE 0 END), 0) as total_billing,
+				COALESCE(SUM(CASE WHEN voucher_type = 'Credit Note' THEN amount ELSE 0 END), 0) as credit_note,
+				COALESCE(SUM(incentive), 0) as total_incentive,
+				COUNT(DISTINCT vch_no) as total_transactions
+			FROM `tabHbs Incentive Sheet`
+			WHERE {sales_where}
+		""", sales_params, as_dict=True)
+	else:
+		sales_where = " AND ".join(sales_conds)
+		sales_res = frappe.db.sql(f"""
+			SELECT
+				COALESCE(SUM(CASE WHEN voucher_type != 'Credit Note' THEN line_amt ELSE 0 END), 0) as total_billing,
+				COALESCE(SUM(CASE WHEN voucher_type = 'Credit Note' THEN line_amt ELSE 0 END), 0) as credit_note,
+				COUNT(DISTINCT vch_no) as total_transactions
+			FROM (
+				SELECT 
+					vch_no, voucher_type, 
+					MAX(amount) as line_amt
+				FROM `tabHbs Incentive Sheet`
+				WHERE {sales_where}
+				GROUP BY vch_no, voucher_type, item_name, COALESCE(NULLIF(master_id, ''), name)
+			) distinct_lines
+		""", sales_params, as_dict=True)
+		total_inc = frappe.db.sql(f"""
+			SELECT COALESCE(SUM(incentive), 0)
+			FROM `tabHbs Incentive Sheet`
+			WHERE {sales_where}
+		""", sales_params)[0][0]
+		if sales_res:
+			sales_res[0]["total_incentive"] = total_inc
 	s_row = sales_res[0] if sales_res else {"total_billing": 0, "credit_note": 0, "total_incentive": 0, "total_transactions": 0}
 	total_billing = flt(s_row["total_billing"])
 	credit_note = flt(s_row["credit_note"])
@@ -365,21 +387,21 @@ def get_dashboard_data(executive=None, from_date=None, to_date=None):
 		SELECT
 			executive_1, executive_2, executive_3,
 			COUNT(CASE WHEN LOWER(status) IN ('open', 'pending', 'in progress', 'follow up', 'contacted', 'new', 'draft') THEN 1 END) as p,
-			COUNT(CASE WHEN follow_up_date < CURDATE() AND LOWER(status) NOT IN ('won', 'lost', 'cancelled', 'closed') THEN 1 END) as o,
+			COUNT(CASE WHEN follow_up_date <= DATE_SUB(CURDATE(), INTERVAL 10 DAY) AND LOWER(status) NOT IN ('won', 'lost', 'cancelled', 'closed') THEN 1 END) as o,
 			COUNT(CASE WHEN DATE(creation) BETWEEN %s AND %s THEN 1 END) as n,
 			COUNT(CASE WHEN LOWER(status) = 'won' AND DATE(COALESCE(modified, creation)) BETWEEN %s AND %s THEN 1 END) as won,
 			COUNT(CASE WHEN LOWER(status) = 'lost' AND DATE(COALESCE(modified, creation)) BETWEEN %s AND %s THEN 1 END) as lost,
-			COUNT(CASE WHEN demo_done = 1 AND DATE(COALESCE(modified, creation)) BETWEEN %s AND %s THEN 1 END) as visits
+			0 as visits
 		FROM `tabHbs Crm Lead`
 		WHERE docstatus < 2
 		GROUP BY executive_1, executive_2, executive_3
-	""", (from_dt, to_dt, from_dt, to_dt, from_dt, to_dt, from_dt, to_dt), as_dict=True)
+	""", (from_dt, to_dt, from_dt, to_dt, from_dt, to_dt), as_dict=True)
 
 	tss_grouped = frappe.db.sql("""
 		SELECT
 			crm_ex_1, crm_executive,
 			COUNT(CASE WHEN COALESCE(LOWER(crm_status), '') IN ('', 'open', 'pending', 'follow up', 'new') AND COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %s AND %s THEN 1 END) as p,
-			COUNT(CASE WHEN follow_up_date < CURDATE() AND LOWER(crm_status) NOT IN ('won', 'renewed', 'closed', 'lost', 'sold') THEN 1 END) as o
+			COUNT(CASE WHEN follow_up_date <= DATE_SUB(CURDATE(), INTERVAL 10 DAY) AND LOWER(crm_status) NOT IN ('won', 'renewed', 'closed', 'lost', 'sold', 'closed - won', 'closed - lost') THEN 1 END) as o
 		FROM `tabHbs Tally Renewal`
 		WHERE COALESCE(isdeleted, 0) = 0
 		GROUP BY crm_ex_1, crm_executive
@@ -621,7 +643,7 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 
 	elif metric_type == "leads_overdue":
 		doctype = "Hbs Crm Lead"
-		conds = ["follow_up_date < CURDATE()", "status NOT IN ('Won', 'Lost', 'Cancelled', 'Closed')", "docstatus < 2"]
+		conds = ["follow_up_date <= DATE_SUB(CURDATE(), INTERVAL 10 DAY)", "status NOT IN ('Won', 'Lost', 'Cancelled', 'Closed')", "docstatus < 2"]
 		params = []
 		if target_execs:
 			conds.append("(executive_1 IN %s OR executive_2 IN %s OR executive_3 IN %s)")
@@ -695,7 +717,7 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 
 	elif metric_type == "tss_overdue":
 		doctype = "Hbs Tally Renewal"
-		conds = ["follow_up_date < CURDATE()", "crm_status NOT IN ('Won', 'Renewed', 'Closed', 'Lost', 'Sold')", "COALESCE(isdeleted, 0) = 0"]
+		conds = ["follow_up_date <= DATE_SUB(CURDATE(), INTERVAL 10 DAY)", "crm_status NOT IN ('Won', 'Renewed', 'Closed', 'Lost', 'Sold', 'Closed - Won', 'Closed - Lost')", "COALESCE(isdeleted, 0) = 0"]
 		params = []
 		if target_execs:
 			conds.append("(crm_ex_1 IN %s OR crm_executive IN %s)")
@@ -711,10 +733,10 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 		doctype = "Hbs Tally Renewal"
 		conds = [
 			"LOWER(crm_status) IN ('won', 'renewed', 'closed - won', 'sold')",
-			"(COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %s AND %s OR DATE(modified) BETWEEN %s AND %s)",
+			"COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %s AND %s",
 			"COALESCE(isdeleted, 0) = 0"
 		]
-		params = [from_dt, to_dt, from_dt, to_dt]
+		params = [from_dt, to_dt]
 		if target_execs:
 			conds.append("(crm_ex_1 IN %s OR crm_executive IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
@@ -729,10 +751,10 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 		doctype = "Hbs Tally Renewal"
 		conds = [
 			"LOWER(crm_status) IN ('lost', 'not interested', 'closed - lost')",
-			"(COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %s AND %s OR DATE(modified) BETWEEN %s AND %s)",
+			"COALESCE(portal_expiry_date, acc_expiry_date) BETWEEN %s AND %s",
 			"COALESCE(isdeleted, 0) = 0"
 		]
-		params = [from_dt, to_dt, from_dt, to_dt]
+		params = [from_dt, to_dt]
 		if target_execs:
 			conds.append("(crm_ex_1 IN %s OR crm_executive IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
@@ -776,21 +798,49 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 			ORDER BY total_balance DESC LIMIT %s OFFSET %s
 		""", tuple(params + [cint(limit), offset]), as_dict=True)
 
-	elif metric_type in ("sales_all", "sales_credit"):
+	elif metric_type in ("sales_all", "sales_billing", "sales_credit", "sales_net", "sales_incentive"):
 		doctype = "Hbs Incentive Sheet"
 		conds = ["voucher_date BETWEEN %s AND %s", "docstatus < 2"]
 		params = [from_dt, to_dt]
-		if metric_type == "sales_credit":
+		if metric_type in ("sales_all", "sales_billing"):
+			conds.append("voucher_type != 'Credit Note'")
+		elif metric_type == "sales_credit":
 			conds.append("voucher_type = 'Credit Note'")
+		elif metric_type == "sales_incentive":
+			conds.append("COALESCE(incentive, 0) > 0")
+
 		if target_execs:
 			conds.append("(executive IN %s OR executive_name IN %s)")
 			params.extend([tuple(exec_aliases), tuple(exec_aliases)])
+
 		where = " AND ".join(conds)
 		columns = ["ID", "Voucher Date", "Vch No", "Voucher Type", "Party Name", "Item Name", "Qty", "Rate", "Amount", "Executive", "Incentive"]
-		rows = frappe.db.sql(f"""
-			SELECT name, voucher_date, vch_no, voucher_type, party_name, item_name, qty, rate, amount, executive_name as executive, incentive
-			FROM `tabHbs Incentive Sheet` WHERE {where} ORDER BY voucher_date DESC LIMIT %s OFFSET %s
-		""", tuple(params + [cint(limit), offset]), as_dict=True)
+
+		if not target_execs:
+			rows = frappe.db.sql(f"""
+				SELECT 
+					MIN(name) as name, 
+					voucher_date, 
+					vch_no, 
+					voucher_type, 
+					party_name, 
+					item_name, 
+					MAX(qty) as qty, 
+					MAX(rate) as rate, 
+					MAX(amount) as amount, 
+					GROUP_CONCAT(DISTINCT COALESCE(NULLIF(executive_name, ''), executive) SEPARATOR ', ') as executive, 
+					SUM(incentive) as incentive
+				FROM `tabHbs Incentive Sheet` 
+				WHERE {where} 
+				GROUP BY vch_no, voucher_type, item_name, COALESCE(NULLIF(master_id, ''), name)
+				ORDER BY voucher_date DESC 
+				LIMIT %s OFFSET %s
+			""", tuple(params + [cint(limit), offset]), as_dict=True)
+		else:
+			rows = frappe.db.sql(f"""
+				SELECT name, voucher_date, vch_no, voucher_type, party_name, item_name, qty, rate, amount, executive_name as executive, incentive
+				FROM `tabHbs Incentive Sheet` WHERE {where} ORDER BY voucher_date DESC LIMIT %s OFFSET %s
+			""", tuple(params + [cint(limit), offset]), as_dict=True)
 
 		if not can_view_incentive(user):
 			if "Incentive" in columns:
@@ -839,7 +889,17 @@ def get_drilldown_records(metric_type, executive=None, from_date=None, to_date=N
 	# Calculate summary totals for modal header cards
 	total_amount = 0.0
 	for r in rows:
-		if "pending_amt" in r and r["pending_amt"]:
+		if metric_type == "sales_net":
+			amt = flt(r.get("amount", 0))
+			if r.get("voucher_type") == "Credit Note":
+				total_amount -= amt
+			else:
+				total_amount += amt
+		elif metric_type == "sales_incentive":
+			total_amount += flt(r.get("incentive", 0))
+		elif metric_type in ("sales_all", "sales_billing", "sales_credit"):
+			total_amount += flt(r.get("amount", 0))
+		elif "pending_amt" in r and r["pending_amt"]:
 			total_amount += flt(r["pending_amt"])
 		elif "total_balance" in r and r["total_balance"]:
 			total_amount += flt(r["total_balance"])
